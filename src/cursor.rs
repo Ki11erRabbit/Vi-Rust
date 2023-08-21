@@ -11,7 +11,7 @@ pub enum Direction {
     Right,
 }
 
-
+#[derive(Debug)]
 pub struct Cursor {
     x: usize,
     y: usize,
@@ -85,9 +85,7 @@ impl Cursor {
                 }
             },
             Direction::Left => {
-                if self.x.saturating_sub(n) != 0 {
-                    self.x = self.x.saturating_sub(n);
-                }
+                self.x = self.x.saturating_sub(n);
             },
             Direction::Right => {
                 if self.x < number_of_cols {

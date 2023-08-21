@@ -11,12 +11,14 @@ pub trait Mode {
 
     fn process_keypress(&mut self, key: KeyEvent, pane: &mut Pane) -> io::Result<bool>;
 
+    fn change_mode(&mut self, name: &str, pane: &mut Pane);
+
 }
 
 
 
 pub struct Normal {
-    name: String,
+    pub name: String,
     //cmd_buff_update: Box<dyn FnMut(Result<char, &str>) -> ()>,
     number_buffer: String,
 }
@@ -184,10 +186,139 @@ impl Mode for Normal {
                 
                 Ok(true)
             },
+            KeyEvent {
+                code: KeyCode::Char('i'),
+                modifiers: KeyModifiers::NONE,
+                ..
+            } => {
+                self.change_mode("Insert", pane);
+                Ok(true)
+            },
             _ => Ok(false),
             
 
         }
     }
 
+    fn change_mode(&mut self, name: &str, pane: &mut Pane) {
+
+        pane.set_mode(name);
+
+    }
+
 }
+
+
+pub struct Insert {
+    pub name: String,
+}
+
+impl Insert {
+    pub fn new() -> Self {
+        Self {
+            name: String::from("Insert"),
+        }
+    }
+
+    fn move_cursor(&self, direction: KeyCode, pane: &mut Pane) -> io::Result<bool> {
+        let cursor = &mut pane.cursor.borrow_mut();
+        let direction = match direction {
+            KeyCode::Up => Direction::Up,
+            KeyCode::Down => Direction::Down,
+            KeyCode::Left => Direction::Left,
+            KeyCode::Right => Direction::Right,
+            _ => return Ok(false),
+        };
+
+        cursor.move_cursor(direction, 1, pane.borrow_buffer());
+        Ok(true)
+    }
+
+    fn insert_newline(&self, pane: &mut Pane) -> io::Result<bool> {
+        pane.insert_newline();
+        let cursor = &mut pane.cursor.borrow_mut();
+        cursor.move_cursor(Direction::Down, 1, pane.borrow_buffer());
+        Ok(true)
+    }
+    fn delete_char(&self, pane: &mut Pane) -> io::Result<bool> {
+        pane.delete_char();
+        Ok(true)
+    }
+    fn backspace(&self, pane: &mut Pane) -> io::Result<bool> {
+        pane.backspace();
+        let cursor = &mut pane.cursor.borrow_mut();
+        cursor.move_cursor(Direction::Left, 1, pane.borrow_buffer());
+        Ok(true)
+    }
+    fn insert_char(&self, pane: &mut Pane, c: char) -> io::Result<bool> {
+        pane.insert_char(c);
+        let cursor = &mut pane.cursor.borrow_mut();
+        cursor.move_cursor(Direction::Right, 1, pane.borrow_buffer());
+        Ok(true)
+    }
+}
+
+impl Mode for Insert {
+    
+    fn process_keypress(&mut self, key: KeyEvent, pane: &mut Pane) -> io::Result<bool> {
+
+        match key {
+            KeyEvent {
+                code:
+                direction
+                    @
+                    (KeyCode::Up
+                     | KeyCode::Down
+                     | KeyCode::Left
+                     | KeyCode::Right
+                    ),
+                modifiers: KeyModifiers::NONE,
+                ..
+            } => self.move_cursor(direction, pane),
+            KeyEvent {
+                code: KeyCode::Enter,
+                modifiers: KeyModifiers::NONE,
+                ..
+            } => self.insert_newline(pane),
+            KeyEvent {
+                code: KeyCode::Delete,
+                modifiers: KeyModifiers::NONE,
+                ..
+            } => self.delete_char(pane),
+            KeyEvent {
+                code: KeyCode::Backspace,
+                modifiers: KeyModifiers::NONE,
+                ..
+            } => self.backspace(pane),
+            KeyEvent {
+                code: code @ (KeyCode::Char(..) | KeyCode::Tab),
+                modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+                ..
+            } => self.insert_char(pane, match code {
+                KeyCode::Char(c) => c,
+                KeyCode::Tab => '\t',
+                _ => unreachable!(),
+            }),
+            KeyEvent {
+                code: KeyCode::Esc,
+                modifiers: KeyModifiers::NONE,
+                ..
+            } => {
+                self.change_mode("Normal", pane);
+                Ok(true)
+            },
+            _ => Ok(false),
+
+        }
+
+    }
+
+    fn change_mode(&mut self, name: &str, pane: &mut Pane) {
+            
+        pane.set_mode(name);
+    
+    }
+
+}
+
+
