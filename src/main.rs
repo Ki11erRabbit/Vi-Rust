@@ -4,6 +4,8 @@ use crossterm::{terminal, event::{self, KeyEvent, Event}};
 use window::Window;
 
 pub mod window;
+pub mod mode;
+pub mod cursor;
 
 struct CleanUp;
 
@@ -62,10 +64,8 @@ impl Editor {
                 code: event::KeyCode::Char('q'),
                 ..
             } => return Ok(false),
-            _ => {}
+            key => return self.window.process_keypress(key),
         }
-
-        Ok(true)
     }
 
 }
