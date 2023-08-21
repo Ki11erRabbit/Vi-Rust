@@ -49,9 +49,9 @@ impl Window {
         let cols = self.size.0;
 
         for i in 0..rows {
-            let real_row = i;//TODO add offset
+            let real_row = i + self.pane.cursor.borrow().row_offset;//TODO add offset
 
-            let offset = 0;//TODO add offset
+            let offset = 0 + self.pane.cursor.borrow().col_offset;//TODO add offset
             if let Some(row) = self.pane.get_row(real_row, offset, cols) {
                 row.chars().for_each(|c| if c == '\t' {
                     self.contents.push_str(" ".repeat(TAB_SIZE).as_str());
@@ -73,7 +73,8 @@ impl Window {
     }
 
     pub fn refresh_screen(&mut self) -> io::Result<()> {
-        //TODO: add cursor movement
+
+        self.pane.scroll_cursor();
 
         queue!(
             self.contents,
@@ -173,6 +174,9 @@ impl Pane {
             cursor: Rc::new(RefCell::new(Cursor::new(size))),
         }
     }
+    pub fn get_size(&self) -> (usize, usize) {
+        self.size
+    }
 
     pub fn get_row(&self, row: usize, offset: usize, col: usize) -> Option<RopeSlice> {
         if row >= self.contents.line_len() {
@@ -197,5 +201,12 @@ impl Pane {
 
     pub fn borrow_buffer(&self) -> &Rope {
         &self.contents
+    }
+
+    pub fn scroll_cursor(&mut self) {
+        let cursor = self.cursor.clone();
+
+        cursor.borrow_mut().scroll(self);
+        
     }
 }

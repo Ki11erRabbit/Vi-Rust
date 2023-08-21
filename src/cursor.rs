@@ -1,5 +1,7 @@
 use crop::Rope;
 
+use crate::window::Pane;
+
 
 
 pub enum Direction {
@@ -15,8 +17,8 @@ pub struct Cursor {
     y: usize,
     rows: usize,
     cols: usize,
-    row_offset: usize,
-    col_offset: usize,
+    pub row_offset: usize,
+    pub col_offset: usize,
 }
 
 impl Cursor {
@@ -37,6 +39,25 @@ impl Cursor {
 
     pub fn get_real_cursor(&self) -> (usize, usize) {
         (self.x - self.col_offset, self.y - self.row_offset)
+    }
+
+    pub fn scroll(&mut self, pane: &Pane) {
+        let (pane_x, pane_y) = pane.get_size();
+
+        if self.x >= pane_x {
+            self.col_offset = self.x - pane_x + 1;
+        }
+        else {
+            self.col_offset = 0;
+        }
+
+        if self.y >= pane_y {
+            self.row_offset = self.y - pane_y + 1;
+        }
+        else {
+            self.row_offset = 0;
+        }
+
     }
 
     pub fn move_cursor(&mut self, direction: Direction, n: usize, rows: &Rope) {
