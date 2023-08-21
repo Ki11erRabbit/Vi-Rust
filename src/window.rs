@@ -85,6 +85,17 @@ impl Window {
 
         let (x, y) = self.pane.cursor.borrow().get_real_cursor();
 
+        
+        let x = {
+            if let Some(row) = self.pane.borrow_buffer().lines().nth(y) {
+                let len = row.chars().count();
+                cmp::min(x, len)
+            }
+            else {
+                0
+            }
+        };
+
         queue!(
             self.contents,
             cursor::MoveTo(x as u16, y as u16),

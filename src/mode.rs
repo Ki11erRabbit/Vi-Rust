@@ -37,11 +37,92 @@ impl Mode for Normal {
 
         match key {
             KeyEvent {
-                code: KeyCode::Char('h'),
+                code: KeyCode::Char('1'),
+                modifiers: KeyModifiers::NONE,
+                ..
+            } => {
+                self.number_buffer.push('1');
+                Ok(true)
+            },
+            KeyEvent {
+                code: KeyCode::Char('2'),
+                modifiers: KeyModifiers::NONE,
+                ..
+            } => {
+                self.number_buffer.push('2');
+                Ok(true)
+            },
+            KeyEvent {
+                code: KeyCode::Char('3'),
+                modifiers: KeyModifiers::NONE,
+                ..
+            } => {
+                self.number_buffer.push('3');
+                Ok(true)
+            },
+            KeyEvent {
+                code: KeyCode::Char('4'),
+                modifiers: KeyModifiers::NONE,
+                ..
+            } => {
+                self.number_buffer.push('4');
+                Ok(true)
+            },
+            KeyEvent {
+                code: KeyCode::Char('5'),
+                modifiers: KeyModifiers::NONE,
+                ..
+            } => {
+                self.number_buffer.push('5');
+                Ok(true)
+            },
+            KeyEvent {
+                code: KeyCode::Char('6'),
+                modifiers: KeyModifiers::NONE,
+                ..
+            } => {
+                self.number_buffer.push('6');
+                Ok(true)
+            },
+            KeyEvent {
+                code: KeyCode::Char('7'),
+                modifiers: KeyModifiers::NONE,
+                ..
+            } => {
+                self.number_buffer.push('7');
+                Ok(true)
+            },
+            KeyEvent {
+                code: KeyCode::Char('8'),
+                modifiers: KeyModifiers::NONE,
+                ..
+            } => {
+                self.number_buffer.push('8');
+                Ok(true)
+            },
+            KeyEvent {
+                code: KeyCode::Char('9'),
+                modifiers: KeyModifiers::NONE,
+                ..
+            } => {
+                self.number_buffer.push('9');
+                Ok(true)
+            },
+            KeyEvent {
+                code: KeyCode::Char('0'),
+                modifiers: KeyModifiers::NONE,
+                ..
+            } => {
+                self.number_buffer.push('0');
+                Ok(true)
+            },
+            KeyEvent {
+                code: KeyCode::Char('h') | KeyCode::Left,
                 modifiers: KeyModifiers::NONE,
                 ..
             } => {
                 let num = if let Ok(num) = self.number_buffer.parse::<usize>() {
+                    self.number_buffer.clear();
                     num
                 } else {
                     1
@@ -53,11 +134,12 @@ impl Mode for Normal {
                 Ok(true)
             },
             KeyEvent {
-                code: KeyCode::Char('j'),
+                code: KeyCode::Char('j') | KeyCode::Down,
                 modifiers: KeyModifiers::NONE,
                 ..
             } => {
                 let num = if let Ok(num) = self.number_buffer.parse::<usize>() {
+                    self.number_buffer.clear();
                     num
                 } else {
                     1
@@ -69,11 +151,12 @@ impl Mode for Normal {
                 Ok(true)
             },
             KeyEvent {
-                code: KeyCode::Char('k'),
+                code: KeyCode::Char('k') | KeyCode::Up,
                 modifiers: KeyModifiers::NONE,
                 ..
             } => {
                 let num = if let Ok(num) = self.number_buffer.parse::<usize>() {
+                    self.number_buffer.clear();
                     num
                 } else {
                     1
@@ -85,11 +168,12 @@ impl Mode for Normal {
                 Ok(true)
             },
             KeyEvent {
-                code: KeyCode::Char('l'),
+                code: KeyCode::Char('l') | KeyCode::Right,
                 modifiers: KeyModifiers::NONE,
                 ..
             } => {
                 let num = if let Ok(num) = self.number_buffer.parse::<usize>() {
+                    self.number_buffer.clear();
                     num
                 } else {
                     1

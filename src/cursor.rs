@@ -41,6 +41,12 @@ impl Cursor {
 
     pub fn move_cursor(&mut self, direction: Direction, n: usize, rows: &Rope) {
         let number_of_lines = rows.line_len();
+        let number_of_cols = if let Some(row) = rows.lines().nth(self.y) {
+            row.chars().count()
+        }
+        else {
+            0
+        };
 
         match direction {
             Direction::Up => {
@@ -48,7 +54,13 @@ impl Cursor {
             },
             Direction::Down => {
                 if self.y < number_of_lines {
-                    self.y = (self.y + n) % number_of_lines;
+                    let new_y = (self.y + n) % number_of_lines;
+                    if new_y < self.y {
+                        self.y = number_of_lines;
+                    }
+                    else {
+                        self.y = new_y;
+                    }
                 }
             },
             Direction::Left => {
@@ -57,8 +69,16 @@ impl Cursor {
                 }
             },
             Direction::Right => {
-                if self.x < self.cols {
-                    self.x = (self.x + n) % self.cols;
+                if self.x < number_of_cols {
+                    let new_x = (self.x + n) % number_of_cols;
+
+                    if new_x < self.x {
+                        self.x = number_of_cols;
+                    }
+                    else {
+                        self.x = new_x;
+                    }
+
                 }
             },
         }
