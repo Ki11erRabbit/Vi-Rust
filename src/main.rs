@@ -16,37 +16,16 @@ impl Drop for CleanUp {
     }
 }
 
-struct KeyReader {
-    duration: Duration,
-}
-
-impl KeyReader {
-    fn read_key(&self) -> io::Result<KeyEvent> {
-        loop {
-            if event::poll(self.duration)? {
-                if let Event::Key(key) = event::read()? {
-                    return Ok(key);
-                }
-            }
-        }
-    }
-}
 
 struct Editor {
     window: Window,
-    key_reader: KeyReader,
 }
 
 impl Editor {
     fn new() -> Self {
         let window = Window::new();
-        let key_reader = KeyReader {
-            duration: Duration::from_millis(100),
-        };
-
         Self {
             window,
-            key_reader,
         }
     }
 
@@ -55,18 +34,7 @@ impl Editor {
     }
 
     pub fn run(&mut self) -> io::Result<bool> {
-        self.window.refresh_screen()?;
-        self.process_keypress()
-    }
-
-    fn process_keypress(&mut self) -> io::Result<bool> {
-        match self.key_reader.read_key()? {
-            KeyEvent {
-                code: event::KeyCode::Char('q'),
-                ..
-            } => return Ok(false),
-            key => return self.window.process_keypress(key),
-        }
+        self.window.run()
     }
 
 }

@@ -9,31 +9,35 @@ use crate::{window::Pane, cursor::Direction};
 
 pub trait Mode {
 
+    fn get_name(&self) -> String;
+
     fn process_keypress(&mut self, key: KeyEvent, pane: &mut Pane) -> io::Result<bool>;
 
     fn change_mode(&mut self, name: &str, pane: &mut Pane);
+
+    fn update_status(&self, pane: &Pane) -> String;
 
 }
 
 
 
 pub struct Normal {
-    pub name: String,
-    //cmd_buff_update: Box<dyn FnMut(Result<char, &str>) -> ()>,
     number_buffer: String,
 }
 
 impl Normal {
-    pub fn new(/*cmd_buff_update: Box<dyn FnMut(Result<char, &str>) -> ()>*/) -> Self {
+    pub fn new() -> Self {
         Self {
-            name: String::from("Normal"),
-            //cmd_buff_update,
             number_buffer: String::new(),
         }
     }
 }
 
 impl Mode for Normal {
+
+    fn get_name(&self) -> String {
+        String::from("Normal")
+    }
 
     fn process_keypress(&mut self, key: KeyEvent, pane: &mut Pane) -> io::Result<bool> {
 
@@ -194,7 +198,15 @@ impl Mode for Normal {
                 self.change_mode("Insert", pane);
                 Ok(true)
             },
-            _ => Ok(false),
+            KeyEvent {
+                code: KeyCode::Char(':'),
+                //modifiers: KeyModifiers::SHIFT,
+                ..
+            } => {
+                self.change_mode("Command", pane);
+                Ok(true)
+            },
+            _ => Ok(true),
             
 
         }
@@ -206,18 +218,19 @@ impl Mode for Normal {
 
     }
 
+    fn update_status(&self, pane: &Pane) -> String {
+        let (row, col) = pane.cursor.borrow().get_cursor();
+        format!("Normal {}:{}", row, col)
+    }
+
 }
 
 
-pub struct Insert {
-    pub name: String,
-}
+pub struct Insert;
 
 impl Insert {
     pub fn new() -> Self {
-        Self {
-            name: String::from("Insert"),
-        }
+        Self {}
     }
 
     fn move_cursor(&self, direction: KeyCode, pane: &mut Pane) -> io::Result<bool> {
@@ -245,9 +258,15 @@ impl Insert {
         Ok(true)
     }
     fn backspace(&self, pane: &mut Pane) -> io::Result<bool> {
-        pane.backspace();
+        let result = pane.backspace();
         let cursor = &mut pane.cursor.borrow_mut();
-        cursor.move_cursor(Direction::Left, 1, pane.borrow_buffer());
+        if result {
+            cursor.move_cursor(Direction::Up, 1, pane.borrow_buffer());
+            cursor.move_cursor(Direction::Right, 1000000000, pane.borrow_buffer());
+        }
+        else {
+            cursor.move_cursor(Direction::Left, 1, pane.borrow_buffer());
+        }
         Ok(true)
     }
     fn insert_char(&self, pane: &mut Pane, c: char) -> io::Result<bool> {
@@ -259,6 +278,10 @@ impl Insert {
 }
 
 impl Mode for Insert {
+
+    fn get_name(&self) -> String {
+        "Insert".to_string()
+    }
     
     fn process_keypress(&mut self, key: KeyEvent, pane: &mut Pane) -> io::Result<bool> {
 
@@ -319,6 +342,136 @@ impl Mode for Insert {
     
     }
 
+    fn update_status(&self, pane: &Pane) -> String {
+        let (row, col) = pane.cursor.borrow().get_cursor();
+        format!("Insert {}:{}", row, col)
+    }
+
 }
 
 
+pub struct Command {
+    command: String,
+    edit_pos: usize,
+}
+
+impl Command {
+    pub fn new() -> Self {
+        Self {
+            command: String::new(),
+            edit_pos: 0,
+        }
+    }
+}
+
+impl Mode for Command {
+
+    fn get_name(&self) -> String {
+        "Command".to_string()
+    }
+
+    fn update_status(&self, _pane: &Pane) -> String {
+        format!(":{}", self.command)
+    }
+
+    fn change_mode(&mut self, name: &str, pane: &mut Pane) {
+        self.command.clear();
+        self.edit_pos = 0;
+        pane.set_mode(name);
+    }
+
+    fn process_keypress(&mut self, key: KeyEvent, pane: &mut Pane) -> io::Result<bool> {
+
+        match key {
+            KeyEvent {
+                code:
+                direction
+                    @
+                    (KeyCode::Up
+                     | KeyCode::Down
+                     | KeyCode::Left
+                     | KeyCode::Right
+                    ),
+                modifiers: KeyModifiers::NONE,
+                ..
+            } => {
+                match direction {
+                    KeyCode::Left => {
+                        self.edit_pos = self.edit_pos.saturating_sub(1);
+                    },
+                    KeyCode::Right => {
+                        if self.edit_pos < self.command.len() {
+                            self.edit_pos += 1;
+                        }
+                    },
+                    KeyCode::Up => {
+                        self.edit_pos = self.command.len();
+                    },
+                    KeyCode::Down => {
+                        self.edit_pos = 0;
+                    },
+                    _ => unreachable!(),
+                }
+                Ok(true)
+            },
+            KeyEvent {
+                code: KeyCode::Enter,
+                modifiers: KeyModifiers::NONE,
+                ..
+            } => {
+                pane.run_command(&self.command);
+
+                self.change_mode("Normal", pane);
+                Ok(true)
+            },
+            KeyEvent {
+                code: KeyCode::Delete,
+                modifiers: KeyModifiers::NONE,
+                ..
+            } => {
+                if self.edit_pos < self.command.len() {
+                    self.command.remove(self.edit_pos);
+                }
+                Ok(true)
+            },
+            KeyEvent {
+                code: KeyCode::Backspace,
+                modifiers: KeyModifiers::NONE,
+                ..
+            } => {
+                if self.edit_pos > 0 {
+                    self.edit_pos -= 1;
+                    self.command.remove(self.edit_pos);
+                }
+                Ok(true)
+            },
+            KeyEvent {
+                code: code @ KeyCode::Char(..),
+                modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+                ..
+            } => {
+                let c = match code {
+                    KeyCode::Char(c) => c,
+                    _ => unreachable!(),
+                };
+
+
+                self.command.insert(self.edit_pos, c);
+                self.edit_pos += 1;
+                Ok(true)
+            },
+            KeyEvent {
+                code: KeyCode::Esc,
+                modifiers: KeyModifiers::NONE,
+                ..
+            } => {
+                self.change_mode("Normal", pane);
+                Ok(true)
+            },
+            _ => Ok(false),
+
+        }
+
+    }
+
+}
