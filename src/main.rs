@@ -6,6 +6,7 @@ use window::Window;
 pub mod window;
 pub mod mode;
 pub mod cursor;
+pub mod keybinds;
 
 struct CleanUp;
 

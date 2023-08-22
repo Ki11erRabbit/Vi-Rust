@@ -1,0 +1,62 @@
+
+[editor]
+    line_number = true
+    relative_line_number = false
+    
+
+
+    
+[normal]
+    left = ["h", "<left>"]
+    down = ["j", "<down>", "<enter>"]
+    up = ["k", "<up>"]
+    right = ["l", "<right>", "<space>"]
+    line_start = "0"
+    line_end = "$"
+    word_start_forward = "w"
+    word_start_backword = "W"
+    word_end_forward = "b"
+    word_end_backward = "B"
+    file_top = ["gg", "<home>"]
+    file_bottom = ["G", "<end>"]
+    page_up = ["^b", "<pg-up>"]
+    page_down = ["^f", "<pg-down>"]
+    insert_before = "i"
+    insert_beginning = "I"
+    insert_after = "a"
+    insert_end = "A"
+    insert_bellow = "o"
+    insert_above = "O"
+    replace = "r"
+    undo = "u"
+    redo = "^r"
+    delete_char = "x"
+    delete_word = "dw"
+    delete_line = "dd"
+    delete_line_remainder = "D"
+    copy_line = "yy"
+    paste_after = "p"
+    paste_before = "P"
+    start_command = ":"
+
+
+[insert] 
+    leave = "<esc>"
+    left = "<left>"
+    down = "<down>"
+    up = "<up>"
+    right = "<right>"
+    file_top = "<home>"
+    file_bottom = "<end>"
+    page_up = ["^b", "<pg-up>"]
+    page_down = ["^f", "<pg-down>"]
+
+[command]
+    leave = "<esc>"
+    left = "<left>"
+    right = "<right>"
+    start = "<up>"
+    end = "<down>"
+    
+ 
+    

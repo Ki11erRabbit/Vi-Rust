@@ -431,6 +431,20 @@ impl Pane {
             "q!" => {
                 self.close();
             },
+            "move" => {
+                let direction = command_args.next();
+                let direction = match direction {
+                    Some("up") => Direction::Up,
+                    Some("down") => Direction::Down,
+                    Some("left") => Direction::Left,
+                    Some("right") => Direction::Right,
+                    _ => panic!("Invalid direction"),
+                };
+
+                let amount = command_args.next().unwrap_or("1").parse::<usize>().unwrap_or(1);
+
+                self.cursor.borrow_mut().move_cursor(direction, amount, self.borrow_buffer());
+            },
             _ => {}
         }
 

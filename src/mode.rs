@@ -127,15 +127,8 @@ impl Mode for Normal {
                 modifiers: KeyModifiers::NONE,
                 ..
             } => {
-                let num = if let Ok(num) = self.number_buffer.parse::<usize>() {
-                    self.number_buffer.clear();
-                    num
-                } else {
-                    1
-                };
-
-                let cursor = &mut pane.cursor.borrow_mut();
-                cursor.move_cursor(Direction::Left, num, pane.borrow_buffer());
+                pane.run_command(&format!("move left {}", self.number_buffer));
+                self.number_buffer.clear();
                 
                 Ok(true)
             },
@@ -144,15 +137,8 @@ impl Mode for Normal {
                 modifiers: KeyModifiers::NONE,
                 ..
             } => {
-                let num = if let Ok(num) = self.number_buffer.parse::<usize>() {
-                    self.number_buffer.clear();
-                    num
-                } else {
-                    1
-                };
-
-                let cursor = &mut pane.cursor.borrow_mut();
-                cursor.move_cursor(Direction::Down, num, pane.borrow_buffer());
+                pane.run_command(&format!("move down {}", self.number_buffer));
+                self.number_buffer.clear();
                 
                 Ok(true)
             },
@@ -161,15 +147,8 @@ impl Mode for Normal {
                 modifiers: KeyModifiers::NONE,
                 ..
             } => {
-                let num = if let Ok(num) = self.number_buffer.parse::<usize>() {
-                    self.number_buffer.clear();
-                    num
-                } else {
-                    1
-                };
-
-                let cursor = &mut pane.cursor.borrow_mut();
-                cursor.move_cursor(Direction::Up, num, pane.borrow_buffer());
+                pane.run_command(&format!("move up {}", self.number_buffer));
+                self.number_buffer.clear();
                 
                 Ok(true)
             },
@@ -178,15 +157,8 @@ impl Mode for Normal {
                 modifiers: KeyModifiers::NONE,
                 ..
             } => {
-                let num = if let Ok(num) = self.number_buffer.parse::<usize>() {
-                    self.number_buffer.clear();
-                    num
-                } else {
-                    1
-                };
-
-                let cursor = &mut pane.cursor.borrow_mut();
-                cursor.move_cursor(Direction::Right, num, pane.borrow_buffer());
+                pane.run_command(&format!("move right {}", self.number_buffer));
+                self.number_buffer.clear();
                 
                 Ok(true)
             },
@@ -220,7 +192,7 @@ impl Mode for Normal {
 
     fn update_status(&self, pane: &Pane) -> String {
         let (row, col) = pane.cursor.borrow().get_cursor();
-        format!("Normal {}:{}", row, col)
+        format!("Normal {}:{}", col, row)
     }
 
 }
@@ -334,7 +306,7 @@ impl Mode for Insert {
 
     fn update_status(&self, pane: &Pane) -> String {
         let (row, col) = pane.cursor.borrow().get_cursor();
-        format!("Insert {}:{}   {:?} {}", row, col, pane.borrow_buffer().to_string().as_str(), pane.borrow_buffer().lines().count())
+        format!("Insert {}:{}", col, row)
     }
 
 }
