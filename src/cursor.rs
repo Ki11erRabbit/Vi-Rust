@@ -66,7 +66,14 @@ impl Cursor {
     }
 
     pub fn set_cursor(&mut self, x: CursorMove, y: CursorMove, rows: &Rope, (x_offset, y_offset): (usize, usize)) {
-        let number_of_lines = rows.line_len() - y_offset;
+        
+        let mut number_of_lines = rows.line_len();
+        if let Some(newline) = rows.chars().last() {
+            if newline != '\n' {
+                number_of_lines += 1;
+            }
+        }
+        number_of_lines = number_of_lines.saturating_sub(y_offset);
         let number_of_cols = if let Some(row) = rows.lines().nth(self.y.saturating_sub(y_offset)) {
             row.chars().count().saturating_sub(x_offset)
         }
