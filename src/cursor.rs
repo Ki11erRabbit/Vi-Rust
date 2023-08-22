@@ -2,7 +2,12 @@ use crop::Rope;
 
 use crate::window::Pane;
 
-
+pub enum CursorMove {
+    Amount(usize),
+    ToEnd,
+    ToStart,
+    Nothing,
+}
 
 pub enum Direction {
     Up,
@@ -60,8 +65,48 @@ impl Cursor {
 
     }
 
+    pub fn set_cursor(&mut self, x: CursorMove, y: CursorMove, rows: &Rope, (x_offset, y_offset): (usize, usize)) {
+        let number_of_lines = rows.line_len() - y_offset;
+        let number_of_cols = if let Some(row) = rows.lines().nth(self.y.saturating_sub(y_offset)) {
+            row.chars().count().saturating_sub(x_offset)
+        }
+        else {
+            0
+        };
+
+        match x {
+            CursorMove::Amount(n) => {
+                self.x = n % (number_of_cols + 1);
+            },
+            CursorMove::ToEnd => {
+                self.x = self.cols.min(number_of_cols);
+            },
+            CursorMove::ToStart => {
+                self.x = 0;
+            },
+            CursorMove::Nothing => {},
+        }
+        match y {
+            CursorMove::Amount(n) => {
+                self.y = n % (number_of_lines + 1)
+            },
+            CursorMove::ToEnd => {
+                self.y = self.rows.min(number_of_lines);
+            },
+            CursorMove::ToStart => {
+                self.y = 0;
+            },
+            CursorMove::Nothing => {},
+        }
+    }
+
     pub fn move_cursor(&mut self, direction: Direction, n: usize, rows: &Rope) {
-        let number_of_lines = rows.line_len();
+        let mut number_of_lines = rows.line_len();
+        if let Some(newline) = rows.chars().last() {
+            if newline != '\n' {
+                number_of_lines += 1;
+            }
+        }
         let number_of_cols = if let Some(row) = rows.lines().nth(self.y) {
             row.chars().count()
         }
@@ -75,7 +120,7 @@ impl Cursor {
             },
             Direction::Down => {
                 if self.y < number_of_lines {
-                    let new_y = (self.y + n) % number_of_lines;
+                    let new_y = (self.y + n) % (number_of_lines + 1);
                     if new_y < self.y {
                         self.y = number_of_lines;
                     }
@@ -89,7 +134,7 @@ impl Cursor {
             },
             Direction::Right => {
                 if self.x < number_of_cols {
-                    let new_x = (self.x + n) % number_of_cols;
+                    let new_x = (self.x + n) % (number_of_cols + 1);
 
                     if new_x < self.x {
                         self.x = number_of_cols;
@@ -98,6 +143,9 @@ impl Cursor {
                         self.x = new_x;
                     }
 
+                }
+                else {
+                    self.x = number_of_cols;
                 }
             },
         }

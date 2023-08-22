@@ -12,7 +12,7 @@ use crossterm::event::{KeyEvent, self, Event};
 use crossterm::{terminal::{self, ClearType}, execute, cursor, queue};
 
 use crate::mode::{Mode, Normal, Insert, Command};
-use crate::cursor::Cursor;
+use crate::cursor::{Cursor, Direction, CursorMove};
 
 
 struct KeyReader {
@@ -343,6 +343,10 @@ impl Pane {
 
     pub fn insert_newline(&mut self) {
         self.insert_char('\n');
+        let mut cursor = self.cursor.borrow_mut();
+
+        cursor.move_cursor(Direction::Down, 1, self.borrow_buffer());
+        cursor.set_cursor(CursorMove::ToStart, CursorMove::Nothing, self.borrow_buffer(), (0,0));
     }
 
     ///TODO: add check to make sure we have a valid byte range
@@ -358,20 +362,31 @@ impl Pane {
     }
 
     ///TODO: add check to make sure we have a valid byte range
-    pub fn backspace(&mut self) -> bool {
+    pub fn backspace(&mut self) {
         self.set_changed(true);
         let byte_pos = self.get_byte_offset();
-        let mut ret = false;
-        if self.contents.chars().nth(byte_pos).is_some() && self.contents.chars().nth(byte_pos).unwrap() == '\n' {
-            ret = true;
+        let mut go_up = false;
+
+        if self.borrow_buffer().bytes().nth(byte_pos.saturating_sub(1)) == Some(b'\n') {
+            go_up = true;
         }
 
         if byte_pos == 0 {
-            return ret;
+            return;
         }
 
+        let mut cursor = self.cursor.borrow_mut();
+
+        if go_up {
+            cursor.move_cursor(Direction::Up, 1, self.borrow_buffer());
+            cursor.set_cursor(CursorMove::ToEnd, CursorMove::Nothing, self.borrow_buffer(), (0, 1));
+        }
+        else {
+            cursor.move_cursor(Direction::Left, 1, self.borrow_buffer());
+        }
+        
+
         self.contents.delete(byte_pos.saturating_sub(1)..byte_pos);
-        ret
     }
 
     pub fn insert_char(&mut self, c: char) {

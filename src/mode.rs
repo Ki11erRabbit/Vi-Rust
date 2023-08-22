@@ -2,7 +2,7 @@ use std::io;
 
 use crossterm::event::{KeyEvent, KeyCode, KeyModifiers};
 
-use crate::{window::Pane, cursor::Direction};
+use crate::{window::Pane, cursor::{Direction, CursorMove}};
 
 
 
@@ -249,8 +249,6 @@ impl Insert {
 
     fn insert_newline(&self, pane: &mut Pane) -> io::Result<bool> {
         pane.insert_newline();
-        let cursor = &mut pane.cursor.borrow_mut();
-        cursor.move_cursor(Direction::Down, 1, pane.borrow_buffer());
         Ok(true)
     }
     fn delete_char(&self, pane: &mut Pane) -> io::Result<bool> {
@@ -258,15 +256,7 @@ impl Insert {
         Ok(true)
     }
     fn backspace(&self, pane: &mut Pane) -> io::Result<bool> {
-        let result = pane.backspace();
-        let cursor = &mut pane.cursor.borrow_mut();
-        if result {
-            cursor.move_cursor(Direction::Up, 1, pane.borrow_buffer());
-            cursor.move_cursor(Direction::Right, 1000000000, pane.borrow_buffer());
-        }
-        else {
-            cursor.move_cursor(Direction::Left, 1, pane.borrow_buffer());
-        }
+        pane.backspace();
         Ok(true)
     }
     fn insert_char(&self, pane: &mut Pane, c: char) -> io::Result<bool> {
@@ -344,7 +334,7 @@ impl Mode for Insert {
 
     fn update_status(&self, pane: &Pane) -> String {
         let (row, col) = pane.cursor.borrow().get_cursor();
-        format!("Insert {}:{}", row, col)
+        format!("Insert {}:{}   {:?} {}", row, col, pane.borrow_buffer().to_string().as_str(), pane.borrow_buffer().lines().count())
     }
 
 }

@@ -46,8 +46,9 @@ fn main() -> io::Result<()> {
 
     let mut editor = Editor::new();
 
-    let filename = std::env::args().nth(1).expect("No file name provided");
-    editor.open_file(&filename)?;
+    if let Some(filename) = std::env::args().nth(1) {
+        editor.open_file(&filename)?;
+    }
 
     while editor.run()? {}
 
