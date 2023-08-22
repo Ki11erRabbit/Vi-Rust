@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crossterm::event::{KeyCode, KeyModifiers};
+use crossterm::event::{KeyCode, KeyModifiers, KeyEvent};
 use serde::Deserialize;
 
 
@@ -8,6 +8,15 @@ use serde::Deserialize;
 pub struct Key {
     pub key: KeyCode,
     pub modifier: KeyModifiers,
+}
+
+impl From<KeyEvent> for Key {
+    fn from(key_event: KeyEvent) -> Self {
+        Self {
+            key: key_event.code,
+            modifier: key_event.modifiers,
+        }
+    }
 }
 
 pub type Mode = String;
@@ -34,11 +43,19 @@ impl Default for Settings {
             modifier: KeyModifiers::NONE,
         }], "right".to_string());
         normal_keybindings.insert(vec![Key {
+            key: KeyCode::Right,
+            modifier: KeyModifiers::NONE,
+        }], "right".to_string());
+        normal_keybindings.insert(vec![Key {
             key: KeyCode::Char(' '),
             modifier: KeyModifiers::NONE,
         }], "right".to_string());
         normal_keybindings.insert(vec![Key {
             key: KeyCode::Char('h'),
+            modifier: KeyModifiers::NONE,
+        }], "left".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Left,
             modifier: KeyModifiers::NONE,
         }], "left".to_string());
         normal_keybindings.insert(vec![Key {
@@ -50,11 +67,19 @@ impl Default for Settings {
             modifier: KeyModifiers::NONE,
         }], "down".to_string());
         normal_keybindings.insert(vec![Key {
+            key: KeyCode::Down,
+            modifier: KeyModifiers::NONE,
+        }], "down".to_string());
+        normal_keybindings.insert(vec![Key {
             key: KeyCode::Enter,
             modifier: KeyModifiers::NONE,
         }], "down".to_string());
         normal_keybindings.insert(vec![Key {
             key: KeyCode::Char('k'),
+            modifier: KeyModifiers::NONE,
+        }], "up".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Up,
             modifier: KeyModifiers::NONE,
         }], "up".to_string());
 
@@ -283,7 +308,7 @@ pub struct EditorSettings {
     pub relative_line_number: bool,
     pub tab_size: usize,
     pub use_spaces: bool,
-    pub key_press_duration: usize,
+    pub key_timeout: u64,
 }
 
 impl Default for EditorSettings {
@@ -293,7 +318,7 @@ impl Default for EditorSettings {
             relative_line_number: false,
             tab_size: 4,
             use_spaces: true,
-            key_press_duration: 100,
+            key_timeout: 100,
         }
     }
 }

@@ -4,7 +4,7 @@ line_number = true
 relative_line_number = false
 tab_size = 4
 use_spaces = true
-key_press_duration = 100
+key_time = 100
     
 
 

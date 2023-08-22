@@ -13,11 +13,11 @@ use crossterm::{terminal::{self, ClearType}, execute, cursor, queue};
 
 use crate::mode::{Mode, Normal, Insert, Command};
 use crate::cursor::{Cursor, Direction, CursorMove};
-use crate::settings::Settings;
+use crate::settings::{Settings, Keys};
 
 
 struct KeyReader {
-    duration: Duration,
+    pub duration: Duration,
 }
 
 impl KeyReader {
@@ -47,14 +47,16 @@ pub struct Window {
 
 impl Window {
     pub fn new() -> Self {
+        let settings = Settings::default();
+        
         let key_reader = KeyReader {
-            duration: Duration::from_millis(100),
+            duration: Duration::from_millis(settings.editor_settings.key_timeout),
         };
         
         let win_size = terminal::size()
             .map(|(w, h)| (w as usize, h as usize - 2))// -1 for trailing newline and -1 for command bar
             .unwrap();
-        let pane = Rc::new(RefCell::new(Pane::new(win_size)));
+        let pane = Rc::new(RefCell::new(Pane::new(win_size, settings.mode_keybindings.clone())));
         let panes = vec![pane.clone()];
         Self {
             size: win_size,
@@ -62,7 +64,7 @@ impl Window {
             active_pane: 0,
             panes,
             key_reader,
-            settings: Settings::default(),
+            settings,
         }
     }
 
@@ -232,15 +234,22 @@ pub struct Pane {
     pub cursor: Rc<RefCell<Cursor>>,
     close: bool,
     changed: bool,
+    key_bindings: HashMap<String, HashMap<Keys, String>>,
+    
 }
 
 
 impl Pane {
-    pub fn new(size: (usize, usize)) -> Self {
+    pub fn new(size: (usize, usize), key_bindings: HashMap<String, HashMap<Keys, String>>) -> Self {
         let mut modes: HashMap<String, Rc<RefCell<dyn Mode>>> = HashMap::new();
         let normal = Rc::new(RefCell::new(Normal::new()));
+        normal.borrow_mut().add_keybindings(key_bindings.get("Normal").unwrap().clone());
+
         let insert = Rc::new(RefCell::new(Insert::new()));
+        insert.borrow_mut().add_keybindings(key_bindings.get("Insert").unwrap().clone());
+        
         let command = Rc::new(RefCell::new(Command::new()));
+        command.borrow_mut().add_keybindings(key_bindings.get("Command").unwrap().clone());
 
         modes.insert("Normal".to_string(), normal.clone());
         modes.insert("Insert".to_string(), insert.clone());
@@ -254,6 +263,7 @@ impl Pane {
             cursor: Rc::new(RefCell::new(Cursor::new(size))),
             close: false,
             changed: false,
+            key_bindings,
         }
     }
 

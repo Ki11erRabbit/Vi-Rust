@@ -1,8 +1,8 @@
-use std::io;
+use std::{io, collections::HashMap, rc::Rc, cell::RefCell};
 
 use crossterm::event::{KeyEvent, KeyCode, KeyModifiers};
 
-use crate::{window::Pane, cursor::{Direction, CursorMove}};
+use crate::{window::Pane, cursor::{Direction, CursorMove}, settings::{Keys, Key}};
 
 
 
@@ -17,18 +17,28 @@ pub trait Mode {
 
     fn update_status(&self, pane: &Pane) -> String;
 
+    fn add_keybindings(&mut self, bindings: HashMap<Keys, String>);
+
+    fn flush_key_buffer(&mut self);
+
+    fn execute_command(&mut self, command: &str, pane: &mut Pane);
+
 }
 
 
 
 pub struct Normal {
     number_buffer: String,
+    keybindings: Rc<RefCell<HashMap<Keys, String>>>,
+    key_buffer: Vec<Key>,
 }
 
 impl Normal {
     pub fn new() -> Self {
         Self {
             number_buffer: String::new(),
+            keybindings: Rc::new(RefCell::new(HashMap::new())),
+            key_buffer: Vec::new(),
         }
     }
 }
@@ -37,6 +47,44 @@ impl Mode for Normal {
 
     fn get_name(&self) -> String {
         String::from("Normal")
+    }
+
+    fn add_keybindings(&mut self, bindings: HashMap<Keys, String>) {
+        self.keybindings.borrow_mut().extend(bindings);
+    }
+
+    fn flush_key_buffer(&mut self) {
+        self.key_buffer.clear();
+    }
+
+    fn execute_command(&mut self, command: &str, pane: &mut Pane) {
+        match command {
+            "left" => {
+                pane.run_command(&format!("move left {}", self.number_buffer));
+                self.number_buffer.clear();
+            },
+            "right" => {
+                pane.run_command(&format!("move right {}", self.number_buffer));
+                self.number_buffer.clear();
+            },
+            "up" => {
+                pane.run_command(&format!("move up {}", self.number_buffer));
+                self.number_buffer.clear();
+            },
+            "down" => {
+                pane.run_command(&format!("move down {}", self.number_buffer));
+                self.number_buffer.clear();
+            },
+            "insert_before" => {
+                self.change_mode("Insert", pane);
+            },
+            "start_command" => {
+                self.change_mode("Command", pane);
+            },
+            _ => unreachable!(),
+
+        }
+
     }
 
     fn process_keypress(&mut self, key: KeyEvent, pane: &mut Pane) -> io::Result<bool> {
@@ -122,7 +170,23 @@ impl Mode for Normal {
                 self.number_buffer.push('0');
                 Ok(true)
             },
-            KeyEvent {
+            key_event => {
+                let key = Key::from(key_event);
+
+                if key.key == KeyCode::Null {
+                    self.flush_key_buffer();
+                }
+                else {
+                    self.key_buffer.push(key);
+                    if let Some(command) = self.keybindings.clone().borrow().get(&self.key_buffer) {
+                        self.execute_command(command.as_str(), pane);
+                    }
+                    self.flush_key_buffer();
+                }
+
+                Ok(true)
+            }
+            /*KeyEvent {
                 code: KeyCode::Char('h') | KeyCode::Left,
                 modifiers: KeyModifiers::NONE,
                 ..
@@ -178,7 +242,7 @@ impl Mode for Normal {
                 self.change_mode("Command", pane);
                 Ok(true)
             },
-            _ => Ok(true),
+            _ => Ok(true),*/
             
 
         }
@@ -198,11 +262,17 @@ impl Mode for Normal {
 }
 
 
-pub struct Insert;
+pub struct Insert {
+    keybindings: Rc<RefCell<HashMap<Keys, String>>>,
+    key_buffer: Vec<Key>,
+}
 
 impl Insert {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            keybindings: Rc::new(RefCell::new(HashMap::new())),
+            key_buffer: Vec::new(),
+        }
     }
 
     fn move_cursor(&self, direction: KeyCode, pane: &mut Pane) -> io::Result<bool> {
@@ -244,11 +314,41 @@ impl Mode for Insert {
     fn get_name(&self) -> String {
         "Insert".to_string()
     }
+
+    fn add_keybindings(&mut self, keybindings: HashMap<Keys, String>) {
+        self.keybindings.borrow_mut().extend(keybindings);
+    }
+
+    fn flush_key_buffer(&mut self) {
+        self.key_buffer.clear();
+    }
+
+    fn execute_command(&mut self, command: &str, pane: &mut Pane) {
+        match command {
+            "left" => {
+                pane.run_command("move left 1");
+            },
+            "right" => {
+                pane.run_command("move right 1");
+            },
+            "up" => {
+                pane.run_command("move up 1");
+            },
+            "down" => {
+                pane.run_command("move down 1");
+            },
+            "leave" => {
+                self.change_mode("Normal", pane);
+            },
+            _ => unreachable!(),
+
+        }
+    }
     
     fn process_keypress(&mut self, key: KeyEvent, pane: &mut Pane) -> io::Result<bool> {
 
         match key {
-            KeyEvent {
+            /*KeyEvent {
                 code:
                 direction
                     @
@@ -259,7 +359,7 @@ impl Mode for Insert {
                     ),
                 modifiers: KeyModifiers::NONE,
                 ..
-            } => self.move_cursor(direction, pane),
+            } => self.move_cursor(direction, pane),*/
             KeyEvent {
                 code: KeyCode::Enter,
                 modifiers: KeyModifiers::NONE,
@@ -284,7 +384,23 @@ impl Mode for Insert {
                 KeyCode::Tab => '\t',
                 _ => unreachable!(),
             }),
-            KeyEvent {
+            key_event => {
+                let key = Key::from(key_event);
+
+                if key.key == KeyCode::Null {
+                    self.flush_key_buffer();
+                }
+                else {
+                    self.key_buffer.push(key);
+                    if let Some(command) = self.keybindings.clone().borrow().get(&self.key_buffer) {
+                        self.execute_command(command.as_str(), pane);
+                    }
+                    self.flush_key_buffer();
+                }
+
+                Ok(true)
+            }
+            /*KeyEvent {
                 code: KeyCode::Esc,
                 modifiers: KeyModifiers::NONE,
                 ..
@@ -292,7 +408,7 @@ impl Mode for Insert {
                 self.change_mode("Normal", pane);
                 Ok(true)
             },
-            _ => Ok(false),
+            _ => Ok(false),*/
 
         }
 
@@ -315,6 +431,8 @@ impl Mode for Insert {
 pub struct Command {
     command: String,
     edit_pos: usize,
+    keybindings: Rc<RefCell<HashMap<Keys, String>>>,
+    key_buffer: Vec<Key>,
 }
 
 impl Command {
@@ -322,6 +440,8 @@ impl Command {
         Self {
             command: String::new(),
             edit_pos: 0,
+            keybindings: Rc::new(RefCell::new(HashMap::new())),
+            key_buffer: Vec::new(),
         }
     }
 }
@@ -342,10 +462,42 @@ impl Mode for Command {
         pane.set_mode(name);
     }
 
+    fn add_keybindings(&mut self, keybindings: HashMap<Keys, String>) {
+        self.keybindings.borrow_mut().extend(keybindings);
+    }
+
+    fn flush_key_buffer(&mut self) {
+        self.key_buffer.clear();
+    }
+
+    fn execute_command(&mut self, command: &str, pane: &mut Pane) {
+        match command {
+            "left" => {
+                self.edit_pos = self.edit_pos.saturating_sub(1);
+            },
+            "right" => {
+                if self.edit_pos < self.command.len() {
+                    self.edit_pos += 1;
+                }
+            },
+            "start" => {
+                self.edit_pos = 0;
+            },
+            "end" => {
+                self.edit_pos = self.command.len();
+            },
+            "leave" => {
+                self.change_mode("Normal", pane);
+            },
+            _ => unreachable!(),
+
+        }
+    }
+
     fn process_keypress(&mut self, key: KeyEvent, pane: &mut Pane) -> io::Result<bool> {
 
         match key {
-            KeyEvent {
+            /*KeyEvent {
                 code:
                 direction
                     @
@@ -375,7 +527,7 @@ impl Mode for Command {
                     _ => unreachable!(),
                 }
                 Ok(true)
-            },
+            },*/
             KeyEvent {
                 code: KeyCode::Enter,
                 modifiers: KeyModifiers::NONE,
@@ -422,15 +574,29 @@ impl Mode for Command {
                 self.edit_pos += 1;
                 Ok(true)
             },
-            KeyEvent {
+            /*KeyEvent {
                 code: KeyCode::Esc,
                 modifiers: KeyModifiers::NONE,
                 ..
             } => {
                 self.change_mode("Normal", pane);
                 Ok(true)
-            },
-            _ => Ok(false),
+            },*/
+            key_event => {
+                let key = Key::from(key_event);
+
+                if key.key == KeyCode::Null {
+                    if let Some(command) = self.keybindings.clone().borrow().get(&self.key_buffer) {
+                        self.execute_command(command.as_str(), pane);
+                    }
+                    self.flush_key_buffer();
+                }
+                else {
+                    self.key_buffer.push(key);
+                }
+
+                Ok(true)
+            }
 
         }
 
