@@ -13,6 +13,7 @@ use crossterm::{terminal::{self, ClearType}, execute, cursor, queue};
 
 use crate::mode::{Mode, Normal, Insert, Command};
 use crate::cursor::{Cursor, Direction, CursorMove};
+use crate::settings::Settings;
 
 
 struct KeyReader {
@@ -41,6 +42,7 @@ pub struct Window {
     active_pane: usize,
     panes: Vec<Rc<RefCell<Pane>>>,
     key_reader: KeyReader,
+    settings: Settings,
 }
 
 impl Window {
@@ -60,6 +62,7 @@ impl Window {
             active_pane: 0,
             panes,
             key_reader,
+            settings: Settings::default(),
         }
     }
 

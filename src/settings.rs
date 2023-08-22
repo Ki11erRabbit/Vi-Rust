@@ -17,18 +17,285 @@ pub type Keys = Vec<Key>;
 
 #[derive(Debug)]
 pub struct Settings {
-    editor_settings: EditorSettings,
-    mode_keybindings: HashMap<Mode, HashMap<Keys, Command>>,
+    pub editor_settings: EditorSettings,
+    pub mode_keybindings: HashMap<Mode, HashMap<Keys, Command>>,
     
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        let editor_settings = EditorSettings::default();
+        let mut mode_keybindings = HashMap::new();
+
+        let mut normal_keybindings = HashMap::new();
+
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('l'),
+            modifier: KeyModifiers::NONE,
+        }], "right".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char(' '),
+            modifier: KeyModifiers::NONE,
+        }], "right".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('h'),
+            modifier: KeyModifiers::NONE,
+        }], "left".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Backspace,
+            modifier: KeyModifiers::NONE,
+        }], "left".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('j'),
+            modifier: KeyModifiers::NONE,
+        }], "down".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Enter,
+            modifier: KeyModifiers::NONE,
+        }], "down".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('k'),
+            modifier: KeyModifiers::NONE,
+        }], "up".to_string());
+
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('0'),
+            modifier: KeyModifiers::NONE,
+        }], "line_start".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('$'),
+            modifier: KeyModifiers::NONE,
+        }], "line_end".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('w'),
+            modifier: KeyModifiers::NONE,
+        }], "word_start_forward".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('W'),
+            modifier: KeyModifiers::NONE,
+        }], "word_start_backward".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('B'),
+            modifier: KeyModifiers::NONE,
+        }], "word_end_forward".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('b'),
+            modifier: KeyModifiers::NONE,
+        }], "word_end_backward".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('g'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('g'),
+            modifier: KeyModifiers::NONE,
+        }], "file_top".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Home,
+            modifier: KeyModifiers::NONE,
+        }], "file_top".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('G'),
+            modifier: KeyModifiers::NONE,
+        }], "file_bottom".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::End,
+            modifier: KeyModifiers::NONE,
+        }], "file_bottom".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('b'),
+            modifier: KeyModifiers::CONTROL,
+        }], "page_up".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('f'),
+            modifier: KeyModifiers::CONTROL,
+        }], "page_down".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::PageUp,
+            modifier: KeyModifiers::NONE,
+        }], "page_up".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::PageDown,
+            modifier: KeyModifiers::NONE,
+        }], "page_down".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('i'),
+            modifier: KeyModifiers::NONE,
+        }], "insert_before".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('a'),
+            modifier: KeyModifiers::NONE,
+        }], "insert_after".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('I'),
+            modifier: KeyModifiers::NONE,
+        }], "insert_before".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('a'),
+            modifier: KeyModifiers::NONE,
+        }], "insert_after".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('o'),
+            modifier: KeyModifiers::NONE,
+        }], "insert_bellow".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('O'),
+            modifier: KeyModifiers::NONE,
+        }], "insert_above".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('r'),
+            modifier: KeyModifiers::NONE,
+        }], "replace".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('u'),
+            modifier: KeyModifiers::NONE,
+        }], "undo".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('r'),
+            modifier: KeyModifiers::CONTROL,
+        }], "redo".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('x'),
+            modifier: KeyModifiers::NONE,
+        }], "delete_char".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('d'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('w'),
+            modifier: KeyModifiers::NONE,
+        }], "delete_word".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('d'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('d'),
+            modifier: KeyModifiers::NONE,
+        }], "delete_line".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('D'),
+            modifier: KeyModifiers::NONE,
+        }], "delete_line_remainder".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('y'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('y'),
+            modifier: KeyModifiers::NONE,
+        }], "copy_line".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('p'),
+            modifier: KeyModifiers::NONE,
+        }], "paste_after".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('P'),
+            modifier: KeyModifiers::NONE,
+        }], "paste_before".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char(':'),
+            modifier: KeyModifiers::NONE,
+        }], "start_command".to_string());
+
+        let mut insert_keybindings = HashMap::new();
+
+        insert_keybindings.insert(vec![Key {
+            key: KeyCode::Esc,
+            modifier: KeyModifiers::NONE,
+        }], "leave".to_string());
+        insert_keybindings.insert(vec![Key {
+            key: KeyCode::Left,
+            modifier: KeyModifiers::NONE,
+        }], "left".to_string());
+        insert_keybindings.insert(vec![Key {
+            key: KeyCode::Right,
+            modifier: KeyModifiers::NONE,
+        }], "right".to_string());
+        insert_keybindings.insert(vec![Key {
+            key: KeyCode::Up,
+            modifier: KeyModifiers::NONE,
+        }], "up".to_string());
+        insert_keybindings.insert(vec![Key {
+            key: KeyCode::Down,
+            modifier: KeyModifiers::NONE,
+        }], "down".to_string());
+        insert_keybindings.insert(vec![Key {
+            key: KeyCode::Home,
+            modifier: KeyModifiers::NONE,
+        }], "file_top".to_string());
+        insert_keybindings.insert(vec![Key {
+            key: KeyCode::End,
+            modifier: KeyModifiers::NONE,
+        }], "file_bottom".to_string());
+        insert_keybindings.insert(vec![Key {
+            key: KeyCode::Char('b'),
+            modifier: KeyModifiers::CONTROL,
+        }], "page_up".to_string());
+        insert_keybindings.insert(vec![Key {
+            key: KeyCode::PageUp,
+            modifier: KeyModifiers::NONE,
+        }], "page_up".to_string());
+        insert_keybindings.insert(vec![Key {
+            key: KeyCode::Char('f'),
+            modifier: KeyModifiers::CONTROL,
+        }], "page_down".to_string());
+        insert_keybindings.insert(vec![Key {
+            key: KeyCode::PageDown,
+            modifier: KeyModifiers::NONE,
+        }], "page_down".to_string());
+
+        let mut command_keybindings = HashMap::new();
+
+        command_keybindings.insert(vec![Key {
+            key: KeyCode::Esc,
+            modifier: KeyModifiers::NONE,
+        }], "leave".to_string());
+        command_keybindings.insert(vec![Key {
+            key: KeyCode::Left,
+            modifier: KeyModifiers::NONE,
+        }], "left".to_string());
+        command_keybindings.insert(vec![Key {
+            key: KeyCode::Right,
+            modifier: KeyModifiers::NONE,
+        }], "right".to_string());
+        command_keybindings.insert(vec![Key {
+            key: KeyCode::Up,
+            modifier: KeyModifiers::NONE,
+        }], "start".to_string());
+        command_keybindings.insert(vec![Key {
+            key: KeyCode::Down,
+            modifier: KeyModifiers::NONE,
+        }], "end".to_string());
+
+        mode_keybindings.insert("Normal".to_string(), normal_keybindings);
+        mode_keybindings.insert("Insert".to_string(), insert_keybindings);
+        mode_keybindings.insert("Command".to_string(), command_keybindings);
+
+        
+        Self {
+            editor_settings,
+            mode_keybindings,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
 pub struct EditorSettings {
-    line_number: bool,
-    relative_line_number: bool,
-    tab_size: usize,
-    use_spaces: bool,
-    key_press_duration: usize,
+    pub line_number: bool,
+    pub relative_line_number: bool,
+    pub tab_size: usize,
+    pub use_spaces: bool,
+    pub key_press_duration: usize,
+}
+
+impl Default for EditorSettings {
+    fn default() -> Self {
+        Self {
+            line_number: true,
+            relative_line_number: false,
+            tab_size: 4,
+            use_spaces: true,
+            key_press_duration: 100,
+        }
+    }
 }
 
 fn parse_key(value: &toml::Value) -> Keys {
