@@ -2,25 +2,27 @@
 [editor]
     line_number = true
     relative_line_number = false
+    tab_size = 4
+    use_spaces = true
     
 
 
     
 [normal]
-    left = ["h", "<left>"]
-    down = ["j", "<down>", "<enter>"]
-    up = ["k", "<up>"]
-    right = ["l", "<right>", "<space>"]
-    line_start = "0"
-    line_end = "$"
-    word_start_forward = "w"
-    word_start_backword = "W"
-    word_end_forward = "b"
-    word_end_backward = "B"
-    file_top = ["gg", "<home>"]
-    file_bottom = ["G", "<end>"]
-    page_up = ["^b", "<pg-up>"]
-    page_down = ["^f", "<pg-down>"]
+    left = [{ keys = [{ key = "h", mod = [] }] }, { keys = [{ key = "left", mod = [] }] }]
+    down = [{ keys = [{ key = "j", mod = [] }] }, { keys = [{ key = "down", mod = [] }] }, { keys = [{ key = "enter", mod = [] }] }]
+    up = [{ keys = [{ key = "k", mod = [] }], { keys = [{ key = "up", mod = [] }] }]
+    right = [{ keys = [{ key = "l", mod = [] }] }, { keys = [{ key = "right", mod = [] }] }, { keys = [{ key = "space", mod = [] }] }]
+    line_start = [{ keys = [{ key = "0", mod = [] }] }]
+    line_end = [{ keys = [{ key = "$", mod = [] }] }]
+    word_start_forward = [{ keys = [{ key = "w", mod = [] }] }]
+    word_start_backword = [{ keys = [{ key = "W", mod = [] }] }]
+    word_end_forward = [{ keys = [{ key = "B", mod = [] }] }]
+    word_end_backward = [{ keys = [{ key = "b", mod = [] }] }]
+    file_top = [{ keys = [{ key = "g", mod = []}, { key = "g", mod = [] }] }, { keys = [{ key = "home", mod = [] }] }]
+    file_bottom = [{ keys = [{ key = "G", mod = [] }] }, { keys = [{ key = "end", mod = [] }] } ]
+    page_up = [{ keys = [{ key = "b", mod = ["ctrl"] }] }, { keys = [{ key = "page-up", mod = [] }] }]
+    page_down = [{ keys = [{ key = "f", mod = ["ctrl"] }] }, { keys = [{ key = "page-down", mod = [] }] }]
     insert_before = "i"
     insert_beginning = "I"
     insert_after = "a"
@@ -29,34 +31,34 @@
     insert_above = "O"
     replace = "r"
     undo = "u"
-    redo = "^r"
+    redo = { key = "r", mod = ["ctrl"] }
     delete_char = "x"
-    delete_word = "dw"
-    delete_line = "dd"
+    delete_word = { keys = [{ key = "d", mod = [] }, { key = "w", mod = [] }] }
+    delete_line = { keys = [{ key = "d", mod = [] }, { key = "d", mod = [] }] }
     delete_line_remainder = "D"
-    copy_line = "yy"
+    copy_line = { keys = [{ key = "y", mod = [] }, { key = "y", mod = [] }] }
     paste_after = "p"
     paste_before = "P"
     start_command = ":"
 
 
 [insert] 
-    leave = "<esc>"
-    left = "<left>"
-    down = "<down>"
-    up = "<up>"
-    right = "<right>"
-    file_top = "<home>"
-    file_bottom = "<end>"
-    page_up = ["^b", "<pg-up>"]
-    page_down = ["^f", "<pg-down>"]
+    leave = "esc"
+    left = "left"
+    down = "down"
+    up = "up"
+    right = "right"
+    file_top = "home"
+    file_bottom = "end"
+    page_up = [{ keys = [{ key = "b", mod = ["ctrl"] }] }, { keys = [{ key = "page-up", mod = [] }] }]
+    page_down = [{ keys = [{ key = "f", mod = ["ctrl"] }] }, { keys = [{ key = "page-down", mod = [] }] }]
 
 [command]
-    leave = "<esc>"
-    left = "<left>"
-    right = "<right>"
-    start = "<up>"
-    end = "<down>"
+    leave = "esc"
+    left = "left"
+    right = "right"
+    start = "up"
+    end = "down"
     
  
     
