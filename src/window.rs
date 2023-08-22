@@ -41,29 +41,27 @@ pub struct Window {
     contents: WindowContents,
     active_pane: usize,
     panes: Vec<Rc<RefCell<Pane>>>,
-    key_reader: KeyReader,
     settings: Settings,
+    duration: Duration,
 }
 
 impl Window {
     pub fn new() -> Self {
         let settings = Settings::default();
         
-        let key_reader = KeyReader {
-            duration: Duration::from_millis(settings.editor_settings.key_timeout),
-        };
+        let duration = Duration::from_millis(settings.editor_settings.key_timeout);
         
         let win_size = terminal::size()
             .map(|(w, h)| (w as usize, h as usize - 2))// -1 for trailing newline and -1 for command bar
             .unwrap();
-        let pane = Rc::new(RefCell::new(Pane::new(win_size, settings.mode_keybindings.clone())));
+        let pane = Rc::new(RefCell::new(Pane::new(win_size, settings.clone())));
         let panes = vec![pane.clone()];
         Self {
             size: win_size,
             contents: WindowContents::new(),
             active_pane: 0,
             panes,
-            key_reader,
+            duration,
             settings,
         }
     }
@@ -79,13 +77,25 @@ impl Window {
         
     }
 
+    fn read_key(&mut self) -> io::Result<KeyEvent> {
+        loop {
+            if event::poll(self.duration)? {
+                if let Event::Key(key) = event::read()? {
+                    return Ok(key);
+                }
+            }
+            self.refresh_screen()?;
+        }
+    }
+
+
     pub fn run(&mut self) -> io::Result<bool> {
         self.refresh_screen()?;
         self.remove_panes();
         if self.panes.len() == 0 {
             return Ok(false);
         }
-        let key = self.key_reader.read_key()?;
+        let key = self.read_key()?;
         self.process_keypress(key)
     }
 
@@ -134,12 +144,19 @@ impl Window {
             terminal::Clear(ClearType::UntilNewLine),
         ).unwrap();
         self.contents.push_str("\r\n");
-        self.contents.push_str(self.panes[self.active_pane].borrow().get_status().as_str());
-        let remaining = self.size.0 - self.panes[self.active_pane].borrow().get_status().len();
+
+        let (first, second) = self.panes[self.active_pane].borrow().get_status();
+        let total = first.len() + second.len();
+        
+        self.contents.push_str(first.as_str());
+        let remaining = self.size.0 - total;
         self.contents.push_str(" ".to_owned().repeat(remaining).as_str());
+        self.contents.push_str(second.as_str());
     }
 
     pub fn refresh_screen(&mut self) -> io::Result<()> {
+
+        self.panes[self.active_pane].borrow_mut().refresh();
 
         self.panes[self.active_pane].borrow_mut().scroll_cursor();
 
@@ -234,22 +251,25 @@ pub struct Pane {
     pub cursor: Rc<RefCell<Cursor>>,
     close: bool,
     changed: bool,
-    key_bindings: HashMap<String, HashMap<Keys, String>>,
+    settings: Settings,
     
 }
 
 
 impl Pane {
-    pub fn new(size: (usize, usize), key_bindings: HashMap<String, HashMap<Keys, String>>) -> Self {
+    pub fn new(size: (usize, usize), settings: Settings) -> Self {
         let mut modes: HashMap<String, Rc<RefCell<dyn Mode>>> = HashMap::new();
         let normal = Rc::new(RefCell::new(Normal::new()));
-        normal.borrow_mut().add_keybindings(key_bindings.get("Normal").unwrap().clone());
+        normal.borrow_mut().add_keybindings(settings.mode_keybindings.get("Normal").unwrap().clone());
+        normal.borrow_mut().set_key_timeout(settings.editor_settings.key_timeout);
 
         let insert = Rc::new(RefCell::new(Insert::new()));
-        insert.borrow_mut().add_keybindings(key_bindings.get("Insert").unwrap().clone());
+        insert.borrow_mut().add_keybindings(settings.mode_keybindings.get("Insert").unwrap().clone());
+        insert.borrow_mut().set_key_timeout(settings.editor_settings.key_timeout);
         
         let command = Rc::new(RefCell::new(Command::new()));
-        command.borrow_mut().add_keybindings(key_bindings.get("Command").unwrap().clone());
+        command.borrow_mut().add_keybindings(settings.mode_keybindings.get("Command").unwrap().clone());
+        command.borrow_mut().set_key_timeout(settings.editor_settings.key_timeout);
 
         modes.insert("Normal".to_string(), normal.clone());
         modes.insert("Insert".to_string(), insert.clone());
@@ -263,8 +283,12 @@ impl Pane {
             cursor: Rc::new(RefCell::new(Cursor::new(size))),
             close: false,
             changed: false,
-            key_bindings,
+            settings,
         }
+    }
+
+    pub fn refresh(&mut self) {
+        self.mode.borrow_mut().refresh();
     }
 
     pub fn set_changed(&mut self, changed: bool) {
@@ -327,7 +351,7 @@ impl Pane {
         
     }
 
-    pub fn get_status(&self) -> String {
+    pub fn get_status(&self) -> (String, String) {
         self.mode.borrow().update_status(self)
     }
 

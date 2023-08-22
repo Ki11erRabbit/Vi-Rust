@@ -4,7 +4,7 @@ line_number = true
 relative_line_number = false
 tab_size = 4
 use_spaces = true
-key_time = 100
+key_timeout = 100
     
 
 
@@ -41,6 +41,7 @@ copy_line = { keys = [{ key = "y", mod = [] }, { key = "y", mod = [] }] }
 paste_after = "p"
 paste_before = "P"
 start_command = ":"
+custom = [{ binding = { keys = [{ key = "Z", mod = [] }, { key = "Q", mod = [] }] }, command = "q!" }]
 
 
 [insert] 

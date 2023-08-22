@@ -1,8 +1,43 @@
+use core::fmt;
 use std::collections::HashMap;
 
 use crossterm::event::{KeyCode, KeyModifiers, KeyEvent};
 use serde::Deserialize;
 
+pub struct KeyCodeWrapper(KeyCode);
+
+impl fmt::Display for KeyCodeWrapper {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let key = match self.0 {
+            KeyCode::Char(c) => format!("{}", c),
+            KeyCode::Enter => "Enter".to_string(),
+            KeyCode::Tab => "Tab".to_string(),
+            KeyCode::Backspace => "Backspace".to_string(),
+            KeyCode::Left => "Left".to_string(),
+            KeyCode::Right => "Right".to_string(),
+            KeyCode::Up => "Up".to_string(),
+            KeyCode::Down => "Down".to_string(),
+            KeyCode::Home => "Home".to_string(),
+            KeyCode::End => "End".to_string(),
+            KeyCode::PageUp => "PageUp".to_string(),
+            KeyCode::PageDown => "PageDown".to_string(),
+            KeyCode::Delete => "Delete".to_string(),
+            KeyCode::Insert => "Insert".to_string(),
+            KeyCode::F(u16) => format!("F{}", u16),
+            KeyCode::Null => "Null".to_string(),
+            KeyCode::Esc => "Esc".to_string(),
+            KeyCode::BackTab => "BackTab".to_string(),
+            KeyCode::CapsLock => "CapsLock".to_string(),
+            KeyCode::NumLock => "NumLock".to_string(),
+            KeyCode::ScrollLock => "ScrollLock".to_string(),
+            KeyCode::PrintScreen => "PrintScreen".to_string(),
+            KeyCode::Pause => "Pause".to_string(),
+            KeyCode::Menu => "Menu".to_string(),
+            _ => "Unknown".to_string(),
+        };
+        write!(f, "{}", key)
+    }
+}
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct Key {
@@ -10,11 +45,39 @@ pub struct Key {
     pub modifier: KeyModifiers,
 }
 
+impl fmt::Display for Key {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut key = String::new();
+        if self.modifier.contains(KeyModifiers::CONTROL) {
+            key.push_str("C-");
+        }
+        if self.modifier.contains(KeyModifiers::ALT) {
+            key.push_str("M-");
+        }
+        if self.modifier.contains(KeyModifiers::SHIFT) {
+            key.push_str("S-");
+        }
+        key.push_str(&format!("{}", KeyCodeWrapper(self.key)));
+        write!(f, "{}", key)
+    }
+}
+
 impl From<KeyEvent> for Key {
     fn from(key_event: KeyEvent) -> Self {
+
+        let modifier = if let KeyCode::Char(c) = key_event.code {
+            if c.is_ascii_uppercase() && key_event.modifiers | KeyModifiers::SHIFT == KeyModifiers::SHIFT {
+                KeyModifiers::NONE
+            } else {
+                key_event.modifiers
+            }
+        } else {
+            key_event.modifiers
+        };
+        
         Self {
             key: key_event.code,
-            modifier: key_event.modifiers,
+            modifier,
         }
     }
 }
@@ -24,7 +87,7 @@ pub type Command = String;
 
 pub type Keys = Vec<Key>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Settings {
     pub editor_settings: EditorSettings,
     pub mode_keybindings: HashMap<Mode, HashMap<Keys, Command>>,
@@ -219,6 +282,13 @@ impl Default for Settings {
             key: KeyCode::Char(':'),
             modifier: KeyModifiers::NONE,
         }], "start_command".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('Z'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('Z'),
+            modifier: KeyModifiers::NONE,
+        }], "q!".to_string());
 
         let mut insert_keybindings = HashMap::new();
 
@@ -302,7 +372,7 @@ impl Default for Settings {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
 pub struct EditorSettings {
     pub line_number: bool,
     pub relative_line_number: bool,
@@ -318,7 +388,7 @@ impl Default for EditorSettings {
             relative_line_number: false,
             tab_size: 4,
             use_spaces: true,
-            key_timeout: 100,
+            key_timeout: 1000,
         }
     }
 }
@@ -424,6 +494,26 @@ fn parse_keys(value: &toml::Value) -> Vec<Keys> {
     }
 }
 
+fn parse_custom_binding(value: &toml::Value) -> (Keys, Command) {
+    let keys = parse_keys(&value["binding"]);
+
+    let command = value["command"].as_str().unwrap().to_string();
+
+    (keys[0].clone(), command)
+}
+
+fn parse_custom(value: &toml::Value) -> Vec<(Keys, Command)> {
+    let mut custom = Vec::new();
+
+    let array = value.as_array().expect("custom keybindings were not an array");
+
+    for value in array {
+        custom.push(parse_custom_binding(value));
+    }
+
+    custom
+}
+
 fn parse_keybindings(table: &toml::Value, commands: &[String]) -> HashMap<Keys, Command> {
     let mut keybindings = HashMap::new();
 
@@ -434,6 +524,13 @@ fn parse_keybindings(table: &toml::Value, commands: &[String]) -> HashMap<Keys, 
             for key in keys {
                 keybindings.insert(key, command.to_string());
             }
+        }
+    }
+    if let Some(value) = table.get("custom") {
+        let custom = parse_custom(value);
+
+        for (keys, command) in custom {
+            keybindings.insert(keys, command);
         }
     }
 
