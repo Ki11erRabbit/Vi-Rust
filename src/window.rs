@@ -114,10 +114,10 @@ impl Window {
 
     fn expand_panes(&mut self, start: (usize, usize), end: (usize, usize)) {
 
-        let mut start_x = start.0;
-        let mut start_y = start.1;
-        let mut end_x = end.0;
-        let mut end_y = end.1;
+        let start_x = start.0;
+        let start_y = start.1;
+        let end_x = end.0;
+        let end_y = end.1;
 
         if start_x == 0 && start_y == 0 && end_x == 8 && end_y == 8 {
             return;
@@ -251,6 +251,71 @@ impl Window {
                 }
             }
         }
+    }
+
+    fn horizontal_split(&mut self) {
+        let active_pane_size = self.panes[self.active_pane].borrow().size;
+        let new_pane_size = (active_pane_size.0, active_pane_size.1 / 2);
+        self.panes[self.active_pane].borrow_mut().size = new_pane_size;
+
+
+        let new_pane_index = self.panes.len();
+        self.panes.push(Rc::new(RefCell::new(Pane::new(new_pane_size, self.settings.clone()))));
+
+        let ((start_x, start_y), (end_x, end_y)) = self.get_pane_position(self.active_pane);
+        let new_pane_position = ((start_x - start_x / 2, start_y), (end_x, end_y));
+
+        let ((start_x, start_y), (end_x, end_y)) = new_pane_position;
+
+        for col in start_x..=end_x {
+            for row in start_y..=end_y {
+                self.pane_positions[col][row] = Some(new_pane_index);
+            }
+        }
+    }
+
+    fn vertical_split(&mut self) {
+        let active_pane_size = self.panes[self.active_pane].borrow().size;
+        let new_pane_size = (active_pane_size.0 / 2, active_pane_size.1);
+        self.panes[self.active_pane].borrow_mut().size = new_pane_size;
+
+
+        let new_pane_index = self.panes.len();
+        self.panes.push(Rc::new(RefCell::new(Pane::new(new_pane_size, self.settings.clone()))));
+
+        let ((start_x, start_y), (end_x, end_y)) = self.get_pane_position(self.active_pane);
+        let new_pane_position = ((start_x, start_y - start_y / 2), (end_x, end_y));
+
+        let ((start_x, start_y), (end_x, end_y)) = new_pane_position;
+
+        for col in start_x..=end_x {
+            for row in start_y..=end_y {
+                self.pane_positions[col][row] = Some(new_pane_index);
+            }
+        }
+
+    }
+
+    fn get_pane_position(&self, pane_index: usize) -> ((usize, usize), (usize, usize)) {
+        let mut start_x = None;
+        let mut start_y = None;
+        let mut end_x = 0;
+        let mut end_y = 0;
+
+        for col in 0..9 {
+            for row in 0..9 {
+                if self.pane_positions[col][row] == Some(pane_index) {
+                    if start_x.is_none() {
+                        start_x = Some(col);
+                        start_y = Some(row);
+                    }
+                    end_x = col;
+                    end_y = row;
+
+                }
+            }
+        }
+        ((start_x.unwrap(), start_y.unwrap()), (end_x, end_y))
     }
 
     fn read_key(&mut self) -> io::Result<KeyEvent> {
