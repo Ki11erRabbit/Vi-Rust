@@ -345,31 +345,38 @@ impl Window {
         execute!(std::io::stdout(), cursor::MoveTo(0, 0))
     }
 
+
+    
     fn draw_rows(&mut self) {
         let rows = self.size.1;
         let cols = self.size.0;
 
+        let mut x = 0;
+
         for i in 0..rows {
-            /*let real_row = i + self.panes[self.active_pane].borrow().cursor.borrow().row_offset;
 
-            let offset = 0 + self.panes[self.active_pane].borrow().cursor.borrow().col_offset;
-            if let Some(row) = self.panes[self.active_pane].borrow().get_row(real_row, offset, cols) {
-                row.chars().for_each(|c| if c == '\t' {
-                    self.contents.push_str(" ".repeat(TAB_SIZE).as_str());
-                } else {
-                    self.contents.push(c);
-                });
+            let mut drawn_panes = Vec::new();
 
-                queue!(
-                    self.contents,
-                    terminal::Clear(ClearType::UntilNewLine),
-                ).unwrap();
+            for j in 0..9 {
+                let pane = self.pane_positions[j][x].expect("Pane positions not expanded properly");
+                if drawn_panes.contains(&pane) {
+                    continue;
+                }
+                drawn_panes.push(pane);
+                if let Some(mut contents) = self.panes[pane].borrow().draw_row(i) {
+                    self.contents.merge(&mut contents);
+                }
+                else {
+                    x += 1;
+                    let pane = self.pane_positions[j][x].expect("Pane positions not expanded properly");
+                    drawn_panes.push(pane);
+                    self.contents.merge(&mut self.panes[pane].borrow().draw_row(i).unwrap());
+                }
+
+                //self.contents.merge(&mut self.panes[pane].borrow().draw_row(i));
             }
-            else {
-                self.contents.push_str(" ".repeat(cols).as_str());
-        }*/
-
-            self.contents.merge(&mut self.panes[self.active_pane].borrow().draw_row(i));
+            
+            //self.contents.merge(&mut self.panes[self.active_pane].borrow().draw_row(i));
 
             
 
@@ -608,7 +615,7 @@ impl Pane {
     }
 
 
-    pub fn draw_row(&self, index: usize) -> WindowContents {
+    pub fn draw_row(&self, index: usize) -> Option<WindowContents> {
         let rows = self.size.1;
         let cols = self.size.0;
 
@@ -622,7 +629,9 @@ impl Pane {
 
         //number_of_lines = self.borrow_buffer().chars().filter(|c| *c == '\n').count();
 
-
+        if index > self.size.1 {
+            return None;
+        }
 
         let mut output = WindowContents::new();
 
@@ -672,7 +681,7 @@ impl Pane {
         }
 
         output.push_str("\r\n");
-        output
+        Some(output)
     }
 
     pub fn refresh(&mut self) {
@@ -931,6 +940,9 @@ impl Pane {
                 else {
                     self.jump_table.add(*cursor);
                 }
+                
+            },
+            "horizontal_split" => {
                 
             },
             _ => {}

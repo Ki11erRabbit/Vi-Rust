@@ -303,6 +303,21 @@ impl Default for Settings {
             modifier: KeyModifiers::CONTROL,
         }], "jump prev".to_string());
 
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('w'),
+            modifier: KeyModifiers::CONTROL,
+        }, Key {
+            key: KeyCode::Char('s'),
+            modifier: KeyModifiers::NONE,
+        }], "horizontal_split".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('w'),
+            modifier: KeyModifiers::CONTROL,
+        }, Key {
+            key: KeyCode::Char('v'),
+            modifier: KeyModifiers::NONE,
+        }], "vertical_split".to_string());
+
         let mut insert_keybindings = HashMap::new();
 
         insert_keybindings.insert(vec![Key {
@@ -357,6 +372,21 @@ impl Default for Settings {
             key: KeyCode::Char('o'),
             modifier: KeyModifiers::CONTROL,
         }], "jump prev".to_string());
+
+        insert_keybindings.insert(vec![Key {
+            key: KeyCode::Char('w'),
+            modifier: KeyModifiers::CONTROL,
+        }, Key {
+            key: KeyCode::Char('s'),
+            modifier: KeyModifiers::NONE,
+        }], "horizontal_split".to_string());
+        insert_keybindings.insert(vec![Key {
+            key: KeyCode::Char('w'),
+            modifier: KeyModifiers::CONTROL,
+        }, Key {
+            key: KeyCode::Char('v'),
+            modifier: KeyModifiers::NONE,
+        }], "vertical_split".to_string());
 
         let mut command_keybindings = HashMap::new();
 
