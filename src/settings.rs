@@ -290,6 +290,19 @@ impl Default for Settings {
             modifier: KeyModifiers::NONE,
         }], "q!".to_string());
 
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('i'),
+            modifier: KeyModifiers::CONTROL,
+        }], "jump next".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Tab,
+            modifier: KeyModifiers::NONE,
+        }], "jump next".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('o'),
+            modifier: KeyModifiers::CONTROL,
+        }], "jump prev".to_string());
+
         let mut insert_keybindings = HashMap::new();
 
         insert_keybindings.insert(vec![Key {
@@ -336,6 +349,14 @@ impl Default for Settings {
             key: KeyCode::PageDown,
             modifier: KeyModifiers::NONE,
         }], "page_down".to_string());
+        insert_keybindings.insert(vec![Key {
+            key: KeyCode::Char('i'),
+            modifier: KeyModifiers::CONTROL,
+        }], "jump next".to_string());
+        insert_keybindings.insert(vec![Key {
+            key: KeyCode::Char('o'),
+            modifier: KeyModifiers::CONTROL,
+        }], "jump prev".to_string());
 
         let mut command_keybindings = HashMap::new();
 

@@ -270,6 +270,7 @@ impl JumpTable {
             self.table.truncate(self.index);
         }
         self.table.push(cursor);
+        self.index += 1;
     }
 
     pub fn add_named(&mut self, name: &str, cursor: Cursor) {
