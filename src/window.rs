@@ -623,10 +623,24 @@ impl Pane {
                     Some("down") => Direction::Down,
                     Some("left") => Direction::Left,
                     Some("right") => Direction::Right,
+                    Some("line_start") => Direction::LineStart,
+                    Some("line_end") => Direction::LineEnd,
+                    Some("file_top") => Direction::FileTop,
+                    Some("file_bottom") => Direction::FileBottom,
+                    Some("page_up") => Direction::PageUp,
+                    Some("page_down") => Direction::PageDown,
                     _ => panic!("Invalid direction"),
                 };
 
                 let amount = command_args.next().unwrap_or("1").parse::<usize>().unwrap_or(1);
+
+                match direction {
+                    Direction::FileBottom | Direction::FileTop | Direction::PageUp | Direction::PageDown => {
+                        let cursor = self.cursor.borrow();
+                        self.jump_table.add(*cursor);
+                    },
+                    _ => {},
+                }
 
                 self.cursor.borrow_mut().move_cursor(direction, amount, self.borrow_buffer());
             },

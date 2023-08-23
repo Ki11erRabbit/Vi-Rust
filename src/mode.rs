@@ -95,6 +95,26 @@ impl Mode for Normal {
                 pane.run_command(&format!("move down {}", self.number_buffer));
                 self.number_buffer.clear();
             },
+            "line_start" => {
+                pane.run_command("move line_start");
+            },
+            "line_end" => {
+                pane.run_command("move line_end");
+            },
+            "file_top" => {
+                pane.run_command("move file_top");
+            },
+            "file_bottom" => {
+                pane.run_command("move file_bottom");
+            },
+            "page_up" => {
+                pane.run_command(&format!("move page_up {}", self.number_buffer));
+                self.number_buffer.clear();
+            },
+            "page_down" => {
+                pane.run_command(&format!("move page_down {}", self.number_buffer));
+                self.number_buffer.clear();
+            },
             "insert_before" => {
                 execute!(io::stdout(),SetCursorStyle::BlinkingBar).unwrap();
                 self.change_mode("Insert", pane);
@@ -186,16 +206,13 @@ impl Mode for Normal {
                 self.number_buffer.push('9');
                 Ok(true)
             },
-            KeyEvent {
-                code: KeyCode::Char('0'),
-                modifiers: KeyModifiers::NONE,
-                ..
-            } => {
-                self.number_buffer.push('0');
-                Ok(true)
-            },
             key_event => {
                 let key = Key::from(key_event);
+
+                if key.key == KeyCode::Char('0') && !self.number_buffer.is_empty() {
+                    self.number_buffer.push('0');
+                    return Ok(true);
+                }
 
                 let mut flush = false;
                 if key.key == KeyCode::Esc {
@@ -331,6 +348,18 @@ impl Mode for Insert {
             },
             "down" => {
                 pane.run_command("move down 1");
+            },
+            "file_top" => {
+                pane.run_command("move file_top");
+            },
+            "file_bottom" => {
+                pane.run_command("move file_bottom");
+            },
+            "page_up" => {
+                pane.run_command("move page_up");
+            },
+            "page_down" => {
+                pane.run_command("move page_down");
             },
             "leave" => {
                 execute!(io::stdout(),SetCursorStyle::BlinkingBlock).unwrap();

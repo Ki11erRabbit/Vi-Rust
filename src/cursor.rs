@@ -14,6 +14,12 @@ pub enum Direction {
     Down,
     Left,
     Right,
+    LineStart,
+    LineEnd,
+    FileTop,
+    FileBottom,
+    PageUp,
+    PageDown,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -76,8 +82,11 @@ impl Cursor {
             self.col_offset = self.col_offset.saturating_sub(1);
         }
 
-        if self.y >= pane_y && self.went_down {
+        if self.y >= pane_y && self.went_down && self.y != 0 {
             self.row_offset = self.y - pane_y + 1;
+        }
+        else if self.y >= pane_y && self.went_down && self.y != 0 {
+            self.row_offset = pane_y - self.y;
         }
         else if self.y < self.row_offset && !self.went_down {
             self.y = self.row_offset.saturating_sub(1);
@@ -184,6 +193,40 @@ impl Cursor {
                     self.x = number_of_cols;
                 }
                 self.went_right = true;
+            },
+            Direction::LineStart => {
+                self.x = 0;
+                self.went_right = false;
+            },
+            Direction::LineEnd => {
+                self.x = number_of_cols - 1;
+                self.went_right = true;
+            },
+            Direction::FileTop => {
+                self.y = 0;
+                self.row_offset = 0;
+                self.went_down = false;
+            },
+            Direction::FileBottom => {
+                self.y = number_of_lines - 1;
+                self.row_offset = number_of_lines.saturating_sub(self.rows + 1);
+                self.went_down = true;
+            },
+            Direction::PageUp => {
+                self.y = self.y.saturating_sub(self.rows * n);
+                self.row_offset = self.row_offset.saturating_sub(self.rows * n);
+                self.went_down = false;
+            },
+            Direction::PageDown => {
+                let new_y = (self.y + (self.rows * n)) % number_of_lines;
+                if new_y < self.y {
+                    self.y = number_of_lines.saturating_sub(1);
+                }
+                else {
+                    self.y = new_y;
+                }
+                self.row_offset = self.row_offset.saturating_add(self.rows * n);
+                self.went_down = true;
             },
         }
         
