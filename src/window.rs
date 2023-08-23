@@ -42,6 +42,7 @@ pub struct Window {
     contents: WindowContents,
     active_pane: usize,
     panes: Vec<Rc<RefCell<Pane>>>,
+    pane_positions: [[Option<usize>; 9]; 9],
     settings: Settings,
     duration: Duration,
 }
@@ -61,6 +62,7 @@ impl Window {
             size: win_size,
             contents: WindowContents::new(),
             active_pane: 0,
+            pane_positions: [[Some(0); 9]; 9],
             panes,
             duration,
             settings,
@@ -68,14 +70,187 @@ impl Window {
     }
 
     fn remove_panes(&mut self) {
-        self.panes.retain(|pane| !pane.borrow().close);
+        let mut panes_to_remove = Vec::new();
+        for (i, pane) in self.panes.iter().enumerate() {
+            if pane.borrow().close {
+                panes_to_remove.push(i);
+            }
+        }
+
+        let mut start_x = None;
+        let mut start_y = None;
+        let mut end_x = 0;
+        let mut end_y = 0;
+        
+        for i in panes_to_remove.iter().rev() {
+            for col in 0..9 {
+                for row in 0..9 {
+                    if self.pane_positions[col][row] == Some(*i) {
+                        self.pane_positions[col][row] = None;
+                        if start_x.is_none() {
+                            start_x = Some(col);
+                            start_y = Some(row);
+                        }
+                        end_x = cmp::max(end_x, col);
+                        end_y = cmp::max(end_y, row);
+                    }
+                }
+            }
+
+            
+            self.panes.remove(*i);
+            let start = (start_x.expect("start_x is None"), start_y.expect("start_y is None"));
+            let end = (end_x, end_y);
+            self.expand_panes(start, end);
+        }
         if self.panes.len() == 0 {
             self.active_pane = 0;
         }
         else {
             self.active_pane = cmp::min(self.active_pane, self.panes.len() - 1);
         }
-        
+
+    }
+
+    fn expand_panes(&mut self, start: (usize, usize), end: (usize, usize)) {
+
+        let mut start_x = start.0;
+        let mut start_y = start.1;
+        let mut end_x = end.0;
+        let mut end_y = end.1;
+
+        if start_x == 0 && start_y == 0 && end_x == 8 && end_y == 8 {
+            return;
+        }
+
+        // Here we try to go up
+        if end_y + 1 != 9 {
+            let mut up_cols = Vec::new();
+            for col in start_x..=end_x {
+                let mut can_go_up = true;
+
+                for row in (0..=end_y).rev() {
+                    if self.pane_positions[col][row].is_some() {
+                        can_go_up = false;
+                        while let Some(pane) = up_cols.last() {
+                            if self.pane_positions[col][row] != Some(*pane) {
+                                break;
+                            }
+                            up_cols.pop();
+                            
+                        }
+                        break;
+                    }
+                }
+                if can_go_up {
+                    up_cols.push(col);
+                }
+                else {
+                    break;
+                }
+            }
+            for (value, col) in up_cols.iter().zip(start_x..=end_x) {
+                for row in (0..=end_y).rev() {
+                    self.pane_positions[col][row] = Some(*value);
+                }
+            }
+        }
+
+
+        // Here we try to go to the left
+        if end_x + 1 != 9 {
+            let mut left_rows = Vec::new();
+
+            for row in start_y..=end_y {
+                let mut can_go_left = true;
+                for col in (0..=end_x).rev() {
+                    if self.pane_positions[col][row].is_some() {
+                        can_go_left = false;
+                        while let Some(pane) = left_rows.last() {
+                            if self.pane_positions[col][row] != Some(*pane) {
+                                break;
+                            }
+                            left_rows.pop();
+                        }
+                        break;
+                    }
+                }
+                if can_go_left {
+                    left_rows.push(row);
+                }
+                else {
+                    break;
+                }
+            }
+
+            for (value, row) in left_rows.iter().zip(start_y..=end_y) {
+                for col in (0..=end_x).rev() {
+                    self.pane_positions[col][row] = Some(*value);
+                }
+            }
+        }
+
+        // Here we try to go down
+        if start_y != 0 {
+            let mut down_cols = Vec::new();
+            for col in start_x..=end_x {
+                let mut can_go_down = true;
+                for row in start_y..=end_y {
+                    if self.pane_positions[col][row].is_some() {
+                        can_go_down = false;
+                        while let Some(pane) = down_cols.last() {
+                            if self.pane_positions[col][row] != Some(*pane) {
+                                break;
+                            }
+                            down_cols.pop();
+                        }
+                        break;
+                    }
+                }
+                if can_go_down {
+                    down_cols.push(col);
+                }
+                else {
+                    break;
+                }
+            }
+            for (value, col) in down_cols.iter().zip(start_x..=end_x) {
+                for row in start_y..=end_y {
+                    self.pane_positions[col][row] = Some(*value);
+                }
+            }
+        }
+
+        // Here we try to go to the right
+        if start_x != 0 {
+            let mut right_rows = Vec::new();
+            for row in start_y..=end_y {
+                let mut can_go_right = true;
+                for col in start_x..=end_x {
+                    if self.pane_positions[col][row].is_some() {
+                        can_go_right = false;
+                        while let Some(pane) = right_rows.last() {
+                            if self.pane_positions[col][row] != Some(*pane) {
+                                break;
+                            }
+                            right_rows.pop();
+                        }
+                        break;
+                    }
+                }
+                if can_go_right {
+                    right_rows.push(row);
+                }
+                else {
+                    break;
+                }
+            }
+            for (value, row) in right_rows.iter().zip(start_y..=end_y) {
+                for col in start_x..=end_x {
+                    self.pane_positions[col][row] = Some(*value);
+                }
+            }
+        }
     }
 
     fn read_key(&mut self) -> io::Result<KeyEvent> {
