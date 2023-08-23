@@ -109,7 +109,7 @@ impl Window {
         let cols = self.size.0;
 
         for i in 0..rows {
-            let real_row = i + self.panes[self.active_pane].borrow().cursor.borrow().row_offset;
+            /*let real_row = i + self.panes[self.active_pane].borrow().cursor.borrow().row_offset;
 
             let offset = 0 + self.panes[self.active_pane].borrow().cursor.borrow().col_offset;
             if let Some(row) = self.panes[self.active_pane].borrow().get_row(real_row, offset, cols) {
@@ -126,7 +126,9 @@ impl Window {
             }
             else {
                 self.contents.push_str(" ".repeat(cols).as_str());
-            }
+        }*/
+
+            self.contents.merge(&mut self.panes[self.active_pane].borrow().draw_row(i));
 
             
 
@@ -180,7 +182,7 @@ impl Window {
             else {
                 0
             }
-        };
+        } + self.panes[self.active_pane].borrow().cursor.borrow().number_line_size;
 
         queue!(
             self.contents,
@@ -218,6 +220,11 @@ impl WindowContents {
 
     fn push_str(&mut self, s: &str) {
         self.content.push_str(s);
+    }
+
+    fn merge(&mut self, other: &mut Self) {
+        self.content.push_str(other.content.as_str());
+        other.content.clear();
     }
 }
 
@@ -287,6 +294,69 @@ impl Pane {
         }
     }
 
+
+    pub fn draw_row(&self, index: usize) -> WindowContents {
+        let rows = self.size.1;
+        let cols = self.size.0;
+
+        let real_row = self.cursor.borrow().row_offset + index;
+        let col_offset = self.cursor.borrow().col_offset;
+
+        let mut number_of_lines = self.borrow_buffer().line_len();
+        if let Some('\n') = self.borrow_buffer().chars().last() {
+            number_of_lines += 1;
+        }
+
+        let mut output = WindowContents::new();
+
+        let mut num_width = 0;
+        if self.settings.editor_settings.line_number && !self.settings.editor_settings.relative_line_number {
+            let mut places = 1;
+            while places < number_of_lines {
+                places *= 10;
+                num_width += 1;
+            }
+            if real_row < number_of_lines {
+                output.push_str(format!("{:width$}", real_row, width = num_width).as_str());
+            }
+        }
+        else if self.settings.editor_settings.relative_line_number {
+            let mut places = 1;
+            num_width = 3;
+            while places < rows {
+                places *= 10;
+                num_width += 1;
+            }
+            if real_row == self.cursor.borrow().get_cursor().1 {
+                output.push_str(format!("{}{:width$}", real_row, ' ', width = num_width).as_str());
+            }
+            else {
+                output.push_str(format!("{:width$} ", real_row - self.cursor.borrow().get_cursor().1, width = num_width).as_str());
+            }
+        }
+
+        self.cursor.borrow_mut().number_line_size = num_width;
+
+
+        if let Some(row) = self.get_row(real_row, col_offset, cols) {
+            row.chars().for_each(|c| match c {
+                '\t' => output.push_str(" ".repeat(self.settings.editor_settings.tab_size).as_str()),
+                '\n' => output.push_str(" "),
+                _ => output.push(c),
+            });
+
+            queue!(
+                output,
+                terminal::Clear(ClearType::UntilNewLine),
+            ).unwrap();
+        }
+        else {
+            output.push_str(" ".repeat(cols).as_str());
+        }
+        
+        output
+    }
+
     pub fn refresh(&mut self) {
         self.mode.borrow_mut().refresh();
     }
@@ -319,7 +389,7 @@ impl Pane {
             return None;
         }
         let line = self.contents.line(row);
-        let len = cmp::min(col + offset, line.line_len() - offset);
+        let len = cmp::min(col + offset, line.line_len().saturating_sub(offset));
         Some(line.line_slice(offset..len))
     }
 
