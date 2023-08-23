@@ -16,7 +16,7 @@ pub enum Direction {
     Right,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Cursor {
     x: usize,
     y: usize,

@@ -385,7 +385,7 @@ impl Default for EditorSettings {
     fn default() -> Self {
         Self {
             line_number: true,
-            relative_line_number: false,
+            relative_line_number: true,
             tab_size: 4,
             use_spaces: true,
             key_timeout: 1000,

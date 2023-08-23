@@ -1,8 +1,8 @@
 use std::{io, collections::HashMap, rc::Rc, cell::RefCell, time::Instant};
 
-use crossterm::event::{KeyEvent, KeyCode, KeyModifiers};
+use crossterm::{event::{KeyEvent, KeyCode, KeyModifiers}, execute, cursor::SetCursorStyle};
 
-use crate::{window::Pane, cursor::{Direction, CursorMove}, settings::{Keys, Key}};
+use crate::{window::Pane, cursor::{Direction, CursorMove, self}, settings::{Keys, Key}};
 
 
 
@@ -41,6 +41,7 @@ pub struct Normal {
 
 impl Normal {
     pub fn new() -> Self {
+
         Self {
             number_buffer: String::new(),
             keybindings: Rc::new(RefCell::new(HashMap::new())),
@@ -95,6 +96,7 @@ impl Mode for Normal {
                 self.number_buffer.clear();
             },
             "insert_before" => {
+                execute!(io::stdout(),SetCursorStyle::BlinkingBar).unwrap();
                 self.change_mode("Insert", pane);
             },
             "start_command" => {
@@ -331,6 +333,7 @@ impl Mode for Insert {
                 pane.run_command("move down 1");
             },
             "leave" => {
+                execute!(io::stdout(),SetCursorStyle::BlinkingBlock).unwrap();
                 self.change_mode("Normal", pane);
             },
             command => {

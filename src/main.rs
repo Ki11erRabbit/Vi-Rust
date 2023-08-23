@@ -1,6 +1,6 @@
 use std::{io, time::Duration};
 
-use crossterm::{terminal, event::{self, KeyEvent, Event}};
+use crossterm::{terminal, event::{self, KeyEvent, Event}, execute, cursor::SetCursorStyle};
 use window::Window;
 
 pub mod window;
@@ -14,6 +14,7 @@ impl Drop for CleanUp {
     fn drop(&mut self) {
         terminal::disable_raw_mode().expect("Could not turn off Raw mode");
         Window::clear_screen().expect("Could not clear screen");
+        execute!(io::stdout(), SetCursorStyle::DefaultUserShape).expect("Could not reset cursor style");
     }
 }
 
@@ -24,6 +25,7 @@ struct Editor {
 
 impl Editor {
     fn new() -> Self {
+        execute!(io::stdout(),SetCursorStyle::BlinkingBlock).unwrap();
         let window = Window::new();
         Self {
             window,

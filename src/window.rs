@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::cmp;
 use std::collections::HashMap;
+use std::num::Wrapping;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::io;
@@ -245,9 +246,79 @@ impl io::Write for WindowContents {
         self.content.clear();
         out
     }
-
-
 }
+
+
+
+pub struct JumpTable {
+    table: Vec<Cursor>,
+    index: usize,
+    named: HashMap<String, Cursor>,
+}
+
+impl JumpTable {
+    pub fn new() -> Self {
+        Self {
+            table: Vec::new(),
+            index: 0,
+            named: HashMap::new(),
+        }
+    }
+
+    pub fn add(&mut self, cursor: Cursor) {
+        if self.index < self.table.len() {
+            self.table.truncate(self.index);
+        }
+        self.table.push(cursor);
+    }
+
+    pub fn add_named(&mut self, name: &str, cursor: Cursor) {
+        self.named.insert(name.to_owned(), cursor);
+    }
+
+    pub fn next_jump(&mut self) -> Option<Cursor> {
+        if self.index < self.table.len() - 1 {
+            self.index += 1;
+            Some(self.table[self.index])
+        }
+        else {
+            None
+        }
+    }
+
+    pub fn prev_jump(&mut self) -> Option<Cursor> {
+        if self.index > 0 {
+            self.index -= 1;
+            Some(self.table[self.index])
+        }
+        else {
+            None
+        }
+    }
+
+    pub fn jump(&mut self, index: usize, cursor: Cursor) -> Option<Cursor> {
+        if index < self.table.len() {
+            self.index = index;
+            self.table.truncate(self.index + 1);
+            self.table.push(cursor);
+            Some(self.table[self.index])
+        }
+        else {
+            None
+        }
+    }
+
+    pub fn named_jump(&mut self, name: &str, cursor: Cursor) -> Option<Cursor> {
+        if let Some(index) = self.named.get(name).cloned() {
+            self.add(cursor);
+            Some(index)
+        }
+        else {
+            None
+        }
+    }
+}
+
 
 pub struct Pane {
     size: (usize, usize),
@@ -259,7 +330,7 @@ pub struct Pane {
     close: bool,
     changed: bool,
     settings: Settings,
-    
+    jump_table: JumpTable,
 }
 
 
@@ -291,6 +362,7 @@ impl Pane {
             close: false,
             changed: false,
             settings,
+            jump_table: JumpTable::new(),
         }
     }
 
@@ -324,18 +396,18 @@ impl Pane {
                 output.push_str(format!("{:width$}", real_row + 1, width = num_width).as_str());
             }
         }
-        else if self.settings.editor_settings.relative_line_number {
+        else if self.settings.editor_settings.line_number && self.settings.editor_settings.relative_line_number {
             let mut places = 1;
             num_width = 3;
             while places < rows {
                 places *= 10;
                 num_width += 1;
             }
-            if real_row == self.cursor.borrow().get_cursor().1 {
-                output.push_str(format!("{}{:width$}", real_row + 1, ' ', width = num_width).as_str());
+            if real_row == self.cursor.borrow().get_cursor().1 && real_row + 1 <= number_of_lines {
+                output.push_str(format!("{}{:width$}", real_row + 1, ' ', width = num_width - real_row.to_string().chars().count()).as_str());
             }
-            else {
-                output.push_str(format!("{:width$} ", real_row + 1 - self.cursor.borrow().get_cursor().1, width = num_width).as_str());
+            else if real_row + 1 <= number_of_lines {
+                output.push_str(format!("{:width$}", ((real_row + 1) as isize - (self.cursor.borrow().get_cursor().1 as isize)).abs() as usize, width = num_width).as_str());
             }
         }
 
@@ -556,6 +628,55 @@ impl Pane {
                 let amount = command_args.next().unwrap_or("1").parse::<usize>().unwrap_or(1);
 
                 self.cursor.borrow_mut().move_cursor(direction, amount, self.borrow_buffer());
+            },
+            "mode" => {
+                let mode = command_args.next().unwrap_or("Normal");
+                self.set_mode(mode);
+            },
+            "jump" => {
+                if let Some(jump) = command_args.next() {
+                    match jump {
+                        "next" => {
+                            let mut cursor = self.cursor.borrow_mut();
+                            if let Some(new_cursor) = self.jump_table.next_jump() {
+                                *cursor = new_cursor;
+                            }
+                        },
+                        "prev" => {
+                            let mut cursor = self.cursor.borrow_mut();
+                            if let Some(new_cursor) = self.jump_table.prev_jump() {
+                                *cursor = new_cursor;
+                            }
+                        },
+                        other => {
+                            let mut cursor = self.cursor.borrow_mut();
+                            if let Some(index) = other.parse::<usize>().ok() {
+                                if let Some(new_cursor) = self.jump_table.jump(index, *cursor) {
+                                    *cursor = new_cursor;
+                                }
+                            }
+                            else {
+                                if let Some(new_cursor) = self.jump_table.named_jump(other, *cursor) {
+                                    *cursor = new_cursor;
+                                }
+
+                            }
+
+                        }
+
+                    }
+                }
+
+            },
+            "set_jump" => {
+                let cursor = self.cursor.borrow();
+                if let Some(jump) = command_args.next() {
+                    self.jump_table.add_named(jump, *cursor);
+                }
+                else {
+                    self.jump_table.add(*cursor);
+                }
+                
             },
             _ => {}
         }
