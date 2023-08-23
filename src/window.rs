@@ -133,7 +133,7 @@ impl Window {
             
 
 
-            self.contents.push_str("\r\n");
+            //self.contents.push_str("\r\n");
 
         }
 
@@ -307,6 +307,10 @@ impl Pane {
             number_of_lines += 1;
         }
 
+        //number_of_lines = self.borrow_buffer().chars().filter(|c| *c == '\n').count();
+
+
+
         let mut output = WindowContents::new();
 
         let mut num_width = 0;
@@ -341,7 +345,7 @@ impl Pane {
         if let Some(row) = self.get_row(real_row, col_offset, cols) {
             row.chars().for_each(|c| match c {
                 '\t' => output.push_str(" ".repeat(self.settings.editor_settings.tab_size).as_str()),
-                '\n' => output.push_str(" "),
+                //'\n' => output.push_str(" "),
                 _ => output.push(c),
             });
 
@@ -350,10 +354,11 @@ impl Pane {
                 terminal::Clear(ClearType::UntilNewLine),
             ).unwrap();
         }
-        else {
+        else if real_row >= number_of_lines {
             output.push_str(" ".repeat(cols).as_str());
         }
-        
+
+        output.push_str("\r\n");
         output
     }
 

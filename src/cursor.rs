@@ -89,11 +89,12 @@ impl Cursor {
     pub fn set_cursor(&mut self, x: CursorMove, y: CursorMove, rows: &Rope, (x_offset, y_offset): (usize, usize)) {
         
         let mut number_of_lines = rows.line_len();
-        if let Some(newline) = rows.chars().last() {
-            if newline != '\n' {
-                number_of_lines += 1;
-            }
+
+        if let Some('\n') = rows.chars().last() {
+            number_of_lines += 1;
         }
+
+
         number_of_lines = number_of_lines.saturating_sub(y_offset);
         let number_of_cols = if let Some(row) = rows.lines().nth(self.y.saturating_sub(y_offset)) {
             row.chars().count().saturating_sub(x_offset)
@@ -134,11 +135,11 @@ impl Cursor {
 
     pub fn move_cursor(&mut self, direction: Direction, n: usize, rows: &Rope) {
         let mut number_of_lines = rows.line_len();
-        if let Some(newline) = rows.chars().last() {
-            if newline != '\n' {
-                number_of_lines += 1;
-            }
+
+        if let Some('\n') = rows.chars().last() {
+            number_of_lines += 1;
         }
+
         let number_of_cols = if let Some(row) = rows.lines().nth(self.y) {
             row.chars().count()
         }
@@ -155,7 +156,7 @@ impl Cursor {
                 if self.y < number_of_lines {
                     let new_y = (self.y + n) % (number_of_lines);
                     if new_y < self.y {
-                        self.y = number_of_lines;
+                        self.y = number_of_lines.saturating_sub(1);
                     }
                     else {
                         self.y = new_y;
@@ -169,7 +170,7 @@ impl Cursor {
             },
             Direction::Right => {
                 if self.x < number_of_cols {
-                    let new_x = (self.x + n) % (number_of_cols + 1);
+                    let new_x = (self.x + n) % (number_of_cols);
 
                     if new_x < self.x {
                         self.x = number_of_cols;
