@@ -216,11 +216,11 @@ impl Default for Settings {
         normal_keybindings.insert(vec![Key {
             key: KeyCode::Char('I'),
             modifier: KeyModifiers::NONE,
-        }], "insert_before".to_string());
+        }], "insert_beginning".to_string());
         normal_keybindings.insert(vec![Key {
-            key: KeyCode::Char('a'),
+            key: KeyCode::Char('A'),
             modifier: KeyModifiers::NONE,
-        }], "insert_after".to_string());
+        }], "insert_end".to_string());
         normal_keybindings.insert(vec![Key {
             key: KeyCode::Char('o'),
             modifier: KeyModifiers::NONE,

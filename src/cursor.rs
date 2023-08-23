@@ -199,7 +199,7 @@ impl Cursor {
                 self.went_right = false;
             },
             Direction::LineEnd => {
-                self.x = number_of_cols - 1;
+                self.x = number_of_cols;
                 self.went_right = true;
             },
             Direction::FileTop => {

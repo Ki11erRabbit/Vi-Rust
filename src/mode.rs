@@ -119,6 +119,21 @@ impl Mode for Normal {
                 execute!(io::stdout(),SetCursorStyle::BlinkingBar).unwrap();
                 self.change_mode("Insert", pane);
             },
+            "insert_after" => {
+                execute!(io::stdout(),SetCursorStyle::BlinkingBar).unwrap();
+                pane.run_command("move right 1");
+                self.change_mode("Insert", pane);
+            },
+            "insert_beginning" => {
+                execute!(io::stdout(),SetCursorStyle::BlinkingBar).unwrap();
+                pane.run_command("move line_start");
+                self.change_mode("Insert", pane);
+            },
+            "insert_end" => {
+                execute!(io::stdout(),SetCursorStyle::BlinkingBar).unwrap();
+                pane.run_command("move line_end");
+                self.change_mode("Insert", pane);
+            },
             "start_command" => {
                 self.change_mode("Command", pane);
             },
@@ -363,6 +378,7 @@ impl Mode for Insert {
             },
             "leave" => {
                 execute!(io::stdout(),SetCursorStyle::BlinkingBlock).unwrap();
+                pane.run_command("move left 1");
                 self.change_mode("Normal", pane);
             },
             command => {
