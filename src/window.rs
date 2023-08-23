@@ -316,8 +316,8 @@ impl Pane {
                 places *= 10;
                 num_width += 1;
             }
-            if real_row < number_of_lines {
-                output.push_str(format!("{:width$}", real_row, width = num_width).as_str());
+            if real_row + 1 <= number_of_lines {
+                output.push_str(format!("{:width$}", real_row + 1, width = num_width).as_str());
             }
         }
         else if self.settings.editor_settings.relative_line_number {
@@ -328,10 +328,10 @@ impl Pane {
                 num_width += 1;
             }
             if real_row == self.cursor.borrow().get_cursor().1 {
-                output.push_str(format!("{}{:width$}", real_row, ' ', width = num_width).as_str());
+                output.push_str(format!("{}{:width$}", real_row + 1, ' ', width = num_width).as_str());
             }
             else {
-                output.push_str(format!("{:width$} ", real_row - self.cursor.borrow().get_cursor().1, width = num_width).as_str());
+                output.push_str(format!("{:width$} ", real_row + 1 - self.cursor.borrow().get_cursor().1, width = num_width).as_str());
             }
         }
 

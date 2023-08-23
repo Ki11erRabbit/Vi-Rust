@@ -221,7 +221,7 @@ impl Mode for Normal {
 
     fn update_status(&self, pane: &Pane) -> (String, String) {
         let (row, col) = pane.cursor.borrow().get_cursor();
-        let mut first = format!("Normal {}:{}", col, row);
+        let mut first = format!("Normal {}:{}", col + 1, row + 1);
         if !self.number_buffer.is_empty() {
             first.push_str(&format!(" {}", self.number_buffer));
         }
@@ -398,9 +398,11 @@ impl Mode for Insert {
 
     fn update_status(&self, pane: &Pane) -> (String, String) {
         let (row, col) = pane.cursor.borrow().get_cursor();
-        let first = format!("Insert {}:{}", col, row);
+        let first = format!("Insert {}:{}", col + 1, row + 1);
 
         let mut second = String::new();
+
+        second.push_str(format!("{:?}", pane.cursor.borrow()).as_str());
 
         (first, second)
     }

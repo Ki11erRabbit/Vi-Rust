@@ -20,6 +20,8 @@ pub enum Direction {
 pub struct Cursor {
     x: usize,
     y: usize,
+    went_down: bool,
+    went_right: bool,
     rows: usize,
     cols: usize,
     pub row_offset: usize,
@@ -32,6 +34,8 @@ impl Cursor {
         Cursor {
             x: 0,
             y: 0,
+            went_down: false,
+            went_right: false,
             rows: win_size.1,
             cols: win_size.0,
             row_offset: 0,
@@ -45,24 +49,39 @@ impl Cursor {
     }
 
     pub fn get_real_cursor(&self) -> (usize, usize) {
-        (self.x - self.col_offset, self.y - self.row_offset)
+        let x = if self.x < self.col_offset {
+            self.x + self.col_offset
+        }
+        else {
+            self.x - self.col_offset
+        };
+
+        let y = if self.y < self.row_offset {
+            self.y + self.row_offset
+        }
+        else {
+            self.y - self.row_offset
+        };
+        (x, y)
     }
 
     pub fn scroll(&mut self, pane: &Pane) {
         let (pane_x, pane_y) = pane.get_size();
 
-        if self.x >= pane_x {
+        if self.x >= pane_x && self.went_right {
             self.col_offset = self.x - pane_x + 1;
         }
-        else {
-            self.col_offset = 0;
+        else if self.x < self.col_offset && !self.went_right {
+            self.x = self.col_offset.saturating_sub(1);
+            self.col_offset = self.col_offset.saturating_sub(1);
         }
 
-        if self.y >= pane_y {
+        if self.y >= pane_y && self.went_down {
             self.row_offset = self.y - pane_y + 1;
         }
-        else {
-            self.row_offset = 0;
+        else if self.y < self.row_offset && !self.went_down {
+            self.y = self.row_offset.saturating_sub(1);
+            self.row_offset = self.row_offset.saturating_sub(1);
         }
 
     }
@@ -89,9 +108,11 @@ impl Cursor {
             },
             CursorMove::ToEnd => {
                 self.x = self.cols.min(number_of_cols);
+                self.went_right = true;
             },
             CursorMove::ToStart => {
                 self.x = 0;
+                self.went_right = false;
             },
             CursorMove::Nothing => {},
         }
@@ -101,9 +122,11 @@ impl Cursor {
             },
             CursorMove::ToEnd => {
                 self.y = self.rows.min(number_of_lines);
+                self.went_down = true;
             },
             CursorMove::ToStart => {
                 self.y = 0;
+                self.went_down = false;
             },
             CursorMove::Nothing => {},
         }
@@ -126,10 +149,11 @@ impl Cursor {
         match direction {
             Direction::Up => {
                 self.y = self.y.saturating_sub(n);
+                self.went_down = false;
             },
             Direction::Down => {
                 if self.y < number_of_lines {
-                    let new_y = (self.y + n) % (number_of_lines + 1);
+                    let new_y = (self.y + n) % (number_of_lines);
                     if new_y < self.y {
                         self.y = number_of_lines;
                     }
@@ -137,9 +161,11 @@ impl Cursor {
                         self.y = new_y;
                     }
                 }
+                self.went_down = true;
             },
             Direction::Left => {
                 self.x = self.x.saturating_sub(n);
+                self.went_right = false;
             },
             Direction::Right => {
                 if self.x < number_of_cols {
@@ -156,6 +182,7 @@ impl Cursor {
                 else {
                     self.x = number_of_cols;
                 }
+                self.went_right = true;
             },
         }
         
