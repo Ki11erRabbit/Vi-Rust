@@ -450,7 +450,8 @@ impl Mode for Insert {
 
         let mut second = String::new();
 
-        second.push_str(&format!("{:?} {}", &pane.borrow_buffer().chars().collect::<String>(), pane.borrow_buffer().line_len()));
+        //second.push_str(&format!("{:?} {}", &pane.borrow_buffer().chars().collect::<String>(), pane.borrow_buffer().line_len()));
+        second.push_str(&format!("{:?}", pane.cursor.borrow()));
 
         (first, second)
     }

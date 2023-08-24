@@ -179,7 +179,7 @@ impl Cursor {
             },
             Direction::Right => {
                 if self.x < number_of_cols {
-                    let new_x = (self.x + n) % (number_of_cols);
+                    let new_x = (self.x + n) % (number_of_cols + 1);
 
                     if new_x < self.x {
                         self.x = number_of_cols;
