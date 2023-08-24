@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::cmp;
 use std::collections::HashMap;
+use std::ops::{Index, IndexMut};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::io;
@@ -18,6 +19,101 @@ use crate::settings::{Settings, Keys};
 
 
 
+struct PaneNode {
+    pub pane: Rc<RefCell<Pane>>,
+    pub next: Option<Box<PaneNode>>,
+}
+
+pub struct PaneList {
+    head: Option<Box<PaneNode>>,
+}
+
+impl PaneList {
+
+    pub fn new() -> Self {
+        Self {
+            head: None,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+
+        let mut len = 0;
+        eprintln!("getting len");
+        let mut node = self.head.as_ref();
+        while let Some(new_node) = node {
+            len += 1;
+            eprintln!("len: {}", len);
+            node = new_node.next.as_ref();
+        }
+        eprintln!("len: {}", len);
+        len
+    }
+
+    fn index_helper(node: &PaneNode, index: usize) -> &Rc<RefCell<Pane>> {
+        if index == 0 {
+            &node.pane
+        }
+        else {
+            Self::index_helper(node.next.as_ref().unwrap(),index - 1)
+        }
+    }
+
+    fn index_mut_helper(node: &mut PaneNode, index: usize) -> &mut Rc<RefCell<Pane>> {
+        if index == 0 {
+            &mut node.pane
+        }
+        else {
+            Self::index_mut_helper(node.next.as_mut().unwrap(),index - 1)
+        }
+    }
+
+    fn push_helper(node: &mut PaneNode, pane: Rc<RefCell<Pane>>) {
+        if let Some(next) = &mut node.next {
+            Self::push_helper(next, pane);
+        }
+        else {
+            node.next = Some(Box::new(PaneNode {
+                pane,
+                next: None,
+            }));
+        }
+    }
+
+    pub fn push(&mut self, pane: Rc<RefCell<Pane>>) {
+        if self.head.is_none() {
+            eprintln!("pushing to head");
+            self.head = Some(Box::new(PaneNode {
+                pane,
+                next: None,
+            }));
+        }
+        else {
+            Self::push_helper(self.head.as_mut().unwrap(), pane);
+        }
+    }
+}
+
+impl Index<usize> for PaneList {
+    type Output = Rc<RefCell<Pane>>;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        if index >= self.len() {
+            panic!("Index out of bounds");
+        }
+        Self::index_helper(self.head.as_ref().unwrap(),index)
+    }
+}
+
+impl IndexMut<usize> for PaneList {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        if index >= self.len() {
+            panic!("Index out of bounds");
+        }
+        Self::index_mut_helper(self.head.as_mut().unwrap(),index)
+    }
+}
+
 pub enum Message {
     HorizontalSplit,
     VerticalSplit,
@@ -27,7 +123,8 @@ pub struct Window {
     size: (usize, usize),
     contents: WindowContents,
     active_pane: usize,
-    panes: Vec<Rc<RefCell<Pane>>>,
+    //panes: Vec<Rc<RefCell<Pane>>>,
+    panes: PaneList,
     settings: Settings,
     duration: Duration,
     channels: (Sender<Message>, Receiver<Message>),
@@ -46,7 +143,12 @@ impl Window {
             .unwrap();
         let pane = Rc::new(RefCell::new(Pane::new(win_size, settings.clone(), channels.0.clone())));
 
-        let panes = vec![pane.clone()];
+        //let panes = vec![pane.clone()];
+        let mut panes = PaneList {
+            head: None,
+        };
+        panes.push(pane.clone());
+        eprintln!("panes len: {}", panes.len());
         Self {
             size: win_size,
             contents: WindowContents::new(),
@@ -58,8 +160,44 @@ impl Window {
         }
     }
 
+    fn remove_pane(pane: &mut Option<Box<PaneNode>>) -> (Option<(usize, usize)>, Option<Box<PaneNode>>) {
+        match pane.take() {
+            None => (None, None),
+            Some(mut pane) => {
+
+                let (size, new_child) = Self::remove_pane(&mut pane.next);
+
+                match size {
+                    None => {},
+                    Some(size) => {
+                        pane.pane.borrow_mut().increase_size(size);
+                    }
+                }
+
+                if pane.pane.borrow().close {
+                    eprintln!("pane closed");
+                    (Some(pane.pane.borrow().size), new_child)
+                }
+                else {
+                    eprintln!("pane not closed");
+                    pane.next = new_child;
+                    (None, Some(pane))
+                }
+            }
+
+        }
+
+    }
+
     fn remove_panes(&mut self) {
-        let mut panes_to_remove = Vec::new();
+
+        let (_, panes) = Self::remove_pane(&mut self.panes.head);
+
+        self.panes.head = panes;
+
+        self.active_pane = 0;
+        
+        /*let mut panes_to_remove = Vec::new();
         for (i, pane) in self.panes.iter().enumerate() {
             if pane.borrow().close {
                 panes_to_remove.push(i);
@@ -76,17 +214,17 @@ impl Window {
         }
         else {
             self.active_pane = cmp::min(self.active_pane, self.panes.len() - 1);
-        }
+        }*/
 
     }
 
 
 
     fn horizontal_split(&mut self) {
-        eprintln!("split panes: {:?}", self.panes.len());
+        //eprintln!("split panes: {:?}", self.panes.len());
         let active_pane_size = self.panes[self.active_pane].borrow().size;
         let new_pane_size = (active_pane_size.0, active_pane_size.1 / 2);
-        self.panes[self.active_pane].borrow_mut().size = new_pane_size;
+        self.panes[self.active_pane].borrow_mut().set_size(new_pane_size);
 
 
         let new_pane_index = self.panes.len();
@@ -95,20 +233,19 @@ impl Window {
         let ((x,_), (_, y)) = self.panes[self.active_pane].borrow().get_corners();
         let new_pane_position = (x, y + 1);
 
-        let new_pane = self.panes.last().expect("New pane not added for some reason");
-        new_pane.borrow_mut().set_position(new_pane_position);
+        let new_pane = self.panes[self.active_pane].borrow_mut().set_position(new_pane_position);
 
 
         // This is for testing purposes, we need to make sure that we can actually access the new pane
         self.active_pane = new_pane_index;
 
-        eprintln!("split panes: {:?}", self.panes.len());
+        //eprintln!("split panes: {:?}", self.panes.len());
     }
 
     fn vertical_split(&mut self) {
         let active_pane_size = self.panes[self.active_pane].borrow().size;
         let new_pane_size = (active_pane_size.0 / 2, active_pane_size.1);
-        self.panes[self.active_pane].borrow_mut().size = new_pane_size;
+        self.panes[self.active_pane].borrow_mut().set_size(new_pane_size);
 
 
         let new_pane_index = self.panes.len();
@@ -117,9 +254,8 @@ impl Window {
         let ((_,y), (x, _)) = self.panes[self.active_pane].borrow().get_corners();
         let new_pane_position = (x + 1, y);
 
-        let new_pane = self.panes.last().expect("New pane not added for some reason");
-        new_pane.borrow_mut().set_position(new_pane_position);
-        
+        let new_pane = self.panes[self.active_pane].borrow_mut().set_position(new_pane_position);
+
 
         self.active_pane = new_pane_index;
     }
@@ -177,7 +313,7 @@ impl Window {
 
 
         //eprintln!("panes: {}", self.panes.len());
-        let panes = self.panes.len();
+        //let panes = self.panes.len();
         for i in 0..rows {
 
             let mut pane_index = 0;
@@ -188,8 +324,8 @@ impl Window {
                 if pane_index >= self.panes.len() {
                     break;
                 }
-                //eprintln!("pane size: {:?} pane_index: {}", self.panes[pane_index].borrow().size, pane_index);
-                //eprintln!("pane corners: {:?}", self.panes[pane_index].borrow().get_corners());
+                eprintln!("pane size: {:?} pane_index: {}", self.panes[pane_index].borrow().size, pane_index);
+                eprintln!("pane corners: {:?}", self.panes[pane_index].borrow().get_corners());
                 let ((start_x, start_y), (end_x, end_y)) = self.panes[pane_index].borrow().get_corners();
                 if start_y <= i && end_y >= i {
                     self.contents.merge(&mut self.panes[pane_index].borrow().draw_row(i - start_y));
@@ -277,6 +413,8 @@ impl Window {
     }
 
     pub fn process_keypress(&mut self, key: KeyEvent) -> io::Result<bool> {
+        eprintln!("active pane: {}", self.active_pane);
+        eprintln!("panes: {}", self.panes.len());
         self.panes[self.active_pane].borrow_mut().process_keypress(key)
     }
 
@@ -508,7 +646,7 @@ impl Pane {
                 },
             });
 
-            output.push_str(" ".repeat(cols - count - num_width).as_str());
+            output.push_str(" ".repeat(cols.saturating_sub(count + num_width)).as_str());
 
             //output.push_str(" ".repeat(cols - row.chars().count() / 2).as_str());
 
@@ -554,6 +692,11 @@ impl Pane {
             let mut file = std::fs::File::create(file_name).unwrap();
             file.write_all(self.contents.to_string().as_bytes()).unwrap();
         }
+    }
+
+    pub fn increase_size(&mut self, size: (usize, usize)) {
+        self.size.0 += size.0;
+        self.size.1 += size.1;
     }
     
     pub fn get_size(&self) -> (usize, usize) {
