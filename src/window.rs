@@ -525,6 +525,9 @@ impl Pane {
                 terminal::Clear(ClearType::UntilNewLine),
             ).unwrap();*/
         }
+        else {
+            output.push_str(" ".repeat(cols - num_width).as_str());
+        }
 
         //output.push_str("\r\n");
         output
