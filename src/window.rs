@@ -540,9 +540,9 @@ impl Pane {
         }
         let line = self.contents.line(row);
         let len = cmp::min(col + offset, line.line_len().saturating_sub(offset));
-        if len == 0 {
+        /*if len == 0 {
             return None;
-        }
+        }*/
         Some(line.line_slice(offset..len))
     }
 
@@ -671,6 +671,11 @@ impl Pane {
             self.contents.insert(0, c);
             return;
         }
+        let byte_pos = if byte_pos >= self.contents.byte_len() {
+            self.contents.byte_len()
+        } else {
+            byte_pos
+        };
         self.contents.insert(byte_pos, c);
     }
 
