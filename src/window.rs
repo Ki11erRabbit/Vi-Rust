@@ -114,14 +114,14 @@ impl Window {
         let new_pane_index = self.panes.len();
         self.panes.push(Rc::new(RefCell::new(Pane::new(new_pane_size, self.settings.clone(), self.channels.0.clone()))));
 
-        let ((x,_), (_, y)) = self.panes[self.active_pane].borrow().get_corners();
+        let ((_,y), (x, _)) = self.panes[self.active_pane].borrow().get_corners();
         let new_pane_position = (x + 1, y);
 
         let new_pane = self.panes.last().expect("New pane not added for some reason");
         new_pane.borrow_mut().set_position(new_pane_position);
         
 
-        //self.active_pane = new_pane_index;
+        self.active_pane = new_pane_index;
     }
 
 
@@ -202,6 +202,10 @@ impl Window {
             //self.contents.merge(&mut self.panes[self.active_pane].borrow().draw_row(i));
 
             
+            queue!(
+                self.contents,
+                terminal::Clear(ClearType::UntilNewLine),
+            ).unwrap();
 
 
             self.contents.push_str("\r\n");
@@ -251,10 +255,11 @@ impl Window {
         let x = {
             if let Some(row) = self.panes[self.active_pane].borrow().borrow_buffer().lines().nth(y) {
                 let len = row.chars().count();
-                cmp::min(x, len)
+                //cmp::min(x, len)
+                x
             }
             else {
-                0
+                x
             }
         } + self.panes[self.active_pane].borrow().cursor.borrow().number_line_size;
 
@@ -490,24 +495,35 @@ impl Pane {
 
 
         if let Some(row) = self.get_row(real_row, col_offset, cols) {
+            let mut count = 0;
             row.chars().for_each(|c| match c {
-                '\t' => output.push_str(" ".repeat(self.settings.editor_settings.tab_size).as_str()),
-                //'\n' => output.push_str(" "),
-                c => output.push(c),
+                '\t' => {
+                    count += self.settings.editor_settings.tab_size;
+                    output.push_str(" ".repeat(self.settings.editor_settings.tab_size).as_str())
+                },
+                '\n' => output.push_str(" "),
+                c => {
+                    count += 1;
+                    output.push(c)
+                },
             });
 
-            queue!(
+            output.push_str(" ".repeat(cols - count - num_width).as_str());
+
+            //output.push_str(" ".repeat(cols - row.chars().count() / 2).as_str());
+
+            /*queue!(
                 output,
                 terminal::Clear(ClearType::UntilNewLine),
-            ).unwrap();
+            ).unwrap();*/
         }
         else if real_row >= number_of_lines {
             output.push_str(" ".repeat(cols).as_str());
 
-            queue!(
+            /*queue!(
                 output,
                 terminal::Clear(ClearType::UntilNewLine),
-            ).unwrap();
+            ).unwrap();*/
         }
 
         //output.push_str("\r\n");
