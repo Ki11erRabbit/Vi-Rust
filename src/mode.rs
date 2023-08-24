@@ -268,6 +268,8 @@ impl Mode for Normal {
             }
         }
 
+        second.push_str(&format!("{:?}", pane.get_corners()));
+
         (first, second)
     }
 

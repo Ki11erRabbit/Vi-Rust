@@ -54,7 +54,7 @@ impl Window {
             panes,
             duration,
             settings,
-            channels: channels,
+            channels,
         }
     }
 
@@ -81,7 +81,9 @@ impl Window {
     }
 
 
+
     fn horizontal_split(&mut self) {
+        eprintln!("split panes: {:?}", self.panes.len());
         let active_pane_size = self.panes[self.active_pane].borrow().size;
         let new_pane_size = (active_pane_size.0, active_pane_size.1 / 2);
         self.panes[self.active_pane].borrow_mut().size = new_pane_size;
@@ -90,15 +92,17 @@ impl Window {
         let new_pane_index = self.panes.len();
         self.panes.push(Rc::new(RefCell::new(Pane::new(new_pane_size, self.settings.clone(), self.channels.0.clone()))));
 
-        let (x, y) = self.panes[self.active_pane].borrow().get_position();
-        let new_pane_position = (x, y + y / 2);
+        let ((x,_), (_, y)) = self.panes[self.active_pane].borrow().get_corners();
+        let new_pane_position = (x, y + 1);
 
         let new_pane = self.panes.last().expect("New pane not added for some reason");
         new_pane.borrow_mut().set_position(new_pane_position);
 
 
         // This is for testing purposes, we need to make sure that we can actually access the new pane
-        //self.active_pane = new_pane_index;
+        self.active_pane = new_pane_index;
+
+        eprintln!("split panes: {:?}", self.panes.len());
     }
 
     fn vertical_split(&mut self) {
@@ -110,8 +114,8 @@ impl Window {
         let new_pane_index = self.panes.len();
         self.panes.push(Rc::new(RefCell::new(Pane::new(new_pane_size, self.settings.clone(), self.channels.0.clone()))));
 
-        let (x, y) = self.panes[self.active_pane].borrow().get_position();
-        let new_pane_position = (x + x / 2, y);
+        let ((x,_), (_, y)) = self.panes[self.active_pane].borrow().get_corners();
+        let new_pane_position = (x + 1, y);
 
         let new_pane = self.panes.last().expect("New pane not added for some reason");
         new_pane.borrow_mut().set_position(new_pane_position);
@@ -171,36 +175,36 @@ impl Window {
         let rows = self.size.1;
         let cols = self.size.0;
 
-        for i in 0..rows {
-            self.contents.merge(&mut self.panes[self.active_pane].borrow().draw_row(i));
-            continue;
 
-            let mut panes = Vec::new();
+        //eprintln!("panes: {}", self.panes.len());
+        let panes = self.panes.len();
+        for i in 0..rows {
+
             let mut pane_index = 0;
             let mut window_index = 0;
+            //eprintln!("size: {:?} i: {}", self.size, i);
             while window_index < self.size.0 {
+                //eprintln!("window_index: {} pane_index: {}\r\n", window_index, pane_index);
                 if pane_index >= self.panes.len() {
                     break;
                 }
+                //eprintln!("pane size: {:?} pane_index: {}", self.panes[pane_index].borrow().size, pane_index);
+                //eprintln!("pane corners: {:?}", self.panes[pane_index].borrow().get_corners());
                 let ((start_x, start_y), (end_x, end_y)) = self.panes[pane_index].borrow().get_corners();
                 if start_y <= i && end_y >= i {
-                    panes.push(pane_index);
+                    self.contents.merge(&mut self.panes[pane_index].borrow().draw_row(i - start_y));
                     window_index += end_x - start_x + 1;
                 }
                 pane_index += 1;
-
             }
 
 
-            for pane in panes {
-                self.contents.merge(&mut self.panes[pane].borrow().draw_row(i));
-            }
             //self.contents.merge(&mut self.panes[self.active_pane].borrow().draw_row(i));
 
             
 
 
-            //self.contents.push_str("\r\n");
+            self.contents.push_str("\r\n");
 
         }
 
@@ -208,6 +212,7 @@ impl Window {
 
 
     pub fn draw_status_bar(&mut self) {
+        Self::clear_screen().unwrap();
         queue!(
             self.contents,
             terminal::Clear(ClearType::UntilNewLine),
@@ -239,6 +244,8 @@ impl Window {
         self.draw_status_bar();
 
         let (x, y) = self.panes[self.active_pane].borrow().cursor.borrow().get_real_cursor();
+        let x = x + self.panes[self.active_pane].borrow().get_position().0;
+        let y = y + self.panes[self.active_pane].borrow().get_position().1;
 
         
         let x = {
@@ -503,7 +510,7 @@ impl Pane {
             ).unwrap();
         }
 
-        output.push_str("\r\n");
+        //output.push_str("\r\n");
         output
     }
 
@@ -532,6 +539,10 @@ impl Pane {
     
     pub fn get_size(&self) -> (usize, usize) {
         self.size
+    }
+
+    pub fn set_size(&mut self, size: (usize, usize)) {
+        self.size = size;
     }
 
     pub fn get_row(&self, row: usize, offset: usize, col: usize) -> Option<RopeSlice> {
