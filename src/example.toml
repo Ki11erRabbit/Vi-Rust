@@ -41,6 +41,8 @@ copy_line = { keys = [{ key = "y", mod = [] }, { key = "y", mod = [] }] }
 paste_after = "p"
 paste_before = "P"
 start_command = ":"
+horizontal_split = { keys = [{ key = "w", mod = ["ctrl"] }, { key = "s", mod = [] }] }
+vertical_split = { keys = [{ key = "w", mod = ["ctrl"] }, { key = "v", mod = [] }] }
 custom = [{ binding = { keys = [{ key = "Z", mod = [] }, { key = "Q", mod = [] }] }, command = "q!" }]
 
 

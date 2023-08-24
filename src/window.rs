@@ -1,11 +1,11 @@
 use std::cell::RefCell;
 use std::cmp;
 use std::collections::HashMap;
-use std::num::Wrapping;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::io;
 use std::io::Write;
+use std::sync::mpsc::{Sender, Receiver, self};
 use std::time::Duration;
 
 use crop::{Rope, RopeSlice};
@@ -17,25 +17,11 @@ use crate::cursor::{Cursor, Direction, CursorMove};
 use crate::settings::{Settings, Keys};
 
 
-struct KeyReader {
-    pub duration: Duration,
+
+pub enum Message {
+    HorizontalSplit,
+    VerticalSplit,
 }
-
-impl KeyReader {
-    fn read_key(&self) -> io::Result<KeyEvent> {
-        loop {
-            if event::poll(self.duration)? {
-                if let Event::Key(key) = event::read()? {
-                    return Ok(key);
-                }
-            }
-        }
-    }
-}
-
-
-const TAB_SIZE: usize = 4;
-
 
 pub struct Window {
     size: (usize, usize),
@@ -45,6 +31,7 @@ pub struct Window {
     pane_positions: [[Option<usize>; 9]; 9],
     settings: Settings,
     duration: Duration,
+    channels: (Sender<Message>, Receiver<Message>),
 }
 
 impl Window {
@@ -52,11 +39,14 @@ impl Window {
         let settings = Settings::default();
         
         let duration = Duration::from_millis(settings.editor_settings.key_timeout);
+
+        let channels = mpsc::channel();
         
         let win_size = terminal::size()
             .map(|(w, h)| (w as usize, h as usize - 2))// -1 for trailing newline and -1 for command bar
             .unwrap();
-        let pane = Rc::new(RefCell::new(Pane::new(win_size, settings.clone())));
+        let pane = Rc::new(RefCell::new(Pane::new(win_size, settings.clone(), channels.0.clone())));
+
         let panes = vec![pane.clone()];
         Self {
             size: win_size,
@@ -66,6 +56,7 @@ impl Window {
             panes,
             duration,
             settings,
+            channels: channels,
         }
     }
 
@@ -260,7 +251,7 @@ impl Window {
 
 
         let new_pane_index = self.panes.len();
-        self.panes.push(Rc::new(RefCell::new(Pane::new(new_pane_size, self.settings.clone()))));
+        self.panes.push(Rc::new(RefCell::new(Pane::new(new_pane_size, self.settings.clone(), self.channels.0.clone()))));
 
         let ((start_x, start_y), (end_x, end_y)) = self.get_pane_position(self.active_pane);
         let new_pane_position = ((start_x - start_x / 2, start_y), (end_x, end_y));
@@ -272,6 +263,8 @@ impl Window {
                 self.pane_positions[col][row] = Some(new_pane_index);
             }
         }
+        // This is for testing purposes, we need to make sure that we can actually access the new pane
+        //self.active_pane = new_pane_index;
     }
 
     fn vertical_split(&mut self) {
@@ -281,7 +274,7 @@ impl Window {
 
 
         let new_pane_index = self.panes.len();
-        self.panes.push(Rc::new(RefCell::new(Pane::new(new_pane_size, self.settings.clone()))));
+        self.panes.push(Rc::new(RefCell::new(Pane::new(new_pane_size, self.settings.clone(), self.channels.0.clone()))));
 
         let ((start_x, start_y), (end_x, end_y)) = self.get_pane_position(self.active_pane);
         let new_pane_position = ((start_x, start_y - start_y / 2), (end_x, end_y));
@@ -294,6 +287,7 @@ impl Window {
             }
         }
 
+        //self.active_pane = new_pane_index;
     }
 
     fn get_pane_position(&self, pane_index: usize) -> ((usize, usize), (usize, usize)) {
@@ -329,8 +323,25 @@ impl Window {
         }
     }
 
+    fn read_messages(&mut self) {
+        match self.channels.1.try_recv() {
+            Ok(message) => {
+                match message {
+                    Message::HorizontalSplit => {
+                        self.horizontal_split();
+                    }
+                    Message::VerticalSplit => {
+                        self.vertical_split();
+                    }
+                }
+            },
+            Err(_) => {}
+        }
+    }
+
 
     pub fn run(&mut self) -> io::Result<bool> {
+        self.read_messages();
         self.refresh_screen()?;
         self.remove_panes();
         if self.panes.len() == 0 {
@@ -358,7 +369,8 @@ impl Window {
             let mut drawn_panes = Vec::new();
 
             for j in 0..9 {
-                let pane = self.pane_positions[j][x].expect("Pane positions not expanded properly");
+
+                let pane = self.pane_positions[x][j].expect("Pane positions not expanded properly");
                 if drawn_panes.contains(&pane) {
                     continue;
                 }
@@ -366,11 +378,18 @@ impl Window {
                 if let Some(mut contents) = self.panes[pane].borrow().draw_row(i) {
                     self.contents.merge(&mut contents);
                 }
-                else {
+                else if x != 8 {
                     x += 1;
-                    let pane = self.pane_positions[j][x].expect("Pane positions not expanded properly");
+                    let pane = self.pane_positions[x][j].expect("Pane positions not expanded properly");
                     drawn_panes.push(pane);
-                    self.contents.merge(&mut self.panes[pane].borrow().draw_row(i).unwrap());
+                    match self.panes[pane].borrow().draw_row(i) {
+                        Some(mut contents) => {
+                            self.contents.merge(&mut contents);
+                        }
+                        None => {
+                        }
+                    }
+                    //self.contents.merge(&mut self.panes[pane].borrow().draw_row(i).unwrap());
                 }
 
                 //self.contents.merge(&mut self.panes[pane].borrow().draw_row(i));
@@ -579,11 +598,12 @@ pub struct Pane {
     changed: bool,
     settings: Settings,
     jump_table: JumpTable,
+    sender: Sender<Message>,
 }
 
 
 impl Pane {
-    pub fn new(size: (usize, usize), settings: Settings) -> Self {
+    pub fn new(size: (usize, usize), settings: Settings, sender: Sender<Message>) -> Self {
         let mut modes: HashMap<String, Rc<RefCell<dyn Mode>>> = HashMap::new();
         let normal = Rc::new(RefCell::new(Normal::new()));
         normal.borrow_mut().add_keybindings(settings.mode_keybindings.get("Normal").unwrap().clone());
@@ -611,9 +631,9 @@ impl Pane {
             changed: false,
             settings,
             jump_table: JumpTable::new(),
+            sender,
         }
     }
-
 
     pub fn draw_row(&self, index: usize) -> Option<WindowContents> {
         let rows = self.size.1;
@@ -717,6 +737,9 @@ impl Pane {
         }
         let line = self.contents.line(row);
         let len = cmp::min(col + offset, line.line_len().saturating_sub(offset));
+        if len == 0 {
+            return None;
+        }
         Some(line.line_slice(offset..len))
     }
 
@@ -943,8 +966,12 @@ impl Pane {
                 
             },
             "horizontal_split" => {
-                
+                self.sender.send(Message::HorizontalSplit).expect("Failed to send message");
             },
+            "vertical_split" => {
+                self.sender.send(Message::VerticalSplit).expect("Failed to send message");
+            },
+
             _ => {}
         }
 

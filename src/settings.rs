@@ -439,7 +439,7 @@ impl Default for EditorSettings {
             relative_line_number: true,
             tab_size: 4,
             use_spaces: true,
-            key_timeout: 1000,
+            key_timeout: 3000,
         }
     }
 }
