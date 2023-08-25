@@ -21,6 +21,7 @@ use crate::settings::{Settings, Keys};
 pub enum Message {
     HorizontalSplit,
     VerticalSplit,
+    ForceQuitAll,
 }
 
 pub struct Window {
@@ -44,7 +45,7 @@ impl Window {
         let win_size = terminal::size()
             .map(|(w, h)| (w as usize, h as usize - 2))// -1 for trailing newline and -1 for command bar
             .unwrap();
-        let pane = Rc::new(RefCell::new(Pane::new(win_size, settings.clone(), channels.0.clone())));
+        let pane = Rc::new(RefCell::new(Pane::new(win_size, win_size, settings.clone(), channels.0.clone())));
 
         let panes = vec![pane.clone()];
         Self {
@@ -68,8 +69,6 @@ impl Window {
 
         
         for i in panes_to_remove.iter().rev() {
-            let pane_size = self.panes[*i].borrow().size;
-            let ((rstart_x, rstart_y), (rend_x, rend_y)) = self.panes[*i].borrow().get_corners();
             
             loop {
                 if *i + 1 < self.panes.len() {
@@ -105,14 +104,22 @@ impl Window {
         eprintln!("split panes: {:?}", self.panes.len());
         let active_pane_size = self.panes[self.active_pane].borrow().size;
         let new_pane_size = (active_pane_size.0, active_pane_size.1 / 2);
-        self.panes[self.active_pane].borrow_mut().size = new_pane_size;
+        let old_pane_size = if active_pane_size.1 % 2 == 0 {
+            (new_pane_size.0, new_pane_size.1 - 1)
+        }
+        else {
+            new_pane_size
+        };
+
+            
+        self.panes[self.active_pane].borrow_mut().size = old_pane_size;
 
 
         let new_pane_index = self.active_pane + 1;
-        self.panes.insert(new_pane_index, Rc::new(RefCell::new(Pane::new(new_pane_size, self.settings.clone(), self.channels.0.clone()))));
+        self.panes.insert(new_pane_index, Rc::new(RefCell::new(Pane::new(self.size, new_pane_size, self.settings.clone(), self.channels.0.clone()))));
 
         let ((x,_), (_, y)) = self.panes[self.active_pane].borrow().get_corners();
-        let new_pane_position = (x, y + 1);
+        let new_pane_position = (x, y + 1 + 1);// extra +1 for the border
 
         let new_pane = self.panes[new_pane_index].clone();
         new_pane.borrow_mut().set_position(new_pane_position);
@@ -127,11 +134,17 @@ impl Window {
     fn vertical_split(&mut self) {
         let active_pane_size = self.panes[self.active_pane].borrow().size;
         let new_pane_size = (active_pane_size.0 / 2, active_pane_size.1);
-        self.panes[self.active_pane].borrow_mut().size = new_pane_size;
+        let old_pane_size = if active_pane_size.0 % 2 == 0 {
+            (new_pane_size.0 - 1, new_pane_size.1)
+        }
+        else {
+            new_pane_size
+        };
+        self.panes[self.active_pane].borrow_mut().size = old_pane_size;
 
 
         let new_pane_index = self.active_pane + 1;
-        self.panes.insert(new_pane_index, Rc::new(RefCell::new(Pane::new(new_pane_size, self.settings.clone(), self.channels.0.clone()))));
+        self.panes.insert(new_pane_index, Rc::new(RefCell::new(Pane::new(self.size, new_pane_size, self.settings.clone(), self.channels.0.clone()))));
 
         let ((_,y), (x, _)) = self.panes[self.active_pane].borrow().get_corners();
         let new_pane_position = (x + 1, y);
@@ -164,6 +177,11 @@ impl Window {
                     }
                     Message::VerticalSplit => {
                         self.vertical_split();
+                    }
+                    Message::ForceQuitAll => {
+                        for pane in self.panes.iter() {
+                            pane.borrow_mut().close = true;
+                        }
                     }
                 }
             },
@@ -199,6 +217,7 @@ impl Window {
         //eprintln!("panes: {}", self.panes.len());
         let panes = self.panes.len();
         for i in 0..rows {
+            let mut row_drawn = false;
 
             let mut pane_index = 0;
             let mut window_index = 0;
@@ -214,13 +233,20 @@ impl Window {
                 if start_y <= i && end_y >= i {
                     self.contents.merge(&mut self.panes[pane_index].borrow().draw_row(i - start_y));
                     window_index += end_x - start_x + 1;
+                    if window_index < self.size.0 {
+                        self.contents.push_str("|");
+                        window_index += 1;
+                    }
+                    row_drawn = true;
                 }
                 pane_index += 1;
             }
 
 
             //self.contents.merge(&mut self.panes[self.active_pane].borrow().draw_row(i));
-
+            if !row_drawn {
+                self.contents.push_str("-".repeat(cols).as_str());
+            }
             
             queue!(
                 self.contents,
@@ -420,6 +446,7 @@ impl JumpTable {
 
 
 pub struct Pane {
+    max_size: (usize, usize),
     size: (usize, usize),
     position: (usize, usize),
     file_name: Option<PathBuf>,
@@ -436,7 +463,7 @@ pub struct Pane {
 
 
 impl Pane {
-    pub fn new(size: (usize, usize), settings: Settings, sender: Sender<Message>) -> Self {
+    pub fn new(max_size: (usize, usize), size: (usize, usize), settings: Settings, sender: Sender<Message>) -> Self {
         let mut modes: HashMap<String, Rc<RefCell<dyn Mode>>> = HashMap::new();
         let normal = Rc::new(RefCell::new(Normal::new()));
         normal.borrow_mut().add_keybindings(settings.mode_keybindings.get("Normal").unwrap().clone());
@@ -453,7 +480,19 @@ impl Pane {
         modes.insert("Normal".to_string(), normal.clone());
         modes.insert("Insert".to_string(), insert.clone());
         modes.insert("Command".to_string(), command.clone());
-        Self {
+
+        let (mut width, mut height) = size;
+        while width > max_size.0 {
+            width -= 1;
+        }
+        while height > max_size.1 {
+            height -= 1;
+        }
+
+        let size = (width, height);
+        
+        let mut pane = Self {
+            max_size,
             size,
             position: (0, 0),
             file_name: None,
@@ -466,7 +505,11 @@ impl Pane {
             settings,
             jump_table: JumpTable::new(),
             sender,
-        }
+        };
+
+        pane.shrink();
+        
+        pane
     }
 
     pub fn draw_row(&self, index: usize) -> WindowContents {
@@ -558,6 +601,20 @@ impl Pane {
         output
     }
 
+    fn shrink(&mut self) {
+        let (_, (mut end_x, _)) = self.get_corners();
+        while  end_x > self.max_size.0 {
+            self.size.0 -= 1;
+            end_x -= 1;
+        }
+        let (_, (_, mut end_y)) = self.get_corners();
+        while  end_y > self.max_size.1 {
+            self.size.1 -= 1;
+            end_y -= 1;
+        }
+
+    }
+
     pub fn combine(&mut self, corners: ((usize, usize), (usize, usize))) -> bool {
         eprintln!("Combine: {:?}", corners);
         let ((other_start_x, other_start_y), (other_end_x, other_end_y)) = corners;
@@ -570,13 +627,15 @@ impl Pane {
             
             //Try combining from the left to right
             if end_x + 1 == other_start_x && start_y == other_start_y && end_y == other_end_y {
-                let mut width = other_end_x - start_x;
-                let mut height = end_y - start_y;
+                let width = other_end_x - start_x;
+                let height = end_y - start_y;
                 eprintln!("Width: {}, Height: {}", width, height);
-
 
                 self.size.0 = width;
                 self.size.1 = height;
+
+                self.shrink();
+                
                 return true;
             }
 
@@ -588,6 +647,9 @@ impl Pane {
 
                 self.size.0 = width;
                 self.size.1 = height;
+
+                self.shrink();
+
                 return true;
             }
         }
@@ -601,6 +663,9 @@ impl Pane {
 
                 self.size.0 = width;
                 self.size.1 = height;
+
+                self.shrink();
+
                 return true;
             }
 
@@ -612,6 +677,9 @@ impl Pane {
 
                 self.size.0 = width;
                 self.size.1 = height;
+
+                self.shrink();
+
                 return true;
             }
         }
@@ -913,6 +981,9 @@ impl Pane {
             },
             "vertical_split" => {
                 self.sender.send(Message::VerticalSplit).expect("Failed to send message");
+            },
+            "qa!" => {
+                self.sender.send(Message::ForceQuitAll).expect("Failed to send message");
             },
 
             _ => {}
