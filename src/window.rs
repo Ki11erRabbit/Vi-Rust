@@ -22,6 +22,10 @@ pub enum Message {
     HorizontalSplit,
     VerticalSplit,
     ForceQuitAll,
+    PaneUp,
+    PaneDown,
+    PaneLeft,
+    PaneRight,
 }
 
 pub struct Window {
@@ -105,10 +109,10 @@ impl Window {
         let active_pane_size = self.panes[self.active_pane].borrow().size;
         let new_pane_size = (active_pane_size.0, active_pane_size.1 / 2);
         let old_pane_size = if active_pane_size.1 % 2 == 0 {
-            (new_pane_size.0, new_pane_size.1 - 1)
+            new_pane_size
         }
         else {
-            new_pane_size
+            (new_pane_size.0, new_pane_size.1 + 1)
         };
 
             
@@ -119,7 +123,7 @@ impl Window {
         self.panes.insert(new_pane_index, Rc::new(RefCell::new(Pane::new(self.size, new_pane_size, self.settings.clone(), self.channels.0.clone()))));
 
         let ((x,_), (_, y)) = self.panes[self.active_pane].borrow().get_corners();
-        let new_pane_position = (x, y + 1 + 1);// extra +1 for the border
+        let new_pane_position = (x, y + 1);
 
         let new_pane = self.panes[new_pane_index].clone();
         new_pane.borrow_mut().set_position(new_pane_position);
@@ -135,10 +139,10 @@ impl Window {
         let active_pane_size = self.panes[self.active_pane].borrow().size;
         let new_pane_size = (active_pane_size.0 / 2, active_pane_size.1);
         let old_pane_size = if active_pane_size.0 % 2 == 0 {
-            (new_pane_size.0 - 1, new_pane_size.1)
+            new_pane_size
         }
         else {
-            new_pane_size
+            (new_pane_size.0 + 1, new_pane_size.1)
         };
         self.panes[self.active_pane].borrow_mut().size = old_pane_size;
 
@@ -168,6 +172,111 @@ impl Window {
         }
     }
 
+    fn pane_up(&mut self) {
+        let ((x1, y1), (x2, _)) = self.panes[self.active_pane].borrow().get_corners();
+
+        let pane_top = y1.saturating_sub(1);
+
+        let pane_middle = (x1 + x2) / 2;
+
+        let mut pane_index = None;
+        // This loop tries to find the pane that is above the current pane
+        for (i, pane) in self.panes.iter().enumerate() {
+            let pane = pane.borrow();
+            let ((x1, _), (x2, y2)) = pane.get_corners();
+            if y2 == pane_top && x1 <= pane_middle && pane_middle <= x2 {
+                pane_index = Some(i);
+                break;
+            }
+        }
+
+        match pane_index {
+            Some(index) => {
+                self.active_pane = index;
+            }
+            None => {}
+        }
+    }
+
+    fn pane_down(&mut self) {
+        let ((x1, y1), (x2, y2)) = self.panes[self.active_pane].borrow().get_corners();
+
+        // We add 1 to make sure that we aren't on the current pane
+        let pane_bottom = y2 + 1;
+        let pane_middle = (x1 + x2) / 2;
+
+        let mut pane_index = None;
+        // This loop tries to find the pane that is below the current pane
+        for (i, pane) in self.panes.iter().enumerate() {
+            let pane = pane.borrow();
+            let ((x1, y1), (x2, _)) = pane.get_corners();
+            if y1 == pane_bottom && x1 <= pane_middle && pane_middle <= x2 {
+                pane_index = Some(i);
+                break;
+            }
+        }
+
+        match pane_index {
+            Some(index) => {
+                self.active_pane = index;
+            }
+            None => {}
+        }
+    }
+
+    fn pane_right(&mut self) {
+        let ((_, y1), (x2, y2)) = self.panes[self.active_pane].borrow().get_corners();
+
+        // We add 1 to make sure that we aren't on the current pane
+        let pane_right = x2 + 1;
+
+        let pane_middle = (y1 + y2) / 2;
+
+        let mut pane_index = None;
+        // This loop tries to find the pane that is to the right of the current pane
+        for (i, pane) in self.panes.iter().enumerate() {
+            let pane = pane.borrow();
+            let ((x1, y1), (x2, y2)) = pane.get_corners();
+            if x1 == pane_right && y1 <= pane_middle && pane_middle <= y2 {
+                pane_index = Some(i);
+                break;
+            }
+        }
+
+        match pane_index {
+            Some(index) => {
+                self.active_pane = index;
+            }
+            None => {}
+        }
+    }
+
+    fn pane_left(&mut self) {
+        let ((x1, y1), (x2, y2)) = self.panes[self.active_pane].borrow().get_corners();
+
+        let pane_left = x1.saturating_sub(1);
+
+        let pane_middle = (y1 + y2) / 2;
+
+        let mut pane_index = None;
+        // This loop tries to find the pane that is to the left of the current pane
+        for (i, pane) in self.panes.iter().enumerate() {
+            let pane = pane.borrow();
+            let ((x1, y1), (x2, y2)) = pane.get_corners();
+            if x2 == pane_left && y1 <= pane_middle && pane_middle <= y2 {
+                pane_index = Some(i);
+                break;
+            }
+        }
+
+        match pane_index {
+            Some(index) => {
+                self.active_pane = index;
+            }
+            None => {}
+        }
+    }
+
     fn read_messages(&mut self) {
         match self.channels.1.try_recv() {
             Ok(message) => {
@@ -183,6 +292,18 @@ impl Window {
                             pane.borrow_mut().close = true;
                         }
                     }
+                    Message::PaneUp => {
+                        self.pane_up();
+                    },
+                    Message::PaneDown => {
+                        self.pane_down();
+                    },
+                    Message::PaneLeft => {
+                        self.pane_left();
+                    },
+                    Message::PaneRight => {
+                        self.pane_right();
+                    },
                 }
             },
             Err(_) => {}
@@ -216,6 +337,9 @@ impl Window {
 
         //eprintln!("panes: {}", self.panes.len());
         let panes = self.panes.len();
+
+        let mut offset = 0;
+        
         for i in 0..rows {
             let mut row_drawn = false;
 
@@ -231,22 +355,23 @@ impl Window {
                 //eprintln!("pane corners: {:?}", self.panes[pane_index].borrow().get_corners());
                 let ((start_x, start_y), (end_x, end_y)) = self.panes[pane_index].borrow().get_corners();
                 if start_y <= i && end_y >= i {
-                    self.contents.merge(&mut self.panes[pane_index].borrow().draw_row(i - start_y));
+                    self.contents.merge(&mut self.panes[pane_index].borrow().draw_row(i - start_y + offset));
                     window_index += end_x - start_x + 1;
-                    if window_index < self.size.0 {
+                    /*if window_index < self.size.0 {
                         self.contents.push_str("|");
                         window_index += 1;
                     }
-                    row_drawn = true;
+                    row_drawn = true;*/
                 }
                 pane_index += 1;
             }
 
 
             //self.contents.merge(&mut self.panes[self.active_pane].borrow().draw_row(i));
-            if !row_drawn {
+            /*if !row_drawn {
                 self.contents.push_str("-".repeat(cols).as_str());
-            }
+                offset = 1;
+            }*/
             
             queue!(
                 self.contents,
@@ -512,11 +637,30 @@ impl Pane {
         pane
     }
 
-    pub fn draw_row(&self, index: usize) -> WindowContents {
+    pub fn draw_row(&self, mut index: usize) -> WindowContents {
         let rows = self.size.1;
-        let cols = self.size.0;
+        let mut cols = self.size.0;
 
-        let real_row = self.cursor.borrow().row_offset + index.saturating_sub(1);
+        let mut output = WindowContents::new();
+
+        let ((x1, y1), _) = self.get_corners();
+
+        if self.settings.editor_settings.border {
+            if index == 0 && y1 != 0 {
+                output.push_str("-".repeat(cols).as_str());
+                return output;
+            }
+            else {
+                index = index.saturating_sub(1);
+            }
+
+            if x1 != 0 {
+                output.push_str("|");
+                cols -= 1;
+            }
+        }
+
+        let real_row = self.cursor.borrow().row_offset + index;
         let col_offset = self.cursor.borrow().col_offset;
 
         let mut number_of_lines = self.borrow_buffer().line_len();
@@ -526,9 +670,9 @@ impl Pane {
 
         //number_of_lines = self.borrow_buffer().chars().filter(|c| *c == '\n').count();
 
-        let mut output = WindowContents::new();
 
         let mut num_width = 0;
+
         if self.settings.editor_settings.line_number && !self.settings.editor_settings.relative_line_number {
             let mut places = 1;
             while places < number_of_lines {
@@ -538,6 +682,7 @@ impl Pane {
             if real_row + 1 <= number_of_lines {
                 output.push_str(format!("{:width$}", real_row + 1, width = num_width).as_str());
             }
+            
         }
         else if self.settings.editor_settings.line_number && self.settings.editor_settings.relative_line_number {
             let mut places = 1;
@@ -553,6 +698,7 @@ impl Pane {
                 output.push_str(format!("{:width$}", ((real_row) as isize - (self.cursor.borrow().get_cursor().1 as isize)).abs() as usize, width = num_width).as_str());
             }
         }
+        //cols -= num_width;
 
         self.cursor.borrow_mut().number_line_size = num_width;
 
@@ -605,12 +751,12 @@ impl Pane {
         let (_, (mut end_x, _)) = self.get_corners();
         while  end_x > self.max_size.0 {
             self.size.0 -= 1;
-            end_x -= 1;
+            (_, (end_x, _)) = self.get_corners();
         }
         let (_, (_, mut end_y)) = self.get_corners();
         while  end_y > self.max_size.1 {
             self.size.1 -= 1;
-            end_y -= 1;
+            (_, (_, end_y)) = self.get_corners();
         }
 
     }
@@ -758,6 +904,7 @@ impl Pane {
 
     pub fn set_position(&mut self, position: (usize, usize)) {
         self.position = position;
+        self.shrink();
     }
 
     pub fn get_position(&self) -> (usize, usize) {
@@ -984,6 +1131,18 @@ impl Pane {
             },
             "qa!" => {
                 self.sender.send(Message::ForceQuitAll).expect("Failed to send message");
+            },
+            "pane_up" => {
+                self.sender.send(Message::PaneUp).expect("Failed to send message");
+            },
+            "pane_down" => {
+                self.sender.send(Message::PaneDown).expect("Failed to send message");
+            },
+            "pane_left" => {
+                self.sender.send(Message::PaneLeft).expect("Failed to send message");
+            },
+            "pane_right" => {
+                self.sender.send(Message::PaneRight).expect("Failed to send message");
             },
 
             _ => {}

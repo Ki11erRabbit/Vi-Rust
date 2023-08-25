@@ -317,6 +317,34 @@ impl Default for Settings {
             key: KeyCode::Char('v'),
             modifier: KeyModifiers::NONE,
         }], "vertical_split".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('w'),
+            modifier: KeyModifiers::CONTROL,
+        }, Key {
+            key: KeyCode::Char('h'),
+            modifier: KeyModifiers::NONE,
+        }], "pane_left".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('w'),
+            modifier: KeyModifiers::CONTROL,
+        }, Key {
+            key: KeyCode::Char('j'),
+            modifier: KeyModifiers::NONE,
+        }], "pane_down".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('w'),
+            modifier: KeyModifiers::CONTROL,
+        }, Key {
+            key: KeyCode::Char('k'),
+            modifier: KeyModifiers::NONE,
+        }], "pane_up".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('w'),
+            modifier: KeyModifiers::CONTROL,
+        }, Key {
+            key: KeyCode::Char('l'),
+            modifier: KeyModifiers::NONE,
+        }], "pane_right".to_string());
 
         let mut insert_keybindings = HashMap::new();
 
@@ -430,6 +458,7 @@ pub struct EditorSettings {
     pub tab_size: usize,
     pub use_spaces: bool,
     pub key_timeout: u64,
+    pub border: bool,
 }
 
 impl Default for EditorSettings {
@@ -440,6 +469,7 @@ impl Default for EditorSettings {
             tab_size: 4,
             use_spaces: true,
             key_timeout: 3000,
+            border: true,
         }
     }
 }
