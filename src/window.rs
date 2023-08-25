@@ -69,13 +69,24 @@ impl Window {
         
         for i in panes_to_remove.iter().rev() {
             let pane_size = self.panes[*i].borrow().size;
+            let ((rstart_x, rstart_y), (rend_x, rend_y)) = self.panes[*i].borrow().get_corners();
+            
+            loop {
+                if *i + 1 < self.panes.len() {
+                    let corners = self.panes[*i].borrow().get_corners();
+                    if self.panes[*i + 1].borrow_mut().combine(corners) {
+                        break;
+                    }
+                }
+                if *i != 0 {
+                    let corners = self.panes[*i].borrow().get_corners();
+                    if self.panes[*i - 1].borrow_mut().combine(corners) {
+                        break;
+                    }
+                }
+                break;
+            }
 
-            if *i == 0 {
-                self.panes[*i + 1].borrow_mut().increase_size(pane_size);
-            }
-            else {
-                self.panes[*i - 1].borrow_mut().increase_size(pane_size);
-            }
             
             self.panes.remove(*i);
         }
@@ -162,12 +173,13 @@ impl Window {
 
 
     pub fn run(&mut self) -> io::Result<bool> {
-        self.read_messages();
         self.refresh_screen()?;
+        self.read_messages();
         self.remove_panes();
         if self.panes.len() == 0 {
             return Ok(false);
         }
+        self.refresh_screen()?;
         let key = self.read_key()?;
         self.process_keypress(key)
     }
@@ -546,6 +558,67 @@ impl Pane {
         output
     }
 
+    pub fn combine(&mut self, corners: ((usize, usize), (usize, usize))) -> bool {
+        eprintln!("Combine: {:?}", corners);
+        let ((other_start_x, other_start_y), (other_end_x, other_end_y)) = corners;
+        eprintln!("Combine: {:?}", self.get_corners());
+        let ((start_x, start_y), (end_x, end_y)) = self.get_corners();
+
+
+        if other_start_y == start_y || other_end_y == end_y {
+
+            
+            //Try combining from the left to right
+            if end_x + 1 == other_start_x && start_y == other_start_y && end_y == other_end_y {
+                let mut width = other_end_x - start_x;
+                let mut height = end_y - start_y;
+                eprintln!("Width: {}, Height: {}", width, height);
+
+
+                self.size.0 = width;
+                self.size.1 = height;
+                return true;
+            }
+
+            //Try combining from the right to left
+            else if other_start_x - 1 == end_x && start_y == other_start_y && end_y == other_end_y {
+                let width = end_x - other_start_x;
+                let height = end_y - start_y;
+                eprintln!("Width: {}, Height: {}", width, height);
+
+                self.size.0 = width;
+                self.size.1 = height;
+                return true;
+            }
+        }
+        else if other_start_x == start_x || other_end_x == end_x {
+
+            //Try combining from the top to bottom
+            if end_y + 1 == other_start_y && start_x == other_start_x && end_x == other_end_x {
+                let width = end_x - start_x;
+                let height = other_end_y - start_y;
+                eprintln!("Width: {}, Height: {}", width, height);
+
+                self.size.0 = width;
+                self.size.1 = height;
+                return true;
+            }
+
+            //Try combining from the bottom to top
+            else if other_start_y - 1 == end_y && start_x == other_start_x && end_x == other_end_x {
+                let width = end_x - start_x;
+                let height = end_y - other_start_y;
+                eprintln!("Width: {}, Height: {}", width, height);
+
+                self.size.0 = width;
+                self.size.1 = height;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     pub fn refresh(&mut self) {
         self.mode.borrow_mut().refresh();
     }
@@ -588,9 +661,9 @@ impl Pane {
         }
         let line = self.contents.line(row);
         let len = cmp::min(col + offset, line.line_len().saturating_sub(offset));
-        /*if len == 0 {
+        if len == 0 {
             return None;
-        }*/
+        }
         Some(line.line_slice(offset..len))
     }
 
