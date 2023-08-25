@@ -43,7 +43,7 @@ impl Window {
         let channels = mpsc::channel();
         
         let win_size = terminal::size()
-            .map(|(w, h)| (w as usize, h as usize - 2))// -1 for trailing newline and -1 for command bar
+            .map(|(w, h)| (w as usize, h as usize - 1))// -1 for trailing newline and -1 for command bar
             .unwrap();
         let pane = Rc::new(RefCell::new(Pane::new(win_size, win_size, settings.clone(), channels.0.clone())));
 
@@ -516,7 +516,7 @@ impl Pane {
         let rows = self.size.1;
         let cols = self.size.0;
 
-        let real_row = self.cursor.borrow().row_offset + index;
+        let real_row = self.cursor.borrow().row_offset + index.saturating_sub(1);
         let col_offset = self.cursor.borrow().col_offset;
 
         let mut number_of_lines = self.borrow_buffer().line_len();
@@ -547,10 +547,10 @@ impl Pane {
                 num_width += 1;
             }
             if real_row == self.cursor.borrow().get_cursor().1 && real_row + 1 <= number_of_lines {
-                output.push_str(format!("{}{:width$}", real_row + 1, ' ', width = num_width - real_row.to_string().chars().count()).as_str());
+                output.push_str(format!("{}{:width$}", real_row + 1 , ' ', width = num_width - real_row.to_string().chars().count()).as_str());
             }
             else if real_row + 1 <= number_of_lines {
-                output.push_str(format!("{:width$}", ((real_row + 1) as isize - (self.cursor.borrow().get_cursor().1 as isize)).abs() as usize, width = num_width).as_str());
+                output.push_str(format!("{:width$}", ((real_row) as isize - (self.cursor.borrow().get_cursor().1 as isize)).abs() as usize, width = num_width).as_str());
             }
         }
 
