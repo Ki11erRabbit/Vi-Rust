@@ -68,6 +68,14 @@ impl Window {
 
         
         for i in panes_to_remove.iter().rev() {
+            let pane_size = self.panes[*i].borrow().size;
+
+            if *i == 0 {
+                self.panes[*i + 1].borrow_mut().increase_size(pane_size);
+            }
+            else {
+                self.panes[*i - 1].borrow_mut().increase_size(pane_size);
+            }
             
             self.panes.remove(*i);
         }
@@ -89,13 +97,13 @@ impl Window {
         self.panes[self.active_pane].borrow_mut().size = new_pane_size;
 
 
-        let new_pane_index = self.panes.len();
-        self.panes.push(Rc::new(RefCell::new(Pane::new(new_pane_size, self.settings.clone(), self.channels.0.clone()))));
+        let new_pane_index = self.active_pane + 1;
+        self.panes.insert(new_pane_index, Rc::new(RefCell::new(Pane::new(new_pane_size, self.settings.clone(), self.channels.0.clone()))));
 
         let ((x,_), (_, y)) = self.panes[self.active_pane].borrow().get_corners();
         let new_pane_position = (x, y + 1);
 
-        let new_pane = self.panes.last().expect("New pane not added for some reason");
+        let new_pane = self.panes[new_pane_index].clone();
         new_pane.borrow_mut().set_position(new_pane_position);
 
 
@@ -111,13 +119,13 @@ impl Window {
         self.panes[self.active_pane].borrow_mut().size = new_pane_size;
 
 
-        let new_pane_index = self.panes.len();
-        self.panes.push(Rc::new(RefCell::new(Pane::new(new_pane_size, self.settings.clone(), self.channels.0.clone()))));
+        let new_pane_index = self.active_pane + 1;
+        self.panes.insert(new_pane_index, Rc::new(RefCell::new(Pane::new(new_pane_size, self.settings.clone(), self.channels.0.clone()))));
 
         let ((_,y), (x, _)) = self.panes[self.active_pane].borrow().get_corners();
         let new_pane_position = (x + 1, y);
 
-        let new_pane = self.panes.last().expect("New pane not added for some reason");
+        let new_pane = self.panes[new_pane_index].clone();
         new_pane.borrow_mut().set_position(new_pane_position);
         
 
@@ -496,19 +504,24 @@ impl Pane {
 
         if let Some(row) = self.get_row(real_row, col_offset, cols) {
             let mut count = 0;
-            row.chars().for_each(|c| match c {
-                '\t' => {
-                    count += self.settings.editor_settings.tab_size;
-                    output.push_str(" ".repeat(self.settings.editor_settings.tab_size).as_str())
-                },
-                '\n' => output.push_str(" "),
-                c => {
-                    count += 1;
-                    output.push(c)
-                },
+            row.chars().for_each(|c| if count != (cols - num_width) {
+                match c {
+                    '\t' => {
+                        count += self.settings.editor_settings.tab_size;
+                        output.push_str(" ".repeat(self.settings.editor_settings.tab_size).as_str())
+                    },
+                    '\n' => output.push_str(" "),
+                    c => {
+                        count += 1;
+                        output.push(c)
+                    },
+                }
+            }
+                                 else {
+                                     output.push_str("");
             });
 
-            output.push_str(" ".repeat(cols - count - num_width).as_str());
+            output.push_str(" ".repeat(cols.saturating_sub(count + num_width)).as_str());
 
             //output.push_str(" ".repeat(cols - row.chars().count() / 2).as_str());
 
@@ -562,6 +575,11 @@ impl Pane {
 
     pub fn set_size(&mut self, size: (usize, usize)) {
         self.size = size;
+    }
+
+    pub fn increase_size(&mut self, size: (usize, usize)) {
+        self.size.0 += size.0;
+        self.size.1 += size.1;
     }
 
     pub fn get_row(&self, row: usize, offset: usize, col: usize) -> Option<RopeSlice> {
