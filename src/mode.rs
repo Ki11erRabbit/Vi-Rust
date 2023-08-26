@@ -7,7 +7,7 @@ use crate::{window::Pane, cursor::{Direction, CursorMove, self}, settings::{Keys
 
 
 
-pub trait Mode<B : Buffer> {
+pub trait Mode<B: Buffer> {
 
     fn get_name(&self) -> String;
 
@@ -52,7 +52,7 @@ impl Normal {
     }
 }
 
-impl<B> Mode<B> for Normal {
+impl<B: Buffer> Mode<B> for Normal {
 
     fn get_name(&self) -> String {
         String::from("Normal")
@@ -72,7 +72,7 @@ impl<B> Mode<B> for Normal {
 
     fn refresh(&mut self) {
         if self.time.elapsed().as_millis() >= self.timeout as u128 {
-            self.flush_key_buffer();
+            <Normal as Mode<B>>::flush_key_buffer(self);
             self.time = Instant::now();
         }
     }
@@ -146,7 +146,7 @@ impl<B> Mode<B> for Normal {
     }
 
     fn process_keypress(&mut self, key: KeyEvent, pane: &mut Pane<B>) -> io::Result<bool> {
-        self.refresh();
+        <Normal as Mode<B>>::refresh(self);
 
         match key {
             KeyEvent {
@@ -239,7 +239,7 @@ impl<B> Mode<B> for Normal {
                     flush = true;
                 }
                 if flush {
-                    self.flush_key_buffer();
+                    <Normal as Mode<B>>::flush_key_buffer(self);
                 }
 
                 Ok(true)
@@ -331,7 +331,7 @@ impl Insert {
     }
 }
 
-impl<B> Mode<B> for Insert {
+impl<B: Buffer> Mode<B> for Insert {
 
     fn get_name(&self) -> String {
         "Insert".to_string()
@@ -351,7 +351,7 @@ impl<B> Mode<B> for Insert {
 
     fn refresh(&mut self) {
         if self.time.elapsed().as_millis() >= self.timeout as u128 {
-            self.flush_key_buffer();
+            <Insert as Mode<B>>::flush_key_buffer(self);
             self.time = Instant::now();
         }
     }
@@ -395,7 +395,7 @@ impl<B> Mode<B> for Insert {
     }
     
     fn process_keypress(&mut self, key: KeyEvent, pane: &mut Pane<B>) -> io::Result<bool> {
-        self.refresh();
+        <Insert as Mode<B>>::refresh(self);
         
         match key {
             KeyEvent {
@@ -435,7 +435,7 @@ impl<B> Mode<B> for Insert {
                     flush = true;
                 }
                 if flush {
-                    self.flush_key_buffer();
+                    <Insert as Mode<B>>::flush_key_buffer(self);
                 }
 
                 Ok(true)
@@ -487,7 +487,7 @@ impl Command {
     }
 }
 
-impl<B> Mode<B> for Command {
+impl<B: Buffer> Mode<B> for Command {
 
     fn get_name(&self) -> String {
         "Command".to_string()
@@ -520,7 +520,7 @@ impl<B> Mode<B> for Command {
 
     fn refresh(&mut self) {
         if self.time.elapsed().as_millis() >= self.timeout as u128 {
-            self.flush_key_buffer();
+            <Command as Mode<B>>::flush_key_buffer(self);
             self.time = Instant::now();
         }
     }
@@ -553,7 +553,7 @@ impl<B> Mode<B> for Command {
     }
 
     fn process_keypress(&mut self, key: KeyEvent, pane: &mut Pane<B>) -> io::Result<bool> {
-        self.refresh();
+        <Command as Mode<B>>::refresh(self);
 
         match key {
             KeyEvent {
@@ -615,7 +615,7 @@ impl<B> Mode<B> for Command {
                     flush = true;
                 }
                 if flush {
-                    self.flush_key_buffer();
+                    <Command as Mode<B>>::flush_key_buffer(self);
                 }
 
                 Ok(true)

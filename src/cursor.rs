@@ -86,7 +86,7 @@ impl Cursor {
         (x, y)
     }
 
-    pub fn scroll<B>(&mut self, pane: &Pane<B>) where B: Buffer + ToString{
+    pub fn scroll<B: Buffer>(&mut self, pane: &Pane<B>) {
         let (pane_x, pane_y) = pane.get_size();
 
         if self.x >= pane_x && self.went_right {
@@ -115,8 +115,8 @@ impl Cursor {
         let mut number_of_lines = rows.line_count();
 
         number_of_lines = number_of_lines.saturating_sub(y_offset);
-        let number_of_cols = if let Some(row) = rows.lines().nth(self.y.saturating_sub(y_offset)) {
-            row.chars().count().saturating_sub(x_offset)
+        let number_of_cols = if let Some(row) = rows.get_line(self.y.saturating_sub(y_offset)) {
+            row.len().saturating_sub(x_offset)
         }
         else {
             0

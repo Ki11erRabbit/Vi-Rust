@@ -12,7 +12,7 @@ use crop::{Rope, RopeSlice};
 use crossterm::event::{KeyEvent, self, Event};
 use crossterm::{terminal::{self, ClearType}, execute, cursor, queue};
 
-use crate::buffer::Buffer;
+use crate::buffer::{Buffer, BufferLine};
 use crate::mode::{Mode, Normal, Insert, Command};
 use crate::cursor::{Cursor, Direction, CursorMove};
 use crate::settings::Settings;
@@ -39,7 +39,7 @@ pub struct Window<B: Buffer> {
     channels: (Sender<Message>, Receiver<Message>),
 }
 
-impl<B> Window<B> {
+impl<B: Buffer> Window<B> {
     pub fn new() -> Self {
         let settings = Settings::default();
         
@@ -439,8 +439,8 @@ impl<B> Window<B> {
 
         
         let x = {
-            if let Some(row) = self.panes[self.active_pane].borrow().borrow_buffer().lines().nth(y) {
-                let len = row.chars().count();
+            if let Some(row) = self.panes[self.active_pane].borrow().borrow_buffer().get_line(y) {
+                //let len = row.len();
                 //cmp::min(x, len)
                 x
             }
@@ -585,7 +585,7 @@ impl JumpTable {
 }
 
 
-pub struct Pane<B> where B: Buffer + ToString {
+pub struct Pane<B: Buffer>  {
     max_size: (usize, usize),
     size: (usize, usize),
     position: (usize, usize),
@@ -602,20 +602,20 @@ pub struct Pane<B> where B: Buffer + ToString {
 }
 
 
-impl<B> Pane<B> {
+impl<B: Buffer> Pane<B> {
     pub fn new(max_size: (usize, usize), size: (usize, usize), settings: Settings, sender: Sender<Message>) -> Self {
-        let mut modes: HashMap<String, Rc<RefCell<dyn Mode>>> = HashMap::new();
+        let mut modes: HashMap<String, Rc<RefCell<dyn Mode<B>>>> = HashMap::new();
         let normal = Rc::new(RefCell::new(Normal::new()));
-        normal.borrow_mut().add_keybindings(settings.mode_keybindings.get("Normal").unwrap().clone());
-        normal.borrow_mut().set_key_timeout(settings.editor_settings.key_timeout);
+        <Normal as Mode<B>>::add_keybindings(&mut *normal.borrow_mut(), settings.mode_keybindings.get("Normal").unwrap().clone());
+        <Normal as Mode<B>>::set_key_timeout(&mut *normal.borrow_mut(), settings.editor_settings.key_timeout);
 
         let insert = Rc::new(RefCell::new(Insert::new()));
-        insert.borrow_mut().add_keybindings(settings.mode_keybindings.get("Insert").unwrap().clone());
-        insert.borrow_mut().set_key_timeout(settings.editor_settings.key_timeout);
+        <Insert as Mode<B>>::add_keybindings(&mut *insert.borrow_mut(), settings.mode_keybindings.get("Insert").unwrap().clone());
+        <Insert as Mode<B>>::set_key_timeout(&mut *insert.borrow_mut(), settings.editor_settings.key_timeout);
         
         let command = Rc::new(RefCell::new(Command::new()));
-        command.borrow_mut().add_keybindings(settings.mode_keybindings.get("Command").unwrap().clone());
-        command.borrow_mut().set_key_timeout(settings.editor_settings.key_timeout);
+        <Command as Mode<B>>::add_keybindings(&mut *command.borrow_mut(), settings.mode_keybindings.get("Command").unwrap().clone());
+        <Command as Mode<B>>::set_key_timeout(&mut *command.borrow_mut(), settings.editor_settings.key_timeout);
 
         modes.insert("Normal".to_string(), normal.clone());
         modes.insert("Insert".to_string(), insert.clone());
@@ -930,21 +930,18 @@ impl<B> Pane<B> {
         self.shrink();
     }
 
-    pub fn get_row(&self, row: usize, offset: usize, col: usize) -> Option<RopeSlice> {
-        if row >= self.contents.line_len() {
-            return None;
-        }
-        let line = self.contents.line(row);
-        let len = cmp::min(col + offset, line.line_len().saturating_sub(offset));
+    pub fn get_row(&self, row: usize, offset: usize, col: usize) -> Option<String> {
+        let line = self.contents.get_line(row)?;
+        let len = cmp::min(col + offset, line.len().saturating_sub(offset));
         if len == 0 {
             return None;
         }
-        Some(line.line_slice(offset..len))
+        Some(line.get(offset..len).unwrap().to_string())
     }
 
     pub fn open_file(&mut self, filename: &str) -> io::Result<()> {
         let file = std::fs::read_to_string(filename)?;
-        self.contents = B::from(&file);
+        self.contents = B::from_text(&file);
         self.file_name = Some(PathBuf::from(filename));
         Ok(())
     }
@@ -956,11 +953,11 @@ impl<B> Pane<B> {
     }
 
     pub fn borrow_buffer(&self) -> &dyn Buffer {
-        &self.contents
+        & *self.contents
     }
 
     pub fn borrow_buffer_mut(&mut self) -> &mut dyn Buffer {
-        &mut self.contents
+        &mut *self.contents
     }
 
     pub fn set_position(&mut self, position: (usize, usize)) {
@@ -1001,10 +998,10 @@ impl<B> Pane<B> {
 
     fn get_byte_offset(&self) -> usize {
         let (x, mut y) = self.cursor.borrow().get_cursor();
-        while y > self.contents.line_len() {
+        while y > self.contents.line_count() {
             y = y.saturating_sub(1);
         }
-        let line_pos = self.contents.byte_of_line(y);
+        let line_pos = self.contents.line_start_byte(y).unwrap_or(0);
         let row_pos = x;
 
         let byte_pos = line_pos + row_pos;
@@ -1038,7 +1035,7 @@ impl<B> Pane<B> {
         let byte_pos = self.get_byte_offset();
         let mut go_up = false;
 
-        if self.borrow_buffer().chars().nth(byte_pos.saturating_sub(1)) == Some(b'\n') {
+        if self.borrow_buffer().get_byte(byte_pos.saturating_sub(1)) == Some(b'\n') {
             go_up = true;
         }
 
@@ -1064,7 +1061,7 @@ impl<B> Pane<B> {
         self.set_changed(true);
         let byte_pos = self.get_byte_offset();
         let c = c.to_string();
-        if self.contents.chars().count() == 0 {
+        if self.contents.len() == 0 {
             self.contents.insert(0, &c);
             return;
         }

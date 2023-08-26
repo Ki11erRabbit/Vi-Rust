@@ -15,7 +15,7 @@ struct CleanUp;
 impl Drop for CleanUp {
     fn drop(&mut self) {
         terminal::disable_raw_mode().expect("Could not turn off Raw mode");
-        Window::clear_screen().expect("Could not clear screen");
+        Window::<RopeBuffer>::clear_screen().expect("Could not clear screen");
         execute!(io::stdout(), SetCursorStyle::DefaultUserShape).expect("Could not reset cursor style");
         execute!(io::stdout(), terminal::LeaveAlternateScreen).expect("Could not leave alternate screen");
     }
