@@ -11,11 +11,11 @@ pub trait Mode {
 
     fn get_name(&self) -> String;
 
-    fn process_keypress(&mut self, key: KeyEvent, pane: &mut Pane) -> io::Result<bool>;
+    fn process_keypress(&mut self, key: KeyEvent, pane: &mut dyn Pane) -> io::Result<bool>;
 
-    fn change_mode(&mut self, name: &str, pane: &mut Pane);
+    fn change_mode(&mut self, name: &str, pane: &mut dyn Pane);
 
-    fn update_status(&self, pane: &Pane) -> (String, String);
+    fn update_status(&self, pane: &dyn Pane) -> (String, String);
 
     fn add_keybindings(&mut self, bindings: HashMap<Keys, String>);
 
@@ -23,7 +23,7 @@ pub trait Mode {
 
     fn flush_key_buffer(&mut self);
 
-    fn execute_command(&mut self, command: &str, pane: &mut Pane);
+    fn execute_command(&mut self, command: &str, pane: &mut dyn Pane);
 
     fn refresh(&mut self);
 
@@ -77,7 +77,7 @@ impl Mode for Normal {
         }
     }
 
-    fn execute_command(&mut self, command: &str, pane: &mut Pane) {
+    fn execute_command(&mut self, command: &str, pane: &mut dyn Pane) {
         match command {
             "left" => {
                 pane.run_command(&format!("move left {}", self.number_buffer));
@@ -145,7 +145,7 @@ impl Mode for Normal {
 
     }
 
-    fn process_keypress(&mut self, key: KeyEvent, pane: &mut Pane) -> io::Result<bool> {
+    fn process_keypress(&mut self, key: KeyEvent, pane: &mut dyn Pane) -> io::Result<bool> {
         self.refresh();
 
         match key {
@@ -247,14 +247,14 @@ impl Mode for Normal {
         }
     }
 
-    fn change_mode(&mut self, name: &str, pane: &mut Pane) {
+    fn change_mode(&mut self, name: &str, pane: &mut dyn Pane) {
 
-        pane.set_mode(name);
+        pane.change_mode(name);
 
     }
 
-    fn update_status(&self, pane: &Pane) -> (String, String) {
-        let (row, col) = pane.cursor.borrow().get_cursor();
+    fn update_status(&self, pane: &dyn Pane) -> (String, String) {
+        let (row, col) = pane.get_cursor().borrow().get_cursor();
         let mut first = format!("Normal {}:{}", col + 1, row + 1);
         if !self.number_buffer.is_empty() {
             first.push_str(&format!(" {}", self.number_buffer));
@@ -297,8 +297,9 @@ impl Insert {
         }
     }
 
-    fn move_cursor(&self, direction: KeyCode, pane: &mut Pane) -> io::Result<bool> {
-        let cursor = &mut pane.cursor.borrow_mut();
+    fn move_cursor(&self, direction: KeyCode, pane: &mut dyn Pane) -> io::Result<bool> {
+        let cursor = pane.get_cursor();
+        let mut cursor = cursor.borrow_mut();
         let direction = match direction {
             KeyCode::Up => Direction::Up,
             KeyCode::Down => Direction::Down,
@@ -307,26 +308,27 @@ impl Insert {
             _ => return Ok(false),
         };
 
-        cursor.move_cursor(direction, 1, pane.borrow_buffer());
+        cursor.move_cursor(direction, 1, pane);
         Ok(true)
     }
 
-    fn insert_newline(&self, pane: &mut Pane) -> io::Result<bool> {
+    fn insert_newline(&self, pane: &mut dyn Pane) -> io::Result<bool> {
         pane.insert_newline();
         Ok(true)
     }
-    fn delete_char(&self, pane: &mut Pane) -> io::Result<bool> {
+    fn delete_char(&self, pane: &mut dyn Pane) -> io::Result<bool> {
         pane.delete_char();
         Ok(true)
     }
-    fn backspace(&self, pane: &mut Pane) -> io::Result<bool> {
-        pane.backspace();
+    fn backspace(&self, pane: &mut dyn Pane) -> io::Result<bool> {
+        pane.backspace_char();
         Ok(true)
     }
-    fn insert_char(&self, pane: &mut Pane, c: char) -> io::Result<bool> {
+    fn insert_char(&self, pane: &mut dyn Pane, c: char) -> io::Result<bool> {
         pane.insert_char(c);
-        let cursor = &mut pane.cursor.borrow_mut();
-        cursor.move_cursor(Direction::Right, 1, pane.borrow_buffer());
+        let cursor = pane.get_cursor();
+        let mut cursor = cursor.borrow_mut();
+        cursor.move_cursor(Direction::Right, 1, pane);
         Ok(true)
     }
 }
@@ -356,7 +358,7 @@ impl Mode for Insert {
         }
     }
 
-    fn execute_command(&mut self, command: &str, pane: &mut Pane) {
+    fn execute_command(&mut self, command: &str, pane: &mut dyn Pane) {
         match command {
             "left" => {
                 pane.run_command("move left 1");
@@ -394,7 +396,7 @@ impl Mode for Insert {
         }
     }
     
-    fn process_keypress(&mut self, key: KeyEvent, pane: &mut Pane) -> io::Result<bool> {
+    fn process_keypress(&mut self, key: KeyEvent, pane: &mut dyn Pane) -> io::Result<bool> {
         self.refresh();
         
         match key {
@@ -444,20 +446,20 @@ impl Mode for Insert {
 
     }
 
-    fn change_mode(&mut self, name: &str, pane: &mut Pane) {
+    fn change_mode(&mut self, name: &str, pane: &mut dyn Pane) {
             
-        pane.set_mode(name);
+        pane.change_mode(name);
     
     }
 
-    fn update_status(&self, pane: &Pane) -> (String, String) {
-        let (row, col) = pane.cursor.borrow().get_cursor();
+    fn update_status(&self, pane: &dyn Pane) -> (String, String) {
+        let (row, col) = pane.get_cursor().borrow().get_cursor();
         let first = format!("Insert {}:{}", col + 1, row + 1);
 
         let mut second = String::new();
 
         //second.push_str(&format!("{:?} {}", &pane.borrow_buffer().chars().collect::<String>(), pane.borrow_buffer().line_len()));
-        second.push_str(&format!("{:?}", pane.cursor.borrow()));
+        second.push_str(&format!("{:?}", pane.get_cursor().borrow()));
 
         (first, second)
     }
@@ -493,17 +495,17 @@ impl Mode for Command {
         "Command".to_string()
     }
 
-    fn update_status(&self, _pane: &Pane) -> (String, String) {
+    fn update_status(&self, _pane: &dyn Pane) -> (String, String) {
         let first = format!(":{}", self.command);
         let second = String::new();
 
         (first, second)
     }
 
-    fn change_mode(&mut self, name: &str, pane: &mut Pane) {
+    fn change_mode(&mut self, name: &str, pane: &mut dyn Pane) {
         self.command.clear();
         self.edit_pos = 0;
-        pane.set_mode(name);
+        pane.change_mode(name);
     }
 
     fn add_keybindings(&mut self, keybindings: HashMap<Keys, String>) {
@@ -526,7 +528,7 @@ impl Mode for Command {
     }
 
 
-    fn execute_command(&mut self, command: &str, pane: &mut Pane) {
+    fn execute_command(&mut self, command: &str, pane: &mut dyn Pane) {
         match command {
             "left" => {
                 self.edit_pos = self.edit_pos.saturating_sub(1);
@@ -552,7 +554,7 @@ impl Mode for Command {
         }
     }
 
-    fn process_keypress(&mut self, key: KeyEvent, pane: &mut Pane) -> io::Result<bool> {
+    fn process_keypress(&mut self, key: KeyEvent, pane: &mut dyn Pane) -> io::Result<bool> {
         self.refresh();
 
         match key {

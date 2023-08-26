@@ -1,7 +1,7 @@
 use std::{io, time::Duration};
 
-use crossterm::{terminal, event::{self, KeyEvent, Event}, execute, cursor::SetCursorStyle};
-use window::Window;
+use crossterm::{terminal, event::{self, KeyEvent, Event}, execute, cursor::SetCursorStyle, cursor::MoveTo};
+use window::{Window, Pane, TextPane};
 
 pub mod window;
 pub mod mode;
@@ -13,14 +13,15 @@ struct CleanUp;
 impl Drop for CleanUp {
     fn drop(&mut self) {
         terminal::disable_raw_mode().expect("Could not turn off Raw mode");
-        Window::clear_screen().expect("Could not clear screen");
+        execute!(std::io::stdout(), terminal::Clear(terminal::ClearType::All)).expect("Could not clear terminal");
+        execute!(std::io::stdout(), MoveTo(0, 0)).expect("Could not move cursor to (0, 0)");
         execute!(io::stdout(), SetCursorStyle::DefaultUserShape).expect("Could not reset cursor style");
     }
 }
 
 
 struct Editor {
-    window: Window,
+    window: Window<TextPane>,
 }
 
 impl Editor {
