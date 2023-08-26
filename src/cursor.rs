@@ -86,7 +86,7 @@ impl Cursor {
         (x, y)
     }
 
-    pub fn scroll<B: Buffer>(&mut self, pane: &Pane<B>) {
+    pub fn scroll(&mut self, pane: &dyn Pane) {
         let (pane_x, pane_y) = pane.get_size();
 
         if self.x >= pane_x && self.went_right {
@@ -110,17 +110,16 @@ impl Cursor {
 
     }
 
-    pub fn set_cursor(&mut self, x: CursorMove, y: CursorMove, rows: &dyn Buffer, (x_offset, y_offset): (usize, usize)) {
-        
-        let mut number_of_lines = rows.line_count();
+    pub fn set_cursor(&mut self, x: CursorMove, y: CursorMove, pane: &dyn Pane, (x_offset, y_offset): (usize, usize)) {
+        let number_of_lines = pane.get_line_count();
 
-        number_of_lines = number_of_lines.saturating_sub(y_offset);
-        let number_of_cols = if let Some(row) = rows.get_line(self.y.saturating_sub(y_offset)) {
-            row.len().saturating_sub(x_offset)
+        let number_of_cols = if let Some(cols) = pane.get_row_len(self.y) {
+            cols.saturating_sub(x_offset)
         }
         else {
             0
         };
+        
 
         match x {
             CursorMove::Amount(n) => {
@@ -152,11 +151,11 @@ impl Cursor {
         }
     }
 
-    pub fn move_cursor(&mut self, direction: Direction, n: usize, rows: &dyn Buffer) {
-        let mut number_of_lines = rows.line_count();
+    pub fn move_cursor(&mut self, direction: Direction, n: usize, pane: &dyn Pane) {
+        let number_of_lines = pane.get_line_count();
 
-        let number_of_cols = if let Some(row) = rows.get_line(self.y) {
-            row.chars().count()
+        let number_of_cols = if let Some(cols) = pane.get_row_len(self.y) {
+            cols
         }
         else {
             0

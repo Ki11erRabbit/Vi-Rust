@@ -29,17 +29,17 @@ pub enum Message {
     PaneRight,
 }
 
-pub struct Window<B: Buffer> {
+pub struct Window<P: Pane>{
     size: (usize, usize),
     contents: WindowContents,
     active_pane: usize,
-    panes: Vec<Rc<RefCell<Pane<B>>>>,
+    panes: Vec<Rc<RefCell<P>>>,
     settings: Settings,
     duration: Duration,
     channels: (Sender<Message>, Receiver<Message>),
 }
 
-impl<B: Buffer> Window<B> {
+impl<P: Pane> Window<P> {
     pub fn new() -> Self {
         let settings = Settings::default();
         
@@ -50,7 +50,7 @@ impl<B: Buffer> Window<B> {
         let win_size = terminal::size()
             .map(|(w, h)| (w as usize, h as usize - 1))// -1 for trailing newline and -1 for command bar
             .unwrap();
-        let pane = Rc::new(RefCell::new(Pane::new(win_size, win_size, settings.clone(), channels.0.clone())));
+        let pane = P::new(win_size, win_size, settings.clone(), channels.0.clone());
 
         let panes = vec![pane.clone()];
         Self {
@@ -67,7 +67,7 @@ impl<B: Buffer> Window<B> {
     fn remove_panes(&mut self) {
         let mut panes_to_remove = Vec::new();
         for (i, pane) in self.panes.iter().enumerate() {
-            if pane.borrow().close {
+            if pane.borrow().can_close() {
                 panes_to_remove.push(i);
             }
         }
@@ -107,7 +107,7 @@ impl<B: Buffer> Window<B> {
 
     fn horizontal_split(&mut self) {
         //eprintln!("split panes: {:?}", self.panes.len());
-        let active_pane_size = self.panes[self.active_pane].borrow().size;
+        let active_pane_size = self.panes[self.active_pane].borrow().get_size();
         let new_pane_size = (active_pane_size.0, active_pane_size.1 / 2);
         let old_pane_size = if active_pane_size.1 % 2 == 0 {
             new_pane_size
@@ -117,11 +117,11 @@ impl<B: Buffer> Window<B> {
         };
 
             
-        self.panes[self.active_pane].borrow_mut().size = old_pane_size;
+        self.panes[self.active_pane].borrow_mut().set_size(old_pane_size);
 
 
         let new_pane_index = self.active_pane + 1;
-        self.panes.insert(new_pane_index, Rc::new(RefCell::new(Pane::new(self.size, new_pane_size, self.settings.clone(), self.channels.0.clone()))));
+        self.panes.insert(new_pane_index, P::new(self.size, new_pane_size, self.settings.clone(), self.channels.0.clone()));
 
         let ((x,_), (_, y)) = self.panes[self.active_pane].borrow().get_corners();
         let new_pane_position = (x, y + 1);
@@ -137,7 +137,7 @@ impl<B: Buffer> Window<B> {
     }
 
     fn vertical_split(&mut self) {
-        let active_pane_size = self.panes[self.active_pane].borrow().size;
+        let active_pane_size = self.panes[self.active_pane].borrow().get_size();
         let new_pane_size = (active_pane_size.0 / 2, active_pane_size.1);
         let old_pane_size = if active_pane_size.0 % 2 == 0 {
             new_pane_size
@@ -145,11 +145,11 @@ impl<B: Buffer> Window<B> {
         else {
             (new_pane_size.0 + 1, new_pane_size.1)
         };
-        self.panes[self.active_pane].borrow_mut().size = old_pane_size;
+        self.panes[self.active_pane].borrow_mut().set_size(old_pane_size);
 
 
         let new_pane_index = self.active_pane + 1;
-        self.panes.insert(new_pane_index, Rc::new(RefCell::new(Pane::new(self.size, new_pane_size, self.settings.clone(), self.channels.0.clone()))));
+        self.panes.insert(new_pane_index, P::new(self.size, new_pane_size, self.settings.clone(), self.channels.0.clone()));
 
         let ((_,y), (x, _)) = self.panes[self.active_pane].borrow().get_corners();
         let new_pane_position = (x + 1, y);
@@ -279,7 +279,7 @@ impl<B: Buffer> Window<B> {
                     }
                     Message::ForceQuitAll => {
                         for pane in self.panes.iter() {
-                            pane.borrow_mut().close = true;
+                            pane.borrow_mut().close();
                         }
                     }
                     Message::PaneUp => {
@@ -431,23 +431,14 @@ impl<B: Buffer> Window<B> {
         self.draw_rows();
         self.draw_status_bar();
 
-        let (x, y) = self.panes[self.active_pane].borrow().cursor.borrow().get_real_cursor();
+        let (x, y) = self.panes[self.active_pane].borrow().get_cursor().borrow().get_real_cursor();
         //eprintln!("x: {} y: {}", x, y);
         let x = x + self.panes[self.active_pane].borrow().get_position().0;
         let y = y + self.panes[self.active_pane].borrow().get_position().1;
         //eprintln!("x: {} y: {}", x, y);
 
         
-        let x = {
-            if let Some(row) = self.panes[self.active_pane].borrow().borrow_buffer().get_line(y) {
-                //let len = row.len();
-                //cmp::min(x, len)
-                x
-            }
-            else {
-                x
-            }
-        } + self.panes[self.active_pane].borrow().cursor.borrow().number_line_size;
+        let x = x + self.panes[self.active_pane].borrow().get_cursor().borrow().number_line_size;
 
         queue!(
             self.contents,
@@ -584,8 +575,58 @@ impl JumpTable {
     }
 }
 
+pub trait Pane {
 
-pub struct Pane<B: Buffer>  {
+    fn new(max_size: (usize, usize), size: (usize, usize), settings: Settings, sender: Sender<Message>) -> Rc<RefCell<Self>> where Self: Sized;
+
+    fn draw_row(&self, index: usize) -> WindowContents;
+
+    fn combine(&mut self, corners: ((usize, usize), (usize, usize))) -> bool;
+
+    fn refresh(&mut self);
+
+    fn can_close(&self) -> bool;
+    fn close(&mut self);
+
+    fn save_buffer(&mut self) -> io::Result<()>;
+    fn open_file(&mut self, filename: &str) -> io::Result<()>;
+
+    fn get_size(&self) -> (usize, usize);
+    fn set_size(&mut self, size: (usize, usize));
+    fn resize(&mut self, size: (usize, usize));
+
+    fn set_position(&mut self, position: (usize, usize));
+    fn get_position(&self) -> (usize, usize);
+    fn get_corners(&self) -> ((usize, usize), (usize, usize));
+
+    fn process_keypress(&mut self, key: KeyEvent) -> io::Result<bool>;
+
+    fn scroll_cursor(&mut self);
+
+    fn get_status(&self) -> (String, String);
+
+    fn run_command(&mut self, command: &str);
+
+    fn change_mode(&mut self, mode_name: &str);
+
+    fn insert_newline(&mut self) {
+        self.insert_char('\n');
+    }
+    fn insert_char(&mut self, c: char);
+    fn insert_str(&mut self, s: &str);
+    fn delete_char(&mut self);
+    fn backspace_char(&mut self);
+
+    fn get_cursor(&self) -> Rc<RefCell<Cursor>>;
+
+    fn get_line_count(&self) -> usize;
+
+    fn buffer_to_string(&self) -> String;
+    
+    fn get_row_len(&self, row: usize) -> Option<usize>;
+}
+
+pub struct TextPane {
     max_size: (usize, usize),
     size: (usize, usize),
     position: (usize, usize),
@@ -602,9 +643,80 @@ pub struct Pane<B: Buffer>  {
 }
 
 
-impl<B: Buffer> Pane<B> {
-    pub fn new(max_size: (usize, usize), size: (usize, usize), settings: Settings, sender: Sender<Message>) -> Self {
-        let mut modes: HashMap<String, Rc<RefCell<dyn Mode<B>>>> = HashMap::new();
+impl TextPane {
+
+    fn shrink(&mut self) {
+        let (_, (mut end_x, _)) = self.get_corners();
+        while  end_x > self.max_size.0 {
+            if self.size.0 == 0 {
+                break;
+            }
+            self.size.0 = self.size.0.saturating_sub(1);
+            (_, (end_x, _)) = self.get_corners();
+        }
+        let (_, (_, mut end_y)) = self.get_corners();
+        while  end_y > self.max_size.1 {
+            if self.size.1 == 0 {
+                break;
+            }
+            self.size.1 = self.size.1.saturating_sub(1);
+            (_, (_, end_y)) = self.get_corners();
+        }
+
+    }
+
+    pub fn set_changed(&mut self, changed: bool) {
+        self.changed = changed;
+    }
+
+    pub fn increase_size(&mut self, size: (usize, usize)) {
+        self.size.0 += size.0;
+        self.size.1 += size.1;
+    }
+
+    fn get_row(&self, row: usize, offset: usize, col: usize) -> Option<RopeSlice> {
+        if row >= self.contents.line_len() {
+            return None;
+        }
+        let line = self.contents.line(row);
+        let len = cmp::min(col + offset, line.line_len().saturating_sub(offset));
+        if len == 0 {
+            return None;
+        }
+        Some(line.line_slice(offset..len))
+    }
+
+    pub fn borrow_buffer(&self) -> &Rope {
+        &self.contents
+    }
+
+    pub fn borrow_buffer_mut(&mut self) -> &mut Rope {
+        &mut self.contents
+    }
+
+    pub fn get_mode(&self, name: &str) -> Option<Rc<RefCell<dyn Mode>>> {
+        self.modes.get(name).map(|m| m.clone())
+    }
+
+
+    fn get_byte_offset(&self) -> usize {
+        let (x, mut y) = self.cursor.borrow().get_cursor();
+        while y > self.contents.line_len() {
+            y = y.saturating_sub(1);
+        }
+        let line_pos = self.contents.byte_of_line(y);
+        let row_pos = x;
+
+        let byte_pos = line_pos + row_pos;
+
+        byte_pos
+    }
+
+}
+
+impl Pane for TextPane {
+    fn new(max_size: (usize, usize), size: (usize, usize), settings: Settings, sender: Sender<Message>) -> Rc<RefCell<Self>> {
+        let mut modes: HashMap<String, Rc<RefCell<dyn Mode>>> = HashMap::new();
         let normal = Rc::new(RefCell::new(Normal::new()));
         <Normal as Mode<B>>::add_keybindings(&mut *normal.borrow_mut(), settings.mode_keybindings.get("Normal").unwrap().clone());
         <Normal as Mode<B>>::set_key_timeout(&mut *normal.borrow_mut(), settings.editor_settings.key_timeout);
@@ -621,15 +733,6 @@ impl<B: Buffer> Pane<B> {
         modes.insert("Insert".to_string(), insert.clone());
         modes.insert("Command".to_string(), command.clone());
 
-        let (mut width, mut height) = size;
-        while width > max_size.0 {
-            width -= 1;
-        }
-        while height > max_size.1 {
-            height -= 1;
-        }
-
-        let size = (width, height);
         
         let mut pane = Self {
             max_size,
@@ -649,10 +752,10 @@ impl<B: Buffer> Pane<B> {
 
         pane.shrink();
         
-        pane
+        Rc::new(RefCell::new(pane))
     }
 
-    pub fn draw_row(&self, mut index: usize) -> WindowContents {
+    fn draw_row(&self, mut index: usize) -> WindowContents {
         let rows = self.size.1;
         let mut cols = self.size.0;
 
@@ -756,27 +859,8 @@ impl<B: Buffer> Pane<B> {
         output
     }
 
-    fn shrink(&mut self) {
-        let (_, (mut end_x, _)) = self.get_corners();
-        while  end_x > self.max_size.0 {
-            if self.size.0 == 0 {
-                break;
-            }
-            self.size.0 = self.size.0.saturating_sub(1);
-            (_, (end_x, _)) = self.get_corners();
-        }
-        let (_, (_, mut end_y)) = self.get_corners();
-        while  end_y > self.max_size.1 {
-            if self.size.1 == 0 {
-                break;
-            }
-            self.size.1 = self.size.1.saturating_sub(1);
-            (_, (_, end_y)) = self.get_corners();
-        }
 
-    }
-
-    pub fn combine(&mut self, corners: ((usize, usize), (usize, usize))) -> bool {
+    fn combine(&mut self, corners: ((usize, usize), (usize, usize))) -> bool {
         //eprintln!("Combine: {:?}", corners);
         let ((other_start_x, other_start_y), (other_end_x, other_end_y)) = corners;
         //eprintln!("Combine: {:?}", self.get_corners());
@@ -848,46 +932,39 @@ impl<B: Buffer> Pane<B> {
         return false;
     }
 
-    pub fn refresh(&mut self) {
+    fn refresh(&mut self) {
         self.mode.borrow_mut().refresh();
     }
 
-    pub fn set_changed(&mut self, changed: bool) {
-        self.changed = changed;
-    }
-
-    pub fn can_close(&self) -> bool {
+    fn can_close(&self) -> bool {
         self.close
     }
 
-    pub fn close(&mut self) {
+    fn close(&mut self) {
         self.close = true;
     }
 
-    pub fn save_buffer(&mut self) {
+    fn save_buffer(&mut self) -> io::Result<()> {
         if let Some(file_name) = &self.file_name {
-            let mut file = std::fs::File::create(file_name).unwrap();
-            file.write_all(self.contents.to_string().as_bytes()).unwrap();
+            let mut file = std::fs::File::create(file_name)?;
+            file.write_all(self.contents.to_string().as_bytes())?;
         }
+        Ok(())
     }
     
-    pub fn get_size(&self) -> (usize, usize) {
+    fn get_size(&self) -> (usize, usize) {
         self.size
     }
 
-    pub fn set_size(&mut self, size: (usize, usize)) {
+    fn set_size(&mut self, size: (usize, usize)) {
         self.size = size;
     }
 
-    pub fn increase_size(&mut self, size: (usize, usize)) {
-        self.size.0 += size.0;
-        self.size.1 += size.1;
-    }
 
-    pub fn resize(&mut self, size: (usize, usize)) {
-        eprintln!("Old Max Size: {:?}", self.max_size);
-        eprintln!("Old Size: {:?}", self.size);
-        eprintln!("New Max Size: {:?}", size);
+    fn resize(&mut self, size: (usize, usize)) {
+        //eprintln!("Old Max Size: {:?}", self.max_size);
+        //eprintln!("Old Size: {:?}", self.size);
+        //eprintln!("New Max Size: {:?}", size);
 
         let ((start_x, start_y), (end_x, end_y)) = self.get_corners();
 
@@ -930,150 +1007,53 @@ impl<B: Buffer> Pane<B> {
         self.shrink();
     }
 
-    pub fn get_row(&self, row: usize, offset: usize, col: usize) -> Option<String> {
-        let line = self.contents.get_line(row)?;
-        let len = cmp::min(col + offset, line.len().saturating_sub(offset));
-        if len == 0 {
-            return None;
-        }
-        Some(line.get(offset..len).unwrap().to_string())
-    }
-
-    pub fn open_file(&mut self, filename: &str) -> io::Result<()> {
+    fn open_file(&mut self, filename: &str) -> io::Result<()> {
         let file = std::fs::read_to_string(filename)?;
         self.contents = B::from_text(&file);
         self.file_name = Some(PathBuf::from(filename));
         Ok(())
     }
 
-    pub fn process_keypress(&mut self, key: KeyEvent) -> io::Result<bool> {
+    fn process_keypress(&mut self, key: KeyEvent) -> io::Result<bool> {
         let mode = self.mode.clone();
         let result = mode.borrow_mut().process_keypress(key, self);
         result
     }
 
-    pub fn borrow_buffer(&self) -> &dyn Buffer {
-        & *self.contents
-    }
-
-    pub fn borrow_buffer_mut(&mut self) -> &mut dyn Buffer {
-        &mut *self.contents
-    }
-
-    pub fn set_position(&mut self, position: (usize, usize)) {
+    fn set_position(&mut self, position: (usize, usize)) {
         self.position = position;
         self.shrink();
     }
 
-    pub fn get_position(&self) -> (usize, usize) {
+    fn get_position(&self) -> (usize, usize) {
         self.position
     }
 
-    pub fn get_corners(&self) -> ((usize, usize), (usize, usize)) {
+    fn get_corners(&self) -> ((usize, usize), (usize, usize)) {
         let x = self.size.0 + self.position.0;
         let y = self.size.1 + self.position.1;
         (self.position, (x, y))
     }
 
-    pub fn scroll_cursor(&mut self) {
+    fn scroll_cursor(&mut self) {
         let cursor = self.cursor.clone();
 
         cursor.borrow_mut().scroll(self);
         
     }
 
-    pub fn get_status(&self) -> (String, String) {
+    fn get_status(&self) -> (String, String) {
         self.mode.borrow().update_status(self)
     }
 
-    pub fn get_mode(&self, name: &str) -> Option<Rc<RefCell<dyn Mode<B>>>> {
-        self.modes.get(name).map(|m| m.clone())
-    }
-
-    pub fn set_mode(&mut self, name: &str) {
+    fn change_mode(&mut self, name: &str) {
         if let Some(mode) = self.get_mode(name) {
             self.mode = mode;
         }
     }
 
-    fn get_byte_offset(&self) -> usize {
-        let (x, mut y) = self.cursor.borrow().get_cursor();
-        while y > self.contents.line_count() {
-            y = y.saturating_sub(1);
-        }
-        let line_pos = self.contents.line_start_byte(y).unwrap_or(0);
-        let row_pos = x;
 
-        let byte_pos = line_pos + row_pos;
-
-        byte_pos
-    }
-
-    pub fn insert_newline(&mut self) {
-        self.insert_char('\n');
-        let mut cursor = self.cursor.borrow_mut();
-
-        cursor.move_cursor(Direction::Down, 1, self.borrow_buffer());
-        cursor.set_cursor(CursorMove::ToStart, CursorMove::Nothing, self.borrow_buffer(), (0,0));
-    }
-
-    ///TODO: add check to make sure we have a valid byte range
-    pub fn delete_char(&mut self) {
-        self.set_changed(true);
-        let byte_pos = self.get_byte_offset();
-
-        if byte_pos >= self.contents.byte_len() {
-            return;
-        }
-
-        self.contents.delete(byte_pos, byte_pos.saturating_add(1));
-    }
-
-    ///TODO: add check to make sure we have a valid byte range
-    pub fn backspace(&mut self) {
-        self.set_changed(true);
-        let byte_pos = self.get_byte_offset();
-        let mut go_up = false;
-
-        if self.borrow_buffer().get_byte(byte_pos.saturating_sub(1)) == Some(b'\n') {
-            go_up = true;
-        }
-
-        if byte_pos == 0 {
-            return;
-        }
-
-        let mut cursor = self.cursor.borrow_mut();
-
-        if go_up {
-            cursor.move_cursor(Direction::Up, 1, self.borrow_buffer());
-            cursor.set_cursor(CursorMove::ToEnd, CursorMove::Nothing, self.borrow_buffer(), (0, 1));
-        }
-        else {
-            cursor.move_cursor(Direction::Left, 1, self.borrow_buffer());
-        }
-        
-
-        self.contents.delete(byte_pos.saturating_sub(1), byte_pos);
-    }
-
-    pub fn insert_char(&mut self, c: char) {
-        self.set_changed(true);
-        let byte_pos = self.get_byte_offset();
-        let c = c.to_string();
-        if self.contents.len() == 0 {
-            self.contents.insert(0, &c);
-            return;
-        }
-        let byte_pos = if byte_pos >= self.contents.byte_len() {
-            self.contents.byte_len()
-        } else {
-            byte_pos
-        };
-        self.contents.insert(byte_pos, &c);
-    }
-
-    pub fn run_command(&mut self, command: &str) {
+    fn run_command(&mut self, command: &str) {
         let mut command_args = command.split_whitespace();
         let command = command_args.next().unwrap_or("");
         match command {
@@ -1130,11 +1110,11 @@ impl<B: Buffer> Pane<B> {
                     _ => {},
                 }
 
-                self.cursor.borrow_mut().move_cursor(direction, amount, self.borrow_buffer());
+                self.cursor.borrow_mut().move_cursor(direction, amount, self);
             },
             "mode" => {
                 let mode = command_args.next().unwrap_or("Normal");
-                self.set_mode(mode);
+                self.change_mode(mode);
             },
             "jump" => {
                 if let Some(jump) = command_args.next() {
@@ -1206,5 +1186,110 @@ impl<B: Buffer> Pane<B> {
             _ => {}
         }
 
+    }
+
+    fn insert_newline(&mut self) {
+        self.insert_char('\n');
+        let mut cursor = self.cursor.borrow_mut();
+
+        cursor.move_cursor(Direction::Down, 1, self);
+        cursor.set_cursor(CursorMove::ToStart, CursorMove::Nothing, self, (0,0));
+    }
+
+    ///TODO: add check to make sure we have a valid byte range
+    fn delete_char(&mut self) {
+        self.set_changed(true);
+        let byte_pos = self.get_byte_offset();
+
+        if byte_pos >= self.contents.byte_len() {
+            return;
+        }
+
+        self.contents.delete(byte_pos..byte_pos.saturating_add(1));
+    }
+
+    ///TODO: add check to make sure we have a valid byte range
+    fn backspace_char(&mut self) {
+        self.set_changed(true);
+        let byte_pos = self.get_byte_offset();
+        let mut go_up = false;
+
+        if self.borrow_buffer().bytes().nth(byte_pos.saturating_sub(1)) == Some(b'\n') {
+            go_up = true;
+        }
+
+        if byte_pos == 0 {
+            return;
+        }
+
+        let mut cursor = self.cursor.borrow_mut();
+
+        if go_up {
+            cursor.move_cursor(Direction::Up, 1, self);
+            cursor.set_cursor(CursorMove::ToEnd, CursorMove::Nothing, self, (0, 1));
+        }
+        else {
+            cursor.move_cursor(Direction::Left, 1, self);
+        }
+        
+
+        self.contents.delete(byte_pos.saturating_sub(1)..byte_pos);
+    }
+
+    fn insert_char(&mut self, c: char) {
+        self.set_changed(true);
+        let byte_pos = self.get_byte_offset();
+        let c = c.to_string();
+        if self.contents.chars().count() == 0 {
+            self.contents.insert(0, c);
+            return;
+        }
+        let byte_pos = if byte_pos >= self.contents.byte_len() {
+            self.contents.byte_len()
+        } else {
+            byte_pos
+        };
+        self.contents.insert(byte_pos, c);
+    }
+
+    fn insert_str(&mut self, s: &str) {
+        self.set_changed(true);
+        let byte_pos = self.get_byte_offset();
+        if self.contents.chars().count() == 0 {
+            self.contents.insert(0, s);
+            return;
+        }
+        let byte_pos = if byte_pos >= self.contents.byte_len() {
+            self.contents.byte_len()
+        } else {
+            byte_pos
+        };
+        self.contents.insert(byte_pos, s);
+    }
+
+    fn get_cursor(&self) -> Rc<RefCell<Cursor>> {
+        self.cursor.clone()
+    }
+
+    fn get_line_count(&self) -> usize {
+        let mut number_of_lines = self.contents.line_len();
+
+        if let Some('\n') = self.contents.chars().last() {
+            number_of_lines += 1;
+        }
+        number_of_lines
+    }
+
+    fn buffer_to_string(&self) -> String {
+        self.contents.to_string()
+    }
+
+    fn get_row_len(&self, row: usize) -> Option<usize> {
+        if let Some(line) = self.contents.lines().nth(row) {
+            Some(line.chars().count())
+        }
+        else {
+            None
+        }
     }
 }
