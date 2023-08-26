@@ -1,12 +1,13 @@
-use std::{io, time::Duration};
+use std::io;
 
-use crossterm::{terminal, event::{self, KeyEvent, Event}, execute, cursor::SetCursorStyle};
+use crossterm::{terminal::{self, EnterAlternateScreen}, execute, cursor::SetCursorStyle};
 use window::Window;
 
 pub mod window;
 pub mod mode;
 pub mod cursor;
 pub mod settings;
+pub mod buffer;
 
 struct CleanUp;
 
@@ -15,6 +16,7 @@ impl Drop for CleanUp {
         terminal::disable_raw_mode().expect("Could not turn off Raw mode");
         Window::clear_screen().expect("Could not clear screen");
         execute!(io::stdout(), SetCursorStyle::DefaultUserShape).expect("Could not reset cursor style");
+        execute!(io::stdout(), terminal::LeaveAlternateScreen).expect("Could not leave alternate screen");
     }
 }
 
@@ -25,6 +27,7 @@ struct Editor {
 
 impl Editor {
     fn new() -> Self {
+        execute!(io::stdout(), EnterAlternateScreen).unwrap();
         execute!(io::stdout(),SetCursorStyle::BlinkingBlock).unwrap();
         let window = Window::new();
         Self {
