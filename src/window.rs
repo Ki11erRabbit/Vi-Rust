@@ -105,7 +105,7 @@ impl Window {
 
 
     fn horizontal_split(&mut self) {
-        eprintln!("split panes: {:?}", self.panes.len());
+        //eprintln!("split panes: {:?}", self.panes.len());
         let active_pane_size = self.panes[self.active_pane].borrow().size;
         let new_pane_size = (active_pane_size.0, active_pane_size.1 / 2);
         let old_pane_size = if active_pane_size.1 % 2 == 0 {
@@ -132,7 +132,7 @@ impl Window {
         // This is for testing purposes, we need to make sure that we can actually access the new pane
         self.active_pane = new_pane_index;
 
-        eprintln!("split panes: {:?}", self.panes.len());
+        //eprintln!("split panes: {:?}", self.panes.len());
     }
 
     fn vertical_split(&mut self) {
@@ -160,17 +160,6 @@ impl Window {
         self.active_pane = new_pane_index;
     }
 
-
-    fn read_key(&mut self) -> io::Result<KeyEvent> {
-        loop {
-            if event::poll(self.duration)? {
-                if let Event::Key(key) = event::read()? {
-                    return Ok(key);
-                }
-            }
-            self.refresh_screen()?;
-        }
-    }
 
     fn pane_up(&mut self) {
         let ((x1, y1), (x2, _)) = self.panes[self.active_pane].borrow().get_corners();
@@ -310,6 +299,15 @@ impl Window {
         }
     }
 
+    fn process_event(&mut self) -> io::Result<Event> {
+        loop {
+            if event::poll(self.duration)? {
+                return event::read();
+            }
+            self.refresh_screen()?;
+        }
+    }
+
 
     pub fn run(&mut self) -> io::Result<bool> {
         self.refresh_screen()?;
@@ -319,8 +317,22 @@ impl Window {
             return Ok(false);
         }
         self.refresh_screen()?;
-        let key = self.read_key()?;
-        self.process_keypress(key)
+        let event = self.process_event()?;
+        match event {
+            Event::Key(key) => self.process_keypress(key),
+            Event::Resize(width, height) => {
+                self.resize(width, height);
+                Ok(true)
+            }
+            _ => Ok(true),
+        }
+    }
+
+    fn resize(&mut self, width: u16, height: u16) {
+        self.size = (width as usize, height as usize - 1);
+        for pane in self.panes.iter() {
+            pane.borrow_mut().resize((width as usize, height as usize));
+        }
     }
 
     pub fn clear_screen() -> io::Result<()> {
@@ -419,10 +431,10 @@ impl Window {
         self.draw_status_bar();
 
         let (x, y) = self.panes[self.active_pane].borrow().cursor.borrow().get_real_cursor();
-        eprintln!("x: {} y: {}", x, y);
+        //eprintln!("x: {} y: {}", x, y);
         let x = x + self.panes[self.active_pane].borrow().get_position().0;
         let y = y + self.panes[self.active_pane].borrow().get_position().1;
-        eprintln!("x: {} y: {}", x, y);
+        //eprintln!("x: {} y: {}", x, y);
 
         
         let x = {
@@ -658,7 +670,7 @@ impl Pane {
 
             if x1 != 0 {
                 output.push_str("|");
-                cols -= 1;
+                cols = cols.saturating_sub(1);
             }
         }
 
@@ -742,7 +754,7 @@ impl Pane {
             ).unwrap();*/
         }
         else {
-            output.push_str(" ".repeat(cols - num_width).as_str());
+            output.push_str(" ".repeat(cols.saturating_sub(num_width)).as_str());
         }
 
         //output.push_str("\r\n");
@@ -752,21 +764,27 @@ impl Pane {
     fn shrink(&mut self) {
         let (_, (mut end_x, _)) = self.get_corners();
         while  end_x > self.max_size.0 {
-            self.size.0 -= 1;
+            if self.size.0 == 0 {
+                break;
+            }
+            self.size.0 = self.size.0.saturating_sub(1);
             (_, (end_x, _)) = self.get_corners();
         }
         let (_, (_, mut end_y)) = self.get_corners();
         while  end_y > self.max_size.1 {
-            self.size.1 -= 1;
+            if self.size.1 == 0 {
+                break;
+            }
+            self.size.1 = self.size.1.saturating_sub(1);
             (_, (_, end_y)) = self.get_corners();
         }
 
     }
 
     pub fn combine(&mut self, corners: ((usize, usize), (usize, usize))) -> bool {
-        eprintln!("Combine: {:?}", corners);
+        //eprintln!("Combine: {:?}", corners);
         let ((other_start_x, other_start_y), (other_end_x, other_end_y)) = corners;
-        eprintln!("Combine: {:?}", self.get_corners());
+        //eprintln!("Combine: {:?}", self.get_corners());
         let ((start_x, start_y), (end_x, end_y)) = self.get_corners();
 
 
@@ -777,7 +795,7 @@ impl Pane {
             if end_x + 1 == other_start_x && start_y == other_start_y && end_y == other_end_y {
                 let width = other_end_x - start_x;
                 let height = end_y - start_y;
-                eprintln!("Width: {}, Height: {}", width, height);
+                //eprintln!("Width: {}, Height: {}", width, height);
 
                 self.size.0 = width;
                 self.size.1 = height;
@@ -791,7 +809,7 @@ impl Pane {
             else if other_start_x - 1 == end_x && start_y == other_start_y && end_y == other_end_y {
                 let width = end_x - other_start_x;
                 let height = end_y - start_y;
-                eprintln!("Width: {}, Height: {}", width, height);
+                //eprintln!("Width: {}, Height: {}", width, height);
 
                 self.size.0 = width;
                 self.size.1 = height;
@@ -807,7 +825,7 @@ impl Pane {
             if end_y + 1 == other_start_y && start_x == other_start_x && end_x == other_end_x {
                 let width = end_x - start_x;
                 let height = other_end_y - start_y;
-                eprintln!("Width: {}, Height: {}", width, height);
+                //eprintln!("Width: {}, Height: {}", width, height);
 
                 self.size.0 = width;
                 self.size.1 = height;
@@ -821,7 +839,7 @@ impl Pane {
             else if other_start_y - 1 == end_y && start_x == other_start_x && end_x == other_end_x {
                 let width = end_x - start_x;
                 let height = end_y - other_start_y;
-                eprintln!("Width: {}, Height: {}", width, height);
+                //eprintln!("Width: {}, Height: {}", width, height);
 
                 self.size.0 = width;
                 self.size.1 = height;
@@ -869,6 +887,52 @@ impl Pane {
     pub fn increase_size(&mut self, size: (usize, usize)) {
         self.size.0 += size.0;
         self.size.1 += size.1;
+    }
+
+    pub fn resize(&mut self, size: (usize, usize)) {
+        eprintln!("Old Max Size: {:?}", self.max_size);
+        eprintln!("Old Size: {:?}", self.size);
+        eprintln!("New Max Size: {:?}", size);
+
+        let ((start_x, start_y), (end_x, end_y)) = self.get_corners();
+
+        //let new_width = (size.0 * self.size.0) as f64 / self.max_size.0 as f64;
+        //let new_height = (size.1 * self.size.1) as f64 / self.max_size.1 as f64;
+
+
+        //self.size.0 = new_width.ceil() as usize;
+        //self.size.1 = new_height.ceil() as usize;
+
+        let new_start_x = (size.0 * start_x) as f64 / self.max_size.0 as f64;
+        let new_start_y = (size.1 * start_y) as f64 / self.max_size.1 as f64;
+
+        let new_end_x = (size.0 * end_x) as f64 / self.max_size.0 as f64;
+        let new_end_y = (size.1 * end_y) as f64 / self.max_size.1 as f64;
+
+        let new_width = if self.position.0 == 0 {
+            cmp::max((new_end_x - new_start_x) as usize, self.settings.editor_settings.minimum_width)
+        }
+        else {
+            (new_end_x - new_start_x) as usize
+        };
+        let new_height = if self.position.1 == 0 {
+            cmp::max((new_end_y - new_start_y) as usize, self.settings.editor_settings.minimum_height)
+        }
+        else {
+            (new_end_y - new_start_y) as usize
+        };
+
+        self.position.0 = new_start_x as usize;
+        self.position.1 = new_start_y as usize;
+
+        self.size.0 = new_width;
+        self.size.1 = new_height;
+
+        self.max_size = size;
+
+        self.cursor.borrow_mut().resize(self.size);
+
+        self.shrink();
     }
 
     pub fn get_row(&self, row: usize, offset: usize, col: usize) -> Option<RopeSlice> {

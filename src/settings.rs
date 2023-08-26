@@ -459,6 +459,8 @@ pub struct EditorSettings {
     pub use_spaces: bool,
     pub key_timeout: u64,
     pub border: bool,
+    pub minimum_width: usize,
+    pub minimum_height: usize,
 }
 
 impl Default for EditorSettings {
@@ -470,6 +472,8 @@ impl Default for EditorSettings {
             use_spaces: true,
             key_timeout: 3000,
             border: true,
+            minimum_width: 24,
+            minimum_height: 1,
         }
     }
 }

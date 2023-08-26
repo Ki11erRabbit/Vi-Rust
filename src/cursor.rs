@@ -50,6 +50,21 @@ impl Cursor {
         }
     }
 
+    pub fn resize(&mut self, win_size: (usize, usize)) {
+            
+
+        
+        //let new_x = (self.x * win_size.0) as f64 / self.cols as f64;
+        //let new_y = (self.y * win_size.1) as f64 / self.rows as f64;
+
+        self.rows = win_size.1;
+        self.cols = win_size.0;
+
+
+        //self.x = new_x as usize;
+        //self.y = new_y as usize;
+    }
+
     pub fn get_cursor(&self) -> (usize, usize) {
         (self.x, self.y)
     }

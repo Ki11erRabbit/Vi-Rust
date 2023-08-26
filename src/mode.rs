@@ -269,7 +269,7 @@ impl Mode for Normal {
         }
         let corners = pane.get_corners();
 
-        let width = corners.1.0 - corners.1.0;
+        let width = corners.1.0 - corners.0.0;
         let height = corners.1.1 - corners.0.1;
 
         second.push_str(&format!("{:?} ({}, {})", pane.get_corners(), width, height));
