@@ -1,5 +1,6 @@
 use std::io;
 
+use buffer::RopeBuffer;
 use crossterm::{terminal::{self, EnterAlternateScreen}, execute, cursor::SetCursorStyle};
 use window::Window;
 
@@ -22,7 +23,7 @@ impl Drop for CleanUp {
 
 
 struct Editor {
-    window: Window,
+    window: Window<RopeBuffer>,
 }
 
 impl Editor {

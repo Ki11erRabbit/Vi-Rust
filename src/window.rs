@@ -12,9 +12,10 @@ use crop::{Rope, RopeSlice};
 use crossterm::event::{KeyEvent, self, Event};
 use crossterm::{terminal::{self, ClearType}, execute, cursor, queue};
 
+use crate::buffer::Buffer;
 use crate::mode::{Mode, Normal, Insert, Command};
 use crate::cursor::{Cursor, Direction, CursorMove};
-use crate::settings::{Settings, Keys};
+use crate::settings::Settings;
 
 
 
@@ -28,17 +29,17 @@ pub enum Message {
     PaneRight,
 }
 
-pub struct Window {
+pub struct Window<B: Buffer> {
     size: (usize, usize),
     contents: WindowContents,
     active_pane: usize,
-    panes: Vec<Rc<RefCell<Pane>>>,
+    panes: Vec<Rc<RefCell<Pane<B>>>>,
     settings: Settings,
     duration: Duration,
     channels: (Sender<Message>, Receiver<Message>),
 }
 
-impl Window {
+impl<B> Window<B> {
     pub fn new() -> Self {
         let settings = Settings::default();
         
@@ -584,14 +585,14 @@ impl JumpTable {
 }
 
 
-pub struct Pane {
+pub struct Pane<B> where B: Buffer + ToString {
     max_size: (usize, usize),
     size: (usize, usize),
     position: (usize, usize),
     file_name: Option<PathBuf>,
-    contents: Rope,
-    mode: Rc<RefCell<dyn Mode>>,
-    modes: HashMap<String, Rc<RefCell<dyn Mode>>>,
+    contents: Box<B>,
+    mode: Rc<RefCell<dyn Mode<B>>>,
+    modes: HashMap<String, Rc<RefCell<dyn Mode<B>>>>,
     pub cursor: Rc<RefCell<Cursor>>,
     close: bool,
     changed: bool,
@@ -601,7 +602,7 @@ pub struct Pane {
 }
 
 
-impl Pane {
+impl<B> Pane<B> {
     pub fn new(max_size: (usize, usize), size: (usize, usize), settings: Settings, sender: Sender<Message>) -> Self {
         let mut modes: HashMap<String, Rc<RefCell<dyn Mode>>> = HashMap::new();
         let normal = Rc::new(RefCell::new(Normal::new()));
@@ -635,7 +636,7 @@ impl Pane {
             size,
             position: (0, 0),
             file_name: None,
-            contents: Rope::new(),
+            contents: B::new(),
             mode: normal,
             modes,
             cursor: Rc::new(RefCell::new(Cursor::new(size))),
@@ -677,13 +678,7 @@ impl Pane {
         let real_row = self.cursor.borrow().row_offset + index;
         let col_offset = self.cursor.borrow().col_offset;
 
-        let mut number_of_lines = self.borrow_buffer().line_len();
-        if let Some('\n') = self.borrow_buffer().chars().last() {
-            number_of_lines += 1;
-        }
-
-        //number_of_lines = self.borrow_buffer().chars().filter(|c| *c == '\n').count();
-
+        let mut number_of_lines = self.borrow_buffer().line_count();
 
         let mut num_width = 0;
 
@@ -949,7 +944,7 @@ impl Pane {
 
     pub fn open_file(&mut self, filename: &str) -> io::Result<()> {
         let file = std::fs::read_to_string(filename)?;
-        self.contents = Rope::from(file);
+        self.contents = B::from(&file);
         self.file_name = Some(PathBuf::from(filename));
         Ok(())
     }
@@ -960,11 +955,11 @@ impl Pane {
         result
     }
 
-    pub fn borrow_buffer(&self) -> &Rope {
+    pub fn borrow_buffer(&self) -> &dyn Buffer {
         &self.contents
     }
 
-    pub fn borrow_buffer_mut(&mut self) -> &mut Rope {
+    pub fn borrow_buffer_mut(&mut self) -> &mut dyn Buffer {
         &mut self.contents
     }
 
@@ -994,7 +989,7 @@ impl Pane {
         self.mode.borrow().update_status(self)
     }
 
-    pub fn get_mode(&self, name: &str) -> Option<Rc<RefCell<dyn Mode>>> {
+    pub fn get_mode(&self, name: &str) -> Option<Rc<RefCell<dyn Mode<B>>>> {
         self.modes.get(name).map(|m| m.clone())
     }
 
@@ -1034,7 +1029,7 @@ impl Pane {
             return;
         }
 
-        self.contents.delete(byte_pos..byte_pos.saturating_add(1));
+        self.contents.delete(byte_pos, byte_pos.saturating_add(1));
     }
 
     ///TODO: add check to make sure we have a valid byte range
@@ -1043,7 +1038,7 @@ impl Pane {
         let byte_pos = self.get_byte_offset();
         let mut go_up = false;
 
-        if self.borrow_buffer().bytes().nth(byte_pos.saturating_sub(1)) == Some(b'\n') {
+        if self.borrow_buffer().chars().nth(byte_pos.saturating_sub(1)) == Some(b'\n') {
             go_up = true;
         }
 
@@ -1062,7 +1057,7 @@ impl Pane {
         }
         
 
-        self.contents.delete(byte_pos.saturating_sub(1)..byte_pos);
+        self.contents.delete(byte_pos.saturating_sub(1), byte_pos);
     }
 
     pub fn insert_char(&mut self, c: char) {
@@ -1070,7 +1065,7 @@ impl Pane {
         let byte_pos = self.get_byte_offset();
         let c = c.to_string();
         if self.contents.chars().count() == 0 {
-            self.contents.insert(0, c);
+            self.contents.insert(0, &c);
             return;
         }
         let byte_pos = if byte_pos >= self.contents.byte_len() {
@@ -1078,7 +1073,7 @@ impl Pane {
         } else {
             byte_pos
         };
-        self.contents.insert(byte_pos, c);
+        self.contents.insert(byte_pos, &c);
     }
 
     pub fn run_command(&mut self, command: &str) {
