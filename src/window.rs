@@ -199,7 +199,7 @@ impl Window {
     }
 
     fn pane_down(&mut self) {
-        let ((x1, y1), (x2, y2)) = self.panes[self.active_pane].borrow().get_corners();
+        let ((x1, _), (x2, y2)) = self.panes[self.active_pane].borrow().get_corners();
 
         // We add 1 to make sure that we aren't on the current pane
         let pane_bottom = y2 + 1;
@@ -236,7 +236,7 @@ impl Window {
         // This loop tries to find the pane that is to the right of the current pane
         for (i, pane) in self.panes.iter().enumerate() {
             let pane = pane.borrow();
-            let ((x1, y1), (x2, y2)) = pane.get_corners();
+            let ((x1, y1), (_, y2)) = pane.get_corners();
             if x1 == pane_right && y1 <= pane_middle && pane_middle <= y2 {
                 pane_index = Some(i);
                 break;
@@ -252,7 +252,7 @@ impl Window {
     }
 
     fn pane_left(&mut self) {
-        let ((x1, y1), (x2, y2)) = self.panes[self.active_pane].borrow().get_corners();
+        let ((x1, y1), (_, y2)) = self.panes[self.active_pane].borrow().get_corners();
 
         let pane_left = x1.saturating_sub(1);
 
@@ -262,7 +262,7 @@ impl Window {
         // This loop tries to find the pane that is to the left of the current pane
         for (i, pane) in self.panes.iter().enumerate() {
             let pane = pane.borrow();
-            let ((x1, y1), (x2, y2)) = pane.get_corners();
+            let ((_, y1), (x2, y2)) = pane.get_corners();
             if x2 == pane_left && y1 <= pane_middle && pane_middle <= y2 {
                 pane_index = Some(i);
                 break;
@@ -419,8 +419,10 @@ impl Window {
         self.draw_status_bar();
 
         let (x, y) = self.panes[self.active_pane].borrow().cursor.borrow().get_real_cursor();
+        eprintln!("x: {} y: {}", x, y);
         let x = x + self.panes[self.active_pane].borrow().get_position().0;
         let y = y + self.panes[self.active_pane].borrow().get_position().1;
+        eprintln!("x: {} y: {}", x, y);
 
         
         let x = {
@@ -675,7 +677,7 @@ impl Pane {
 
         if self.settings.editor_settings.line_number && !self.settings.editor_settings.relative_line_number {
             let mut places = 1;
-            while places < number_of_lines {
+            while places <= number_of_lines {
                 places *= 10;
                 num_width += 1;
             }
@@ -687,12 +689,12 @@ impl Pane {
         else if self.settings.editor_settings.line_number && self.settings.editor_settings.relative_line_number {
             let mut places = 1;
             num_width = 3;
-            while places < rows {
+            while places <= number_of_lines {
                 places *= 10;
                 num_width += 1;
             }
             if real_row == self.cursor.borrow().get_cursor().1 && real_row + 1 <= number_of_lines {
-                output.push_str(format!("{}{:width$}", real_row + 1 , ' ', width = num_width - real_row.to_string().chars().count()).as_str());
+                output.push_str(format!("{:<width$}", real_row + 1 , width = num_width).as_str());
             }
             else if real_row + 1 <= number_of_lines {
                 output.push_str(format!("{:width$}", ((real_row) as isize - (self.cursor.borrow().get_cursor().1 as isize)).abs() as usize, width = num_width).as_str());
