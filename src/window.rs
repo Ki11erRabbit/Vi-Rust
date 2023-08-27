@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use std::cmp;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::io;
@@ -26,19 +26,22 @@ pub enum Message {
     PaneDown,
     PaneLeft,
     PaneRight,
+    OpenFile(String),
 }
 
-pub struct Window<P: Pane>{
+pub struct Window{
     size: (usize, usize),
     contents: WindowContents,
     active_pane: usize,
-    panes: Vec<Rc<RefCell<P>>>,
+    panes: Vec<PaneContainer>,
+    known_file_types: HashSet<String>,
     settings: Settings,
     duration: Duration,
     channels: (Sender<Message>, Receiver<Message>),
+    
 }
 
-impl<P: Pane> Window<P> {
+impl Window {
     pub fn new() -> Self {
         let settings = Settings::default();
         
@@ -49,24 +52,73 @@ impl<P: Pane> Window<P> {
         let win_size = terminal::size()
             .map(|(w, h)| (w as usize, h as usize - 1))// -1 for trailing newline and -1 for command bar
             .unwrap();
-        let pane = P::new(win_size, win_size, settings.clone(), channels.0.clone());
+        let pane: Rc<RefCell<dyn Pane>> = Rc::new(RefCell::new(TextPane::new(win_size, win_size, settings.clone(), channels.0.clone())));
 
-        let panes = vec![pane.clone()];
+        let panes = vec![PaneContainer::new(pane.clone())];
+        let mut known_file_types = HashSet::new();
+        known_file_types.insert("txt".to_string());
+        
         Self {
             size: win_size,
             contents: WindowContents::new(),
             active_pane: 0,
             panes,
+            known_file_types,
             duration,
             settings,
             channels,
         }
     }
 
+    fn open_file(&mut self, filename: PathBuf) -> usize {
+        let file_type = filename.extension().and_then(|s| s.to_str()).unwrap_or("txt").to_string();
+
+        let active_pane_size = self.panes[self.active_pane].get_pane().borrow().get_size();
+        let active_pane_position = self.panes[self.active_pane].get_pane().borrow().get_position();
+        let active_pane_index = self.active_pane;
+
+        let pane = match file_type.as_str() {
+            "txt" | _ => {
+                let mut pane = TextPane::new(self.size, active_pane_size, self.settings.clone(), self.channels.0.clone());
+                pane.open_file(&filename);
+                pane
+            }
+        };
+        let pane = Rc::new(RefCell::new(pane));
+        self.panes.push(PaneContainer::new(pane.clone()));
+        self.panes.len() - 1
+    }
+
+    fn switch_pane(&mut self, filename: String) {
+        let filename = PathBuf::from(filename);
+        let mut pane_index = None;
+        for (i, pane) in self.panes.iter().enumerate() {
+            if pane.get_pane().borrow().get_filename() == Some(&filename) {
+                pane_index = Some(i);
+                break;
+            }
+        }
+
+        let new_active_pane = if let Some(pane_index) = pane_index {
+            pane_index
+        }
+        else {
+            self.open_file(filename)
+        };
+
+        let active_pane = self.panes[self.active_pane].get_pane().clone();
+        let new_active_pane = self.panes[new_active_pane].get_pane().clone();
+    }
+
+    fn insert_pane(&mut self, index: usize, pane: PaneContainer) {
+        let parent_pane = index - 1;
+        self.panes.insert(index, pane);
+    }
+
     fn remove_panes(&mut self) {
         let mut panes_to_remove = Vec::new();
         for (i, pane) in self.panes.iter().enumerate() {
-            if pane.borrow().can_close() {
+            if pane.get_pane().borrow().can_close() {
                 panes_to_remove.push(i);
             }
         }
@@ -120,7 +172,10 @@ impl<P: Pane> Window<P> {
 
 
         let new_pane_index = self.active_pane + 1;
-        self.panes.insert(new_pane_index, P::new(self.size, new_pane_size, self.settings.clone(), self.channels.0.clone()));
+        let mut new_pane = *self.panes[self.active_pane].borrow().clone();
+        new_pane.set_size(new_pane_size);
+        let new_pane = Rc::new(RefCell::new(new_pane));
+        self.panes.insert(new_pane_index, new_pane.clone());
 
         let ((x,_), (_, y)) = self.panes[self.active_pane].borrow().get_corners();
         let new_pane_position = (x, y + 1);
@@ -148,7 +203,10 @@ impl<P: Pane> Window<P> {
 
 
         let new_pane_index = self.active_pane + 1;
-        self.panes.insert(new_pane_index, P::new(self.size, new_pane_size, self.settings.clone(), self.channels.0.clone()));
+        let mut new_pane = *self.panes[self.active_pane].borrow().clone();
+        new_pane.set_size(new_pane_size);
+        let new_pane = Rc::new(RefCell::new(new_pane));
+        self.panes.insert(new_pane_index, new_pane.clone());
 
         let ((_,y), (x, _)) = self.panes[self.active_pane].borrow().get_corners();
         let new_pane_position = (x + 1, y);
@@ -293,6 +351,9 @@ impl<P: Pane> Window<P> {
                     Message::PaneRight => {
                         self.pane_right();
                     },
+                    Message::OpenFile(path) => {
+                        self.switch_pane(path);
+                    }
                 }
             },
             Err(_) => {}
@@ -448,8 +509,18 @@ impl<P: Pane> Window<P> {
         self.contents.flush()
     }
 
-    pub fn open_file(&mut self, filename: &str) -> io::Result<()> {
-        self.panes[self.active_pane].borrow_mut().open_file(filename)
+    pub fn open_file_start(&mut self, filename: &str) -> io::Result<()> {
+        match self.panes[self.active_pane].borrow_mut().open_file(filename) {
+            Err(e) => {
+                Err(e)
+            },
+            Ok(_) => {
+                self.pane_filenames[self.active_pane] = Some(filename.to_owned().into());
+                self.filenames_to_panes.insert(filename.to_owned().into(), self.active_pane);
+
+                Ok(())
+            }
+        }
     }
 
     pub fn process_keypress(&mut self, key: KeyEvent) -> io::Result<bool> {
@@ -503,7 +574,7 @@ impl io::Write for WindowContents {
 }
 
 
-
+#[derive(Debug, Clone)]
 pub struct JumpTable {
     table: Vec<Cursor>,
     index: usize,
@@ -574,11 +645,9 @@ impl JumpTable {
     }
 }
 
+
 pub trait Pane {
-
-    fn new(max_size: (usize, usize), size: (usize, usize), settings: Settings, sender: Sender<Message>) -> Rc<RefCell<Self>> where Self: Sized;
-
-    fn draw_row(&self, index: usize) -> WindowContents;
+    fn draw_row(&self, index: usize, container: &PaneContainer) -> WindowContents;
 
     fn combine(&mut self, corners: ((usize, usize), (usize, usize))) -> bool;
 
@@ -588,7 +657,7 @@ pub trait Pane {
     fn close(&mut self);
 
     fn save_buffer(&mut self) -> io::Result<()>;
-    fn open_file(&mut self, filename: &str) -> io::Result<()>;
+    fn open_file(&mut self, filename: &PathBuf) -> io::Result<()>;
 
     fn get_size(&self) -> (usize, usize);
     fn set_size(&mut self, size: (usize, usize));
@@ -623,27 +692,33 @@ pub trait Pane {
     fn buffer_to_string(&self) -> String;
     
     fn get_row_len(&self, row: usize) -> Option<usize>;
+
+    fn get_filename(&self) -> Option<&PathBuf>;
 }
 
-pub struct TextPane {
+pub struct PaneContainer {
+    pane: Rc<RefCell<dyn Pane>>,
+    duplicate: bool,
     max_size: (usize, usize),
     size: (usize, usize),
     position: (usize, usize),
-    file_name: Option<PathBuf>,
-    contents: Rope,
-    mode: Rc<RefCell<dyn Mode>>,
-    modes: HashMap<String, Rc<RefCell<dyn Mode>>>,
     pub cursor: Rc<RefCell<Cursor>>,
-    close: bool,
-    changed: bool,
-    settings: Settings,
-    jump_table: JumpTable,
-    sender: Sender<Message>,
 }
 
+impl PaneContainer {
+    pub fn new(max_size: (usize, usize), size: (usize, usize), pane: Rc<RefCell<dyn Pane>>) -> Self {
+        let mut container = Self {
+            pane,
+            duplicate: false,
+            max_size,
+            size,
+            position: (0, 0),
+            cursor: Rc::new(RefCell::new(Cursor::new(size))),
+        };
 
-impl TextPane {
-
+        container.shrink();
+        container
+    }
     fn shrink(&mut self) {
         let (_, (mut end_x, _)) = self.get_corners();
         while  end_x > self.max_size.0 {
@@ -663,6 +738,109 @@ impl TextPane {
         }
 
     }
+
+    pub fn get_pane(&self) -> Rc<RefCell<dyn Pane>> {
+        self.pane.clone()
+    }
+
+    pub fn is_duplicate(&self) -> bool {
+        self.duplicate
+    }
+
+    pub fn change_panel(&mut self, pane: Rc<RefCell<dyn Pane>>) {
+        self.pane = pane;
+        self.duplicate = false;
+    }
+
+    pub fn get_filename(&self) -> Option<&PathBuf> {
+        self.pane.borrow().get_filename()
+    }
+
+    pub fn open_file(&mut self, filename: &PathBuf) -> io::Result<()> {
+        self.pane.borrow_mut().open_file(filename)
+    }
+
+}
+
+impl Clone for PaneContainer {
+    fn clone(&self) -> Self {
+        Self {
+            pane: self.pane.clone(),
+            duplicate: true,
+        }
+    }
+}
+
+pub struct TextPane {
+    file_name: Option<PathBuf>,
+    contents: Rope,
+    mode: Rc<RefCell<dyn Mode>>,
+    modes: HashMap<String, Rc<RefCell<dyn Mode>>>,
+    close: bool,
+    changed: bool,
+    settings: Settings,
+    jump_table: JumpTable,
+    sender: Sender<Message>,
+}
+
+impl Clone for TextPane {
+    fn clone(&self) -> Self {
+        Self {
+            max_size: self.max_size,
+            size: self.size,
+            position: self.position,
+            file_name: self.file_name.clone(),
+            contents: self.contents.clone(),
+            mode: self.mode.clone(),
+            modes: self.modes.clone(),
+            cursor: self.cursor.clone(),
+            close: self.close,
+            changed: self.changed,
+            settings: self.settings.clone(),
+            jump_table: self.jump_table.clone(),
+            sender: self.sender.clone(),
+        }
+    }
+}
+
+
+impl TextPane {
+    fn new(max_size: (usize, usize), size: (usize, usize), settings: Settings, sender: Sender<Message>) -> Self {
+        let mut modes: HashMap<String, Rc<RefCell<dyn Mode>>> = HashMap::new();
+        let normal = Rc::new(RefCell::new(Normal::new()));
+        normal.borrow_mut().add_keybindings(settings.mode_keybindings.get("Normal").unwrap().clone());
+        normal.borrow_mut().set_key_timeout(settings.editor_settings.key_timeout);
+
+        let insert = Rc::new(RefCell::new(Insert::new()));
+        insert.borrow_mut().add_keybindings(settings.mode_keybindings.get("Insert").unwrap().clone());
+        insert.borrow_mut().set_key_timeout(settings.editor_settings.key_timeout);
+        
+        let command = Rc::new(RefCell::new(Command::new()));
+        command.borrow_mut().add_keybindings(settings.mode_keybindings.get("Command").unwrap().clone());
+        command.borrow_mut().set_key_timeout(settings.editor_settings.key_timeout);
+
+        modes.insert("Normal".to_string(), normal.clone());
+        modes.insert("Insert".to_string(), insert.clone());
+        modes.insert("Command".to_string(), command.clone());
+
+        
+        let mut pane = Self {
+            file_name: None,
+            contents: Rope::new(),
+            mode: normal,
+            modes,
+            close: false,
+            changed: false,
+            settings,
+            jump_table: JumpTable::new(),
+            sender,
+        };
+
+        pane.shrink();
+
+        pane
+    }
+
 
     pub fn set_changed(&mut self, changed: bool) {
         self.changed = changed;
@@ -712,47 +890,8 @@ impl TextPane {
     }
 
 }
-
 impl Pane for TextPane {
-    fn new(max_size: (usize, usize), size: (usize, usize), settings: Settings, sender: Sender<Message>) -> Rc<RefCell<Self>> {
-        let mut modes: HashMap<String, Rc<RefCell<dyn Mode>>> = HashMap::new();
-        let normal = Rc::new(RefCell::new(Normal::new()));
-        normal.borrow_mut().add_keybindings(settings.mode_keybindings.get("Normal").unwrap().clone());
-        normal.borrow_mut().set_key_timeout(settings.editor_settings.key_timeout);
 
-        let insert = Rc::new(RefCell::new(Insert::new()));
-        insert.borrow_mut().add_keybindings(settings.mode_keybindings.get("Insert").unwrap().clone());
-        insert.borrow_mut().set_key_timeout(settings.editor_settings.key_timeout);
-        
-        let command = Rc::new(RefCell::new(Command::new()));
-        command.borrow_mut().add_keybindings(settings.mode_keybindings.get("Command").unwrap().clone());
-        command.borrow_mut().set_key_timeout(settings.editor_settings.key_timeout);
-
-        modes.insert("Normal".to_string(), normal.clone());
-        modes.insert("Insert".to_string(), insert.clone());
-        modes.insert("Command".to_string(), command.clone());
-
-        
-        let mut pane = Self {
-            max_size,
-            size,
-            position: (0, 0),
-            file_name: None,
-            contents: Rope::new(),
-            mode: normal,
-            modes,
-            cursor: Rc::new(RefCell::new(Cursor::new(size))),
-            close: false,
-            changed: false,
-            settings,
-            jump_table: JumpTable::new(),
-            sender,
-        };
-
-        pane.shrink();
-        
-        Rc::new(RefCell::new(pane))
-    }
 
     fn draw_row(&self, mut index: usize) -> WindowContents {
         let rows = self.size.1;
@@ -1012,7 +1151,7 @@ impl Pane for TextPane {
         self.shrink();
     }
 
-    fn open_file(&mut self, filename: &str) -> io::Result<()> {
+    fn open_file(&mut self, filename: &PathBuf) -> io::Result<()> {
         let file = std::fs::read_to_string(filename)?;
         self.contents = Rope::from(file);
         self.file_name = Some(PathBuf::from(filename));
@@ -1186,6 +1325,11 @@ impl Pane for TextPane {
             },
             "pane_right" => {
                 self.sender.send(Message::PaneRight).expect("Failed to send message");
+            },
+            "e" => {
+                if let Some(file_name) = command_args.next() {
+                    self.sender.send(Message::OpenFile(file_name.to_string())).expect("Failed to send message");
+                }
             },
 
             _ => {}

@@ -21,7 +21,7 @@ impl Drop for CleanUp {
 
 
 struct Editor {
-    window: Window<TextPane>,
+    window: Window,
 }
 
 impl Editor {
@@ -34,7 +34,7 @@ impl Editor {
     }
 
     pub fn open_file(&mut self, filename: &str) -> io::Result<()> {
-        self.window.open_file(filename)
+        self.window.open_file_start(filename)
     }
 
     pub fn run(&mut self) -> io::Result<bool> {
