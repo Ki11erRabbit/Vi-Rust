@@ -362,13 +362,12 @@ impl Window {
             if event::poll(self.duration)? {
                 return event::read();
             }
-            self.refresh_screen()?;
         }
     }
 
 
     pub fn run(&mut self) -> io::Result<bool> {
-        self.refresh_screen()?;
+        //self.refresh_screen()?;
         self.read_messages();
         self.remove_panes();
         if self.panes.len() == 0 {
@@ -384,12 +383,18 @@ impl Window {
         
         let event = self.process_event()?;
         match event {
-            Event::Key(key) => self.process_keypress(key),
+            Event::Key(key) => {
+                self.contents.set_change(true);
+                self.process_keypress(key)
+            },
             Event::Resize(width, height) => {
+                self.contents.set_change(true);
                 self.resize(width, height);
                 Ok(true)
             }
-            _ => Ok(true),
+            _ => {
+                self.contents.set_change(false);
+                Ok(true)},
         }
     }
 
@@ -416,7 +421,6 @@ impl Window {
         let panes = self.panes.len();
 
         let mut offset = 0;
-        
         for i in 0..rows {
             let mut row_drawn = false;
 
@@ -432,7 +436,7 @@ impl Window {
                 //eprintln!("pane corners: {:?}", self.panes[pane_index].borrow().get_corners());
                 let ((start_x, start_y), (end_x, end_y)) = self.panes[pane_index].get_corners();
                 if start_y <= i && end_y >= i {
-                    self.contents.merge(&mut self.panes[pane_index].draw_row(i - start_y + offset));
+                    self.panes[pane_index].draw_row(i - start_y + offset, &mut self.contents);
                     window_index += end_x - start_x + 1;
                     /*if window_index < self.size.0 {
                         self.contents.push_str("|");
@@ -482,6 +486,10 @@ impl Window {
 
     pub fn refresh_screen(&mut self) -> io::Result<()> {
 
+        if !self.contents.will_change() {
+            return Ok(());
+        }
+        
         self.panes[self.active_pane].refresh();
 
         self.panes[self.active_pane].scroll_cursor();
@@ -525,26 +533,39 @@ impl Window {
 
 pub struct WindowContents {
     content: String,
+    change: bool,
 }
 
 impl WindowContents {
     pub fn new() -> Self {
         Self {
             content: String::new(),
+            change: true,
         }
     }
 
     fn push(&mut self, c: char) {
         self.content.push(c);
+        self.change = true;
     }
 
     fn push_str(&mut self, s: &str) {
         self.content.push_str(s);
+        self.change = true;
     }
 
     fn merge(&mut self, other: &mut Self) {
         self.content.push_str(other.content.as_str());
         other.content.clear();
+        self.change = true;
+    }
+
+    fn set_change(&mut self, change: bool) {
+        self.change = change;
+    }
+
+    fn will_change(&self) -> bool {
+        self.change
     }
 }
 
@@ -560,9 +581,13 @@ impl io::Write for WindowContents {
     }
 
     fn flush(&mut self) -> io::Result<()> {
+        if !self.change {
+            return Ok(());
+        }
         let out = write!(std::io::stdout(), "{}", self.content);
         std::io::stdout().flush()?;
         self.content.clear();
+        self.change = true;
         out
     }
 }
@@ -878,8 +903,8 @@ impl PaneContainer {
         self.pane.borrow_mut().refresh();
     }
 
-    pub fn draw_row(&self, index: usize) -> WindowContents {
-        self.pane.borrow().draw_row(index, self)
+    pub fn draw_row(&self, index: usize, contents: &mut WindowContents) {
+        self.pane.borrow().draw_row(index, self, contents);
     }
 
     pub fn process_keypress(&mut self, key: KeyEvent) -> io::Result<bool> {
@@ -902,7 +927,7 @@ impl PaneContainer {
 }
 
 pub trait Pane {
-    fn draw_row(&self, index: usize, container: &PaneContainer) -> WindowContents;
+    fn draw_row(&self, index: usize, container: &PaneContainer, contents: &mut WindowContents);
 
     fn refresh(&mut self);
 
@@ -1035,18 +1060,17 @@ impl TextPane {
 impl Pane for TextPane {
 
 
-    fn draw_row(&self, mut index: usize, container: &PaneContainer) -> WindowContents {
+    fn draw_row(&self, mut index: usize, container: &PaneContainer, output: &mut WindowContents) {
         let rows = container.get_size().1;
         let mut cols = container.get_size().0;
 
-        let mut output = WindowContents::new();
 
         let ((x1, y1), _) = container.get_corners();
 
         if self.settings.borrow().editor_settings.border {
             if index == 0 && y1 != 0 {
                 output.push_str("-".repeat(cols).as_str());
-                return output;
+                return;
             }
             else {
                 index = index.saturating_sub(1);
@@ -1142,7 +1166,6 @@ impl Pane for TextPane {
         }
 
         //output.push_str("\r\n");
-        output
     }
 
     fn scroll_cursor(&mut self, container: &PaneContainer) {
