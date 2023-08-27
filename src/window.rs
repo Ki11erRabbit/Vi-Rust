@@ -27,6 +27,7 @@ pub enum Message {
     PaneLeft,
     PaneRight,
     OpenFile(String),
+    ClosePane,
 }
 
 pub struct Window{
@@ -75,10 +76,6 @@ impl Window {
     fn open_file(&mut self, filename: PathBuf) -> usize {
         let file_type = filename.extension().and_then(|s| s.to_str()).unwrap_or("txt").to_string();
 
-        let active_pane_size = self.panes[self.active_pane].get_size();
-        let active_pane_position = self.panes[self.active_pane].get_position();
-        let active_pane_index = self.active_pane;
-
         let pane = match file_type.as_str() {
             "txt" | _ => {
                 let mut pane = TextPane::new(self.settings.clone(), self.channels.0.clone());
@@ -93,6 +90,7 @@ impl Window {
 
     fn switch_pane(&mut self, filename: String) {
         let filename = PathBuf::from(filename);
+        eprintln!("switching to pane: {:?}", filename);
         let mut pane_index = None;
         for (i, pane) in self.panes.iter().enumerate() {
             if pane.get_pane().borrow().get_filename() == &Some(filename.clone()) {//todo: remove the clone
@@ -101,7 +99,7 @@ impl Window {
             }
         }
 
-        let new_active_pane = if let Some(pane_index) = pane_index {
+        let new_active_pane_index = if let Some(pane_index) = pane_index {
             pane_index
         }
         else {
@@ -109,7 +107,10 @@ impl Window {
         };
 
         let active_pane = self.panes[self.active_pane].get_pane().clone();
-        let new_active_pane = self.panes[new_active_pane].get_pane().clone();
+        let new_active_pane = self.panes[new_active_pane_index].get_pane().clone();
+
+        self.panes[self.active_pane].change_pane(new_active_pane);
+        self.panes[new_active_pane_index].change_pane(active_pane);
     }
 
     fn insert_pane(&mut self, index: usize, pane: PaneContainer) {
@@ -120,7 +121,7 @@ impl Window {
     fn remove_panes(&mut self) {
         let mut panes_to_remove = Vec::new();
         for (i, pane) in self.panes.iter().enumerate() {
-            if pane.get_pane().borrow().can_close() {
+            if pane.can_close() {
                 panes_to_remove.push(i);
             }
         }
@@ -346,6 +347,10 @@ impl Window {
                     Message::OpenFile(path) => {
                         self.switch_pane(path);
                     }
+                    Message::ClosePane => {
+                        self.panes.remove(self.active_pane);
+                        self.active_pane = self.active_pane.saturating_sub(1);
+                    }
                 }
             },
             Err(_) => {}
@@ -370,6 +375,13 @@ impl Window {
             return Ok(false);
         }
         self.refresh_screen()?;
+
+        let ((x1, y1), (x2, y2)) = self.panes[self.active_pane].get_corners();
+
+        if x1 == x2 || y1 == y2 {
+            return Ok(false);
+        }
+        
         let event = self.process_event()?;
         match event {
             Event::Key(key) => self.process_keypress(key),
@@ -639,6 +651,7 @@ impl Clone for PaneContainer {
             size: self.size,
             position: self.position,
             settings: self.settings.clone(),
+            close: false,
         }
     }
 }
@@ -650,6 +663,7 @@ pub struct PaneContainer {
     size: (usize, usize),
     position: (usize, usize),
     settings: Rc<RefCell<Settings>>,
+    close: bool,
 }
 
 impl PaneContainer {
@@ -661,6 +675,7 @@ impl PaneContainer {
             size,
             position: (0, 0),
             settings,
+            close: false,
         };
 
         container.shrink();
@@ -694,7 +709,7 @@ impl PaneContainer {
         self.duplicate
     }
 
-    pub fn change_panel(&mut self, pane: Rc<RefCell<dyn Pane>>) {
+    pub fn change_pane(&mut self, pane: Rc<RefCell<dyn Pane>>) {
         self.pane = pane;
         self.duplicate = false;
     }
@@ -876,7 +891,11 @@ impl PaneContainer {
     }
 
     pub fn close(&mut self) {
-        self.pane.borrow_mut().close();
+        self.close = true;
+    }
+
+    pub fn can_close(&self) -> bool {
+        self.close
     }
 
 
@@ -886,9 +905,6 @@ pub trait Pane {
     fn draw_row(&self, index: usize, container: &PaneContainer) -> WindowContents;
 
     fn refresh(&mut self);
-
-    fn can_close(&self) -> bool;
-    fn close(&mut self);
 
     fn save_buffer(&mut self) -> io::Result<()>;
     fn open_file(&mut self, filename: &PathBuf) -> io::Result<()>;
@@ -932,7 +948,6 @@ pub struct TextPane {
     contents: Rope,
     mode: Rc<RefCell<dyn Mode>>,
     modes: HashMap<String, Rc<RefCell<dyn Mode>>>,
-    close: bool,
     changed: bool,
     settings: Rc<RefCell<Settings>>,
     jump_table: JumpTable,
@@ -965,7 +980,6 @@ impl TextPane {
             contents: Rope::new(),
             mode: normal,
             modes,
-            close: false,
             changed: false,
             settings,
             jump_table: JumpTable::new(),
@@ -1143,14 +1157,6 @@ impl Pane for TextPane {
         self.mode.borrow_mut().refresh();
     }
 
-    fn can_close(&self) -> bool {
-        self.close
-    }
-
-    fn close(&mut self) {
-        self.close = true;
-    }
-
     fn save_buffer(&mut self) -> io::Result<()> {
         if let Some(file_name) = &self.file_name {
             let mut file = std::fs::File::create(file_name)?;
@@ -1191,7 +1197,7 @@ impl Pane for TextPane {
             "q" => {
                 if self.changed {
                 } else {
-                    self.close();
+                    self.sender.send(Message::ClosePane).unwrap();
                 }
             },
             "w" => {
@@ -1199,21 +1205,21 @@ impl Pane for TextPane {
                     self.file_name = Some(PathBuf::from(file_name));
                 }
 
-                self.save_buffer();
+                self.save_buffer().expect("Failed to save file");
             },
             "w!" => {
                 if let Some(file_name) = command_args.next() {
                     self.file_name = Some(PathBuf::from(file_name));
                 }
 
-                self.save_buffer();
+                self.save_buffer().expect("Failed to save file");
             },
             "wq" => {
-                self.save_buffer();
-                self.close();
+                self.save_buffer().expect("Failed to save file");
+                self.sender.send(Message::ClosePane).unwrap();
             },
             "q!" => {
-                self.close();
+                self.sender.send(Message::ClosePane).unwrap();
             },
             "move" => {
                 let direction = command_args.next();
