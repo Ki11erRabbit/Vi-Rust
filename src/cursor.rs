@@ -1,6 +1,6 @@
 use crop::Rope;
 
-use crate::window::Pane;
+use crate::window::{Pane, PaneContainer};
 
 pub enum CursorMove {
     Amount(usize),
@@ -65,6 +65,11 @@ impl Cursor {
         //self.y = new_y as usize;
     }
 
+    pub fn set_size(&mut self, win_size: (usize, usize)) {
+        self.rows = win_size.1;
+        self.cols = win_size.0;
+    }
+
     pub fn get_cursor(&self) -> (usize, usize) {
         (self.x, self.y)
     }
@@ -86,7 +91,7 @@ impl Cursor {
         (x, y)
     }
 
-    pub fn scroll(&mut self, pane: &dyn Pane) {
+    pub fn scroll(&mut self, pane: &PaneContainer) {
         let (pane_x, pane_y) = pane.get_size();
 
         if self.x >= pane_x && self.went_right {

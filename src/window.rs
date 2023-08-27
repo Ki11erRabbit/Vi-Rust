@@ -35,7 +35,7 @@ pub struct Window{
     active_pane: usize,
     panes: Vec<PaneContainer>,
     known_file_types: HashSet<String>,
-    settings: Settings,
+    settings: Rc<RefCell<Settings>>,
     duration: Duration,
     channels: (Sender<Message>, Receiver<Message>),
     
@@ -44,17 +44,19 @@ pub struct Window{
 impl Window {
     pub fn new() -> Self {
         let settings = Settings::default();
-        
         let duration = Duration::from_millis(settings.editor_settings.key_timeout);
+
+        let settings = Rc::new(RefCell::new(settings));
+        
 
         let channels = mpsc::channel();
         
         let win_size = terminal::size()
             .map(|(w, h)| (w as usize, h as usize - 1))// -1 for trailing newline and -1 for command bar
             .unwrap();
-        let pane: Rc<RefCell<dyn Pane>> = Rc::new(RefCell::new(TextPane::new(win_size, win_size, settings.clone(), channels.0.clone())));
+        let pane: Rc<RefCell<dyn Pane>> = Rc::new(RefCell::new(TextPane::new(settings.clone(), channels.0.clone())));
 
-        let panes = vec![PaneContainer::new(pane.clone())];
+        let panes = vec![PaneContainer::new(win_size, win_size, pane.clone(), settings.clone())];
         let mut known_file_types = HashSet::new();
         known_file_types.insert("txt".to_string());
         
@@ -73,19 +75,19 @@ impl Window {
     fn open_file(&mut self, filename: PathBuf) -> usize {
         let file_type = filename.extension().and_then(|s| s.to_str()).unwrap_or("txt").to_string();
 
-        let active_pane_size = self.panes[self.active_pane].get_pane().borrow().get_size();
-        let active_pane_position = self.panes[self.active_pane].get_pane().borrow().get_position();
+        let active_pane_size = self.panes[self.active_pane].get_size();
+        let active_pane_position = self.panes[self.active_pane].get_position();
         let active_pane_index = self.active_pane;
 
         let pane = match file_type.as_str() {
             "txt" | _ => {
-                let mut pane = TextPane::new(self.size, active_pane_size, self.settings.clone(), self.channels.0.clone());
-                pane.open_file(&filename);
+                let mut pane = TextPane::new(self.settings.clone(), self.channels.0.clone());
+                pane.open_file(&filename).expect("Failed to open file");
                 pane
             }
         };
         let pane = Rc::new(RefCell::new(pane));
-        self.panes.push(PaneContainer::new(pane.clone()));
+        self.panes.push(PaneContainer::new((0,0), (0, 0), pane.clone(), self.settings.clone()));
         self.panes.len() - 1
     }
 
@@ -93,7 +95,7 @@ impl Window {
         let filename = PathBuf::from(filename);
         let mut pane_index = None;
         for (i, pane) in self.panes.iter().enumerate() {
-            if pane.get_pane().borrow().get_filename() == Some(&filename) {
+            if pane.get_pane().borrow().get_filename() == &Some(filename.clone()) {//todo: remove the clone
                 pane_index = Some(i);
                 break;
             }
@@ -128,14 +130,14 @@ impl Window {
             
             loop {
                 if *i + 1 < self.panes.len() {
-                    let corners = self.panes[*i].borrow().get_corners();
-                    if self.panes[*i + 1].borrow_mut().combine(corners) {
+                    let corners = self.panes[*i].get_corners();
+                    if self.panes[*i + 1].combine(corners) {
                         break;
                     }
                 }
                 if *i != 0 {
-                    let corners = self.panes[*i].borrow().get_corners();
-                    if self.panes[*i - 1].borrow_mut().combine(corners) {
+                    let corners = self.panes[*i].get_corners();
+                    if self.panes[*i - 1].combine(corners) {
                         break;
                     }
                 }
@@ -158,7 +160,7 @@ impl Window {
 
     fn horizontal_split(&mut self) {
         //eprintln!("split panes: {:?}", self.panes.len());
-        let active_pane_size = self.panes[self.active_pane].borrow().get_size();
+        let active_pane_size = self.panes[self.active_pane].get_size();
         let new_pane_size = (active_pane_size.0, active_pane_size.1 / 2);
         let old_pane_size = if active_pane_size.1 % 2 == 0 {
             new_pane_size
@@ -168,20 +170,17 @@ impl Window {
         };
 
             
-        self.panes[self.active_pane].borrow_mut().set_size(old_pane_size);
+        self.panes[self.active_pane].set_size(old_pane_size);
 
 
         let new_pane_index = self.active_pane + 1;
-        let mut new_pane = *self.panes[self.active_pane].borrow().clone();
-        new_pane.set_size(new_pane_size);
-        let new_pane = Rc::new(RefCell::new(new_pane));
-        self.panes.insert(new_pane_index, new_pane.clone());
+        let mut new_pane = self.panes[self.active_pane].clone();
 
-        let ((x,_), (_, y)) = self.panes[self.active_pane].borrow().get_corners();
+        let ((x,_), (_, y)) = self.panes[self.active_pane].get_corners();
         let new_pane_position = (x, y + 1);
 
-        let new_pane = self.panes[new_pane_index].clone();
-        new_pane.borrow_mut().set_position(new_pane_position);
+        new_pane.set_position(new_pane_position);
+        self.panes.insert(new_pane_index, new_pane);
 
 
         // This is for testing purposes, we need to make sure that we can actually access the new pane
@@ -191,7 +190,7 @@ impl Window {
     }
 
     fn vertical_split(&mut self) {
-        let active_pane_size = self.panes[self.active_pane].borrow().get_size();
+        let active_pane_size = self.panes[self.active_pane].get_size();
         let new_pane_size = (active_pane_size.0 / 2, active_pane_size.1);
         let old_pane_size = if active_pane_size.0 % 2 == 0 {
             new_pane_size
@@ -199,20 +198,17 @@ impl Window {
         else {
             (new_pane_size.0 + 1, new_pane_size.1)
         };
-        self.panes[self.active_pane].borrow_mut().set_size(old_pane_size);
+        self.panes[self.active_pane].set_size(old_pane_size);
 
 
         let new_pane_index = self.active_pane + 1;
-        let mut new_pane = *self.panes[self.active_pane].borrow().clone();
-        new_pane.set_size(new_pane_size);
-        let new_pane = Rc::new(RefCell::new(new_pane));
-        self.panes.insert(new_pane_index, new_pane.clone());
+        let mut new_pane = self.panes[self.active_pane].clone();
 
-        let ((_,y), (x, _)) = self.panes[self.active_pane].borrow().get_corners();
+        let ((_,y), (x, _)) = self.panes[self.active_pane].get_corners();
         let new_pane_position = (x + 1, y);
 
-        let new_pane = self.panes[new_pane_index].clone();
-        new_pane.borrow_mut().set_position(new_pane_position);
+        new_pane.set_position(new_pane_position);
+        self.panes.insert(new_pane_index, new_pane);
         
 
         self.active_pane = new_pane_index;
@@ -220,7 +216,7 @@ impl Window {
 
 
     fn pane_up(&mut self) {
-        let ((x1, y1), (x2, _)) = self.panes[self.active_pane].borrow().get_corners();
+        let ((x1, y1), (x2, _)) = self.panes[self.active_pane].get_corners();
 
         let pane_top = y1.saturating_sub(1);
 
@@ -229,7 +225,6 @@ impl Window {
         let mut pane_index = None;
         // This loop tries to find the pane that is above the current pane
         for (i, pane) in self.panes.iter().enumerate() {
-            let pane = pane.borrow();
             let ((x1, _), (x2, y2)) = pane.get_corners();
             if y2 == pane_top && x1 <= pane_middle && pane_middle <= x2 {
                 pane_index = Some(i);
@@ -246,7 +241,7 @@ impl Window {
     }
 
     fn pane_down(&mut self) {
-        let ((x1, _), (x2, y2)) = self.panes[self.active_pane].borrow().get_corners();
+        let ((x1, _), (x2, y2)) = self.panes[self.active_pane].get_corners();
 
         // We add 1 to make sure that we aren't on the current pane
         let pane_bottom = y2 + 1;
@@ -255,7 +250,6 @@ impl Window {
         let mut pane_index = None;
         // This loop tries to find the pane that is below the current pane
         for (i, pane) in self.panes.iter().enumerate() {
-            let pane = pane.borrow();
             let ((x1, y1), (x2, _)) = pane.get_corners();
             if y1 == pane_bottom && x1 <= pane_middle && pane_middle <= x2 {
                 pane_index = Some(i);
@@ -272,7 +266,7 @@ impl Window {
     }
 
     fn pane_right(&mut self) {
-        let ((_, y1), (x2, y2)) = self.panes[self.active_pane].borrow().get_corners();
+        let ((_, y1), (x2, y2)) = self.panes[self.active_pane].get_corners();
 
         // We add 1 to make sure that we aren't on the current pane
         let pane_right = x2 + 1;
@@ -282,7 +276,6 @@ impl Window {
         let mut pane_index = None;
         // This loop tries to find the pane that is to the right of the current pane
         for (i, pane) in self.panes.iter().enumerate() {
-            let pane = pane.borrow();
             let ((x1, y1), (_, y2)) = pane.get_corners();
             if x1 == pane_right && y1 <= pane_middle && pane_middle <= y2 {
                 pane_index = Some(i);
@@ -299,7 +292,7 @@ impl Window {
     }
 
     fn pane_left(&mut self) {
-        let ((x1, y1), (_, y2)) = self.panes[self.active_pane].borrow().get_corners();
+        let ((x1, y1), (_, y2)) = self.panes[self.active_pane].get_corners();
 
         let pane_left = x1.saturating_sub(1);
 
@@ -308,7 +301,6 @@ impl Window {
         let mut pane_index = None;
         // This loop tries to find the pane that is to the left of the current pane
         for (i, pane) in self.panes.iter().enumerate() {
-            let pane = pane.borrow();
             let ((_, y1), (x2, y2)) = pane.get_corners();
             if x2 == pane_left && y1 <= pane_middle && pane_middle <= y2 {
                 pane_index = Some(i);
@@ -335,8 +327,8 @@ impl Window {
                         self.vertical_split();
                     }
                     Message::ForceQuitAll => {
-                        for pane in self.panes.iter() {
-                            pane.borrow_mut().close();
+                        for pane in self.panes.iter_mut() {
+                            pane.close();
                         }
                     }
                     Message::PaneUp => {
@@ -391,8 +383,8 @@ impl Window {
 
     fn resize(&mut self, width: u16, height: u16) {
         self.size = (width as usize, height as usize - 1);
-        for pane in self.panes.iter() {
-            pane.borrow_mut().resize((width as usize, height as usize));
+        for pane in self.panes.iter_mut() {
+            pane.resize((width as usize, height as usize));
         }
     }
 
@@ -426,9 +418,9 @@ impl Window {
                 }
                 //eprintln!("pane size: {:?} pane_index: {}", self.panes[pane_index].borrow().size, pane_index);
                 //eprintln!("pane corners: {:?}", self.panes[pane_index].borrow().get_corners());
-                let ((start_x, start_y), (end_x, end_y)) = self.panes[pane_index].borrow().get_corners();
+                let ((start_x, start_y), (end_x, end_y)) = self.panes[pane_index].get_corners();
                 if start_y <= i && end_y >= i {
-                    self.contents.merge(&mut self.panes[pane_index].borrow().draw_row(i - start_y + offset));
+                    self.contents.merge(&mut self.panes[pane_index].draw_row(i - start_y + offset));
                     window_index += end_x - start_x + 1;
                     /*if window_index < self.size.0 {
                         self.contents.push_str("|");
@@ -467,7 +459,7 @@ impl Window {
         ).unwrap();
         self.contents.push_str("\r\n");
 
-        let (first, second) = self.panes[self.active_pane].borrow().get_status();
+        let (first, second) = self.panes[self.active_pane].get_status();
         let total = first.len() + second.len();
         
         self.contents.push_str(first.as_str());
@@ -478,9 +470,9 @@ impl Window {
 
     pub fn refresh_screen(&mut self) -> io::Result<()> {
 
-        self.panes[self.active_pane].borrow_mut().refresh();
+        self.panes[self.active_pane].refresh();
 
-        self.panes[self.active_pane].borrow_mut().scroll_cursor();
+        self.panes[self.active_pane].scroll_cursor();
 
         queue!(
             self.contents,
@@ -491,14 +483,14 @@ impl Window {
         self.draw_rows();
         self.draw_status_bar();
 
-        let (x, y) = self.panes[self.active_pane].borrow().get_cursor().borrow().get_real_cursor();
+        let (x, y) = self.panes[self.active_pane].get_cursor().borrow().get_real_cursor();
         //eprintln!("x: {} y: {}", x, y);
-        let x = x + self.panes[self.active_pane].borrow().get_position().0;
-        let y = y + self.panes[self.active_pane].borrow().get_position().1;
+        let x = x + self.panes[self.active_pane].get_position().0;
+        let y = y + self.panes[self.active_pane].get_position().1;
         //eprintln!("x: {} y: {}", x, y);
 
         
-        let x = x + self.panes[self.active_pane].borrow().get_cursor().borrow().number_line_size;
+        let x = x + self.panes[self.active_pane].get_cursor().borrow().number_line_size;
 
         queue!(
             self.contents,
@@ -510,21 +502,11 @@ impl Window {
     }
 
     pub fn open_file_start(&mut self, filename: &str) -> io::Result<()> {
-        match self.panes[self.active_pane].borrow_mut().open_file(filename) {
-            Err(e) => {
-                Err(e)
-            },
-            Ok(_) => {
-                self.pane_filenames[self.active_pane] = Some(filename.to_owned().into());
-                self.filenames_to_panes.insert(filename.to_owned().into(), self.active_pane);
-
-                Ok(())
-            }
-        }
+        self.panes[self.active_pane].open_file(&PathBuf::from(filename.to_owned()))
     }
 
     pub fn process_keypress(&mut self, key: KeyEvent) -> io::Result<bool> {
-        self.panes[self.active_pane].borrow_mut().process_keypress(key)
+        self.panes[self.active_pane].process_keypress(key)
     }
 
 }
@@ -646,54 +628,19 @@ impl JumpTable {
 }
 
 
-pub trait Pane {
-    fn draw_row(&self, index: usize, container: &PaneContainer) -> WindowContents;
 
-    fn combine(&mut self, corners: ((usize, usize), (usize, usize))) -> bool;
 
-    fn refresh(&mut self);
-
-    fn can_close(&self) -> bool;
-    fn close(&mut self);
-
-    fn save_buffer(&mut self) -> io::Result<()>;
-    fn open_file(&mut self, filename: &PathBuf) -> io::Result<()>;
-
-    fn get_size(&self) -> (usize, usize);
-    fn set_size(&mut self, size: (usize, usize));
-    fn resize(&mut self, size: (usize, usize));
-
-    fn set_position(&mut self, position: (usize, usize));
-    fn get_position(&self) -> (usize, usize);
-    fn get_corners(&self) -> ((usize, usize), (usize, usize));
-
-    fn process_keypress(&mut self, key: KeyEvent) -> io::Result<bool>;
-
-    fn scroll_cursor(&mut self);
-
-    fn get_status(&self) -> (String, String);
-
-    fn run_command(&mut self, command: &str);
-
-    fn change_mode(&mut self, mode_name: &str);
-
-    fn insert_newline(&mut self) {
-        self.insert_char('\n');
+impl Clone for PaneContainer {
+    fn clone(&self) -> Self {
+        Self {
+            pane: self.pane.clone(),
+            duplicate: true,
+            max_size: self.max_size,
+            size: self.size,
+            position: self.position,
+            settings: self.settings.clone(),
+        }
     }
-    fn insert_char(&mut self, c: char);
-    fn insert_str(&mut self, s: &str);
-    fn delete_char(&mut self);
-    fn backspace_char(&mut self);
-
-    fn get_cursor(&self) -> Rc<RefCell<Cursor>>;
-
-    fn get_line_count(&self) -> usize;
-
-    fn buffer_to_string(&self) -> String;
-    
-    fn get_row_len(&self, row: usize) -> Option<usize>;
-
-    fn get_filename(&self) -> Option<&PathBuf>;
 }
 
 pub struct PaneContainer {
@@ -702,18 +649,18 @@ pub struct PaneContainer {
     max_size: (usize, usize),
     size: (usize, usize),
     position: (usize, usize),
-    pub cursor: Rc<RefCell<Cursor>>,
+    settings: Rc<RefCell<Settings>>,
 }
 
 impl PaneContainer {
-    pub fn new(max_size: (usize, usize), size: (usize, usize), pane: Rc<RefCell<dyn Pane>>) -> Self {
+    pub fn new(max_size: (usize, usize), size: (usize, usize), pane: Rc<RefCell<dyn Pane>>, settings: Rc<RefCell<Settings>>) -> Self {
         let mut container = Self {
             pane,
             duplicate: false,
             max_size,
             size,
             position: (0, 0),
-            cursor: Rc::new(RefCell::new(Cursor::new(size))),
+            settings,
         };
 
         container.shrink();
@@ -752,259 +699,21 @@ impl PaneContainer {
         self.duplicate = false;
     }
 
-    pub fn get_filename(&self) -> Option<&PathBuf> {
-        self.pane.borrow().get_filename()
+    pub fn get_filename(&self) -> Option<PathBuf> {
+        let pane = self.pane.borrow();
+        pane.get_filename().clone()
     }
 
     pub fn open_file(&mut self, filename: &PathBuf) -> io::Result<()> {
         self.pane.borrow_mut().open_file(filename)
     }
 
-}
-
-impl Clone for PaneContainer {
-    fn clone(&self) -> Self {
-        Self {
-            pane: self.pane.clone(),
-            duplicate: true,
-        }
-    }
-}
-
-pub struct TextPane {
-    file_name: Option<PathBuf>,
-    contents: Rope,
-    mode: Rc<RefCell<dyn Mode>>,
-    modes: HashMap<String, Rc<RefCell<dyn Mode>>>,
-    close: bool,
-    changed: bool,
-    settings: Settings,
-    jump_table: JumpTable,
-    sender: Sender<Message>,
-}
-
-impl Clone for TextPane {
-    fn clone(&self) -> Self {
-        Self {
-            max_size: self.max_size,
-            size: self.size,
-            position: self.position,
-            file_name: self.file_name.clone(),
-            contents: self.contents.clone(),
-            mode: self.mode.clone(),
-            modes: self.modes.clone(),
-            cursor: self.cursor.clone(),
-            close: self.close,
-            changed: self.changed,
-            settings: self.settings.clone(),
-            jump_table: self.jump_table.clone(),
-            sender: self.sender.clone(),
-        }
-    }
-}
-
-
-impl TextPane {
-    fn new(max_size: (usize, usize), size: (usize, usize), settings: Settings, sender: Sender<Message>) -> Self {
-        let mut modes: HashMap<String, Rc<RefCell<dyn Mode>>> = HashMap::new();
-        let normal = Rc::new(RefCell::new(Normal::new()));
-        normal.borrow_mut().add_keybindings(settings.mode_keybindings.get("Normal").unwrap().clone());
-        normal.borrow_mut().set_key_timeout(settings.editor_settings.key_timeout);
-
-        let insert = Rc::new(RefCell::new(Insert::new()));
-        insert.borrow_mut().add_keybindings(settings.mode_keybindings.get("Insert").unwrap().clone());
-        insert.borrow_mut().set_key_timeout(settings.editor_settings.key_timeout);
-        
-        let command = Rc::new(RefCell::new(Command::new()));
-        command.borrow_mut().add_keybindings(settings.mode_keybindings.get("Command").unwrap().clone());
-        command.borrow_mut().set_key_timeout(settings.editor_settings.key_timeout);
-
-        modes.insert("Normal".to_string(), normal.clone());
-        modes.insert("Insert".to_string(), insert.clone());
-        modes.insert("Command".to_string(), command.clone());
-
-        
-        let mut pane = Self {
-            file_name: None,
-            contents: Rope::new(),
-            mode: normal,
-            modes,
-            close: false,
-            changed: false,
-            settings,
-            jump_table: JumpTable::new(),
-            sender,
-        };
-
-        pane.shrink();
-
-        pane
+    pub fn scroll_cursor(&mut self) {
+        self.pane.borrow_mut().scroll_cursor(self);
     }
 
 
-    pub fn set_changed(&mut self, changed: bool) {
-        self.changed = changed;
-    }
-
-    pub fn increase_size(&mut self, size: (usize, usize)) {
-        self.size.0 += size.0;
-        self.size.1 += size.1;
-    }
-
-    fn get_row(&self, row: usize, offset: usize, col: usize) -> Option<RopeSlice> {
-        if row >= self.contents.line_len() {
-            return None;
-        }
-        let line = self.contents.line(row);
-        let len = cmp::min(col + offset, line.line_len().saturating_sub(offset));
-        if len == 0 {
-            return None;
-        }
-        Some(line.line_slice(offset..len))
-    }
-
-    pub fn borrow_buffer(&self) -> &Rope {
-        &self.contents
-    }
-
-    pub fn borrow_buffer_mut(&mut self) -> &mut Rope {
-        &mut self.contents
-    }
-
-    pub fn get_mode(&self, name: &str) -> Option<Rc<RefCell<dyn Mode>>> {
-        self.modes.get(name).map(|m| m.clone())
-    }
-
-
-    fn get_byte_offset(&self) -> usize {
-        let (x, mut y) = self.cursor.borrow().get_cursor();
-        while y > self.contents.line_len() {
-            y = y.saturating_sub(1);
-        }
-        let line_pos = self.contents.byte_of_line(y);
-        let row_pos = x;
-
-        let byte_pos = line_pos + row_pos;
-
-        byte_pos
-    }
-
-}
-impl Pane for TextPane {
-
-
-    fn draw_row(&self, mut index: usize) -> WindowContents {
-        let rows = self.size.1;
-        let mut cols = self.size.0;
-
-        let mut output = WindowContents::new();
-
-        let ((x1, y1), _) = self.get_corners();
-
-        if self.settings.editor_settings.border {
-            if index == 0 && y1 != 0 {
-                output.push_str("-".repeat(cols).as_str());
-                return output;
-            }
-            else {
-                index = index.saturating_sub(1);
-            }
-
-            if x1 != 0 {
-                output.push_str("|");
-                cols = cols.saturating_sub(1);
-            }
-        }
-
-        let real_row = self.cursor.borrow().row_offset + index;
-        let col_offset = self.cursor.borrow().col_offset;
-
-        let mut number_of_lines = self.borrow_buffer().line_len();
-        if let Some('\n') = self.borrow_buffer().chars().last() {
-            number_of_lines += 1;
-        }
-
-        //number_of_lines = self.borrow_buffer().chars().filter(|c| *c == '\n').count();
-
-
-        let mut num_width = 0;
-
-        if self.settings.editor_settings.line_number && !self.settings.editor_settings.relative_line_number {
-            let mut places = 1;
-            while places <= number_of_lines {
-                places *= 10;
-                num_width += 1;
-            }
-            if real_row + 1 <= number_of_lines {
-                output.push_str(format!("{:width$}", real_row + 1, width = num_width).as_str());
-            }
-            
-        }
-        else if self.settings.editor_settings.line_number && self.settings.editor_settings.relative_line_number {
-            let mut places = 1;
-            num_width = 3;
-            while places <= number_of_lines {
-                places *= 10;
-                num_width += 1;
-            }
-            if real_row == self.cursor.borrow().get_cursor().1 && real_row + 1 <= number_of_lines {
-                output.push_str(format!("{:<width$}", real_row + 1 , width = num_width).as_str());
-            }
-            else if real_row + 1 <= number_of_lines {
-                output.push_str(format!("{:width$}", ((real_row) as isize - (self.cursor.borrow().get_cursor().1 as isize)).abs() as usize, width = num_width).as_str());
-            }
-        }
-        //cols -= num_width;
-
-        self.cursor.borrow_mut().number_line_size = num_width;
-
-
-        if let Some(row) = self.get_row(real_row, col_offset, cols) {
-            let mut count = 0;
-            row.chars().for_each(|c| if count != (cols - num_width) {
-                match c {
-                    '\t' => {
-                        count += self.settings.editor_settings.tab_size;
-                        output.push_str(" ".repeat(self.settings.editor_settings.tab_size).as_str())
-                    },
-                    '\n' => output.push_str(" "),
-                    c => {
-                        count += 1;
-                        output.push(c)
-                    },
-                }
-            }
-                                 else {
-                                     output.push_str("");
-            });
-
-            output.push_str(" ".repeat(cols.saturating_sub(count + num_width)).as_str());
-
-            //output.push_str(" ".repeat(cols - row.chars().count() / 2).as_str());
-
-            /*queue!(
-                output,
-                terminal::Clear(ClearType::UntilNewLine),
-            ).unwrap();*/
-        }
-        else if real_row >= number_of_lines {
-            output.push_str(" ".repeat(cols).as_str());
-
-            /*queue!(
-                output,
-                terminal::Clear(ClearType::UntilNewLine),
-            ).unwrap();*/
-        }
-        else {
-            output.push_str(" ".repeat(cols.saturating_sub(num_width)).as_str());
-        }
-
-        //output.push_str("\r\n");
-        output
-    }
-
-
-    fn combine(&mut self, corners: ((usize, usize), (usize, usize))) -> bool {
+    pub fn combine(&mut self, corners: ((usize, usize), (usize, usize))) -> bool {
         //eprintln!("Combine: {:?}", corners);
         let ((other_start_x, other_start_y), (other_end_x, other_end_y)) = corners;
         //eprintln!("Combine: {:?}", self.get_corners());
@@ -1075,37 +784,17 @@ impl Pane for TextPane {
 
         return false;
     }
-
-    fn refresh(&mut self) {
-        self.mode.borrow_mut().refresh();
-    }
-
-    fn can_close(&self) -> bool {
-        self.close
-    }
-
-    fn close(&mut self) {
-        self.close = true;
-    }
-
-    fn save_buffer(&mut self) -> io::Result<()> {
-        if let Some(file_name) = &self.file_name {
-            let mut file = std::fs::File::create(file_name)?;
-            file.write_all(self.contents.to_string().as_bytes())?;
-        }
-        Ok(())
-    }
     
-    fn get_size(&self) -> (usize, usize) {
+    pub fn get_size(&self) -> (usize, usize) {
         self.size
     }
 
-    fn set_size(&mut self, size: (usize, usize)) {
+    pub fn set_size(&mut self, size: (usize, usize)) {
         self.size = size;
     }
 
 
-    fn resize(&mut self, size: (usize, usize)) {
+    pub fn resize(&mut self, size: (usize, usize)) {
         //eprintln!("Old Max Size: {:?}", self.max_size);
         //eprintln!("Old Size: {:?}", self.size);
         //eprintln!("New Max Size: {:?}", size);
@@ -1126,13 +815,13 @@ impl Pane for TextPane {
         let new_end_y = (size.1 * end_y) as f64 / self.max_size.1 as f64;
 
         let new_width = if self.position.0 == 0 {
-            cmp::max((new_end_x - new_start_x) as usize, self.settings.editor_settings.minimum_width)
+            cmp::max((new_end_x - new_start_x) as usize, self.settings.borrow().editor_settings.minimum_width)
         }
         else {
             (new_end_x - new_start_x) as usize
         };
         let new_height = if self.position.1 == 0 {
-            cmp::max((new_end_y - new_start_y) as usize, self.settings.editor_settings.minimum_height)
+            cmp::max((new_end_y - new_start_y) as usize, self.settings.borrow().editor_settings.minimum_height)
         }
         else {
             (new_end_y - new_start_y) as usize
@@ -1146,9 +835,328 @@ impl Pane for TextPane {
 
         self.max_size = size;
 
-        self.cursor.borrow_mut().resize(self.size);
+        self.pane.borrow_mut().resize_cursor(self.size);
 
         self.shrink();
+    }
+
+    pub fn set_position(&mut self, position: (usize, usize)) {
+        self.position = position;
+        self.shrink();
+    }
+
+    pub fn get_position(&self) -> (usize, usize) {
+        self.position
+    }
+
+    pub fn get_corners(&self) -> ((usize, usize), (usize, usize)) {
+        let x = self.size.0 + self.position.0;
+        let y = self.size.1 + self.position.1;
+        (self.position, (x, y))
+    }
+
+    pub fn get_status(&self) -> (String, String) {
+        self.pane.borrow().get_status(self)
+    }
+
+    pub fn refresh(&mut self) {
+        self.pane.borrow_mut().refresh();
+    }
+
+    pub fn draw_row(&self, index: usize) -> WindowContents {
+        self.pane.borrow().draw_row(index, self)
+    }
+
+    pub fn process_keypress(&mut self, key: KeyEvent) -> io::Result<bool> {
+        self.pane.borrow_mut().process_keypress(key)
+    }
+
+    pub fn get_cursor(&self) -> Rc<RefCell<Cursor>> {
+        self.pane.borrow().get_cursor()
+    }
+
+    pub fn close(&mut self) {
+        self.pane.borrow_mut().close();
+    }
+
+
+}
+
+pub trait Pane {
+    fn draw_row(&self, index: usize, container: &PaneContainer) -> WindowContents;
+
+    fn refresh(&mut self);
+
+    fn can_close(&self) -> bool;
+    fn close(&mut self);
+
+    fn save_buffer(&mut self) -> io::Result<()>;
+    fn open_file(&mut self, filename: &PathBuf) -> io::Result<()>;
+
+
+    fn process_keypress(&mut self, key: KeyEvent) -> io::Result<bool>;
+
+    fn scroll_cursor(&mut self, container: &PaneContainer);
+
+    fn get_status(&self, container: &PaneContainer) -> (String, String);
+
+    fn run_command(&mut self, command: &str);
+
+    fn change_mode(&mut self, mode_name: &str);
+
+    fn insert_newline(&mut self) {
+        self.insert_char('\n');
+    }
+    fn insert_char(&mut self, c: char);
+    fn insert_str(&mut self, s: &str);
+    fn delete_char(&mut self);
+    fn backspace_char(&mut self);
+
+    fn get_cursor(&self) -> Rc<RefCell<Cursor>>;
+
+    fn get_line_count(&self) -> usize;
+
+    fn buffer_to_string(&self) -> String;
+    
+    fn get_row_len(&self, row: usize) -> Option<usize>;
+
+    fn get_filename(&self) -> &Option<PathBuf>;
+
+    fn resize_cursor(&mut self, size: (usize, usize));
+    fn set_cursor_size(&mut self, size: (usize, usize));
+}
+
+pub struct TextPane {
+    cursor: Rc<RefCell<Cursor>>,
+    file_name: Option<PathBuf>,
+    contents: Rope,
+    mode: Rc<RefCell<dyn Mode>>,
+    modes: HashMap<String, Rc<RefCell<dyn Mode>>>,
+    close: bool,
+    changed: bool,
+    settings: Rc<RefCell<Settings>>,
+    jump_table: JumpTable,
+    sender: Sender<Message>,
+}
+
+impl TextPane {
+    fn new(settings: Rc<RefCell<Settings>>, sender: Sender<Message>) -> Self {
+        let mut modes: HashMap<String, Rc<RefCell<dyn Mode>>> = HashMap::new();
+        let normal = Rc::new(RefCell::new(Normal::new()));
+        normal.borrow_mut().add_keybindings(settings.borrow().mode_keybindings.get("Normal").unwrap().clone());
+        normal.borrow_mut().set_key_timeout(settings.borrow().editor_settings.key_timeout);
+
+        let insert = Rc::new(RefCell::new(Insert::new()));
+        insert.borrow_mut().add_keybindings(settings.borrow().mode_keybindings.get("Insert").unwrap().clone());
+        insert.borrow_mut().set_key_timeout(settings.borrow().editor_settings.key_timeout);
+        
+        let command = Rc::new(RefCell::new(Command::new()));
+        command.borrow_mut().add_keybindings(settings.borrow().mode_keybindings.get("Command").unwrap().clone());
+        command.borrow_mut().set_key_timeout(settings.borrow().editor_settings.key_timeout);
+
+        modes.insert("Normal".to_string(), normal.clone());
+        modes.insert("Insert".to_string(), insert.clone());
+        modes.insert("Command".to_string(), command.clone());
+
+        
+        Self {
+            cursor: Rc::new(RefCell::new(Cursor::new((0,0)))),
+            file_name: None,
+            contents: Rope::new(),
+            mode: normal,
+            modes,
+            close: false,
+            changed: false,
+            settings,
+            jump_table: JumpTable::new(),
+            sender,
+        }
+    }
+
+
+    pub fn set_changed(&mut self, changed: bool) {
+        self.changed = changed;
+    }
+
+
+    fn get_row(&self, row: usize, offset: usize, col: usize) -> Option<RopeSlice> {
+        if row >= self.contents.line_len() {
+            return None;
+        }
+        let line = self.contents.line(row);
+        let len = cmp::min(col + offset, line.line_len().saturating_sub(offset));
+        if len == 0 {
+            return None;
+        }
+        Some(line.line_slice(offset..len))
+    }
+
+    pub fn borrow_buffer(&self) -> &Rope {
+        &self.contents
+    }
+
+    pub fn borrow_buffer_mut(&mut self) -> &mut Rope {
+        &mut self.contents
+    }
+
+    pub fn get_mode(&self, name: &str) -> Option<Rc<RefCell<dyn Mode>>> {
+        self.modes.get(name).map(|m| m.clone())
+    }
+
+
+    fn get_byte_offset(&self) -> usize {
+        let (x, mut y) = self.cursor.borrow().get_cursor();
+        while y > self.contents.line_len() {
+            y = y.saturating_sub(1);
+        }
+        let line_pos = self.contents.byte_of_line(y);
+        let row_pos = x;
+
+        let byte_pos = line_pos + row_pos;
+
+        byte_pos
+    }
+
+}
+impl Pane for TextPane {
+
+
+    fn draw_row(&self, mut index: usize, container: &PaneContainer) -> WindowContents {
+        let rows = container.get_size().1;
+        let mut cols = container.get_size().0;
+
+        let mut output = WindowContents::new();
+
+        let ((x1, y1), _) = container.get_corners();
+
+        if self.settings.borrow().editor_settings.border {
+            if index == 0 && y1 != 0 {
+                output.push_str("-".repeat(cols).as_str());
+                return output;
+            }
+            else {
+                index = index.saturating_sub(1);
+            }
+
+            if x1 != 0 {
+                output.push_str("|");
+                cols = cols.saturating_sub(1);
+            }
+        }
+
+        let real_row = self.cursor.borrow().row_offset + index;
+        let col_offset = self.cursor.borrow().col_offset;
+
+        let mut number_of_lines = self.borrow_buffer().line_len();
+        if let Some('\n') = self.borrow_buffer().chars().last() {
+            number_of_lines += 1;
+        }
+
+        //number_of_lines = self.borrow_buffer().chars().filter(|c| *c == '\n').count();
+
+
+        let mut num_width = 0;
+
+        if self.settings.borrow().editor_settings.line_number && !self.settings.borrow().editor_settings.relative_line_number {
+            let mut places = 1;
+            while places <= number_of_lines {
+                places *= 10;
+                num_width += 1;
+            }
+            if real_row + 1 <= number_of_lines {
+                output.push_str(format!("{:width$}", real_row + 1, width = num_width).as_str());
+            }
+            
+        }
+        else if self.settings.borrow().editor_settings.line_number && self.settings.borrow().editor_settings.relative_line_number {
+            let mut places = 1;
+            num_width = 3;
+            while places <= number_of_lines {
+                places *= 10;
+                num_width += 1;
+            }
+            if real_row == self.cursor.borrow().get_cursor().1 && real_row + 1 <= number_of_lines {
+                output.push_str(format!("{:<width$}", real_row + 1 , width = num_width).as_str());
+            }
+            else if real_row + 1 <= number_of_lines {
+                output.push_str(format!("{:width$}", ((real_row) as isize - (self.cursor.borrow().get_cursor().1 as isize)).abs() as usize, width = num_width).as_str());
+            }
+        }
+        //cols -= num_width;
+
+        self.cursor.borrow_mut().number_line_size = num_width;
+
+
+        if let Some(row) = self.get_row(real_row, col_offset, cols) {
+            let mut count = 0;
+            row.chars().for_each(|c| if count != (cols - num_width) {
+                match c {
+                    '\t' => {
+                        count += self.settings.borrow().editor_settings.tab_size;
+                        output.push_str(" ".repeat(self.settings.borrow().editor_settings.tab_size).as_str())
+                    },
+                    '\n' => output.push_str(" "),
+                    c => {
+                        count += 1;
+                        output.push(c)
+                    },
+                }
+            }
+                                 else {
+                                     output.push_str("");
+            });
+
+            output.push_str(" ".repeat(cols.saturating_sub(count + num_width)).as_str());
+
+            //output.push_str(" ".repeat(cols - row.chars().count() / 2).as_str());
+
+            /*queue!(
+                output,
+                terminal::Clear(ClearType::UntilNewLine),
+            ).unwrap();*/
+        }
+        else if real_row >= number_of_lines {
+            output.push_str(" ".repeat(cols).as_str());
+
+            /*queue!(
+                output,
+                terminal::Clear(ClearType::UntilNewLine),
+            ).unwrap();*/
+        }
+        else {
+            output.push_str(" ".repeat(cols.saturating_sub(num_width)).as_str());
+        }
+
+        //output.push_str("\r\n");
+        output
+    }
+
+    fn scroll_cursor(&mut self, container: &PaneContainer) {
+        let cursor = self.cursor.clone();
+
+        cursor.borrow_mut().scroll(container);
+        
+    }
+
+
+    fn refresh(&mut self) {
+        self.mode.borrow_mut().refresh();
+    }
+
+    fn can_close(&self) -> bool {
+        self.close
+    }
+
+    fn close(&mut self) {
+        self.close = true;
+    }
+
+    fn save_buffer(&mut self) -> io::Result<()> {
+        if let Some(file_name) = &self.file_name {
+            let mut file = std::fs::File::create(file_name)?;
+            file.write_all(self.contents.to_string().as_bytes())?;
+        }
+        Ok(())
     }
 
     fn open_file(&mut self, filename: &PathBuf) -> io::Result<()> {
@@ -1164,30 +1172,9 @@ impl Pane for TextPane {
         result
     }
 
-    fn set_position(&mut self, position: (usize, usize)) {
-        self.position = position;
-        self.shrink();
-    }
 
-    fn get_position(&self) -> (usize, usize) {
-        self.position
-    }
-
-    fn get_corners(&self) -> ((usize, usize), (usize, usize)) {
-        let x = self.size.0 + self.position.0;
-        let y = self.size.1 + self.position.1;
-        (self.position, (x, y))
-    }
-
-    fn scroll_cursor(&mut self) {
-        let cursor = self.cursor.clone();
-
-        cursor.borrow_mut().scroll(self);
-        
-    }
-
-    fn get_status(&self) -> (String, String) {
-        self.mode.borrow().update_status(self)
+    fn get_status(&self, container: &PaneContainer) -> (String, String) {
+        self.mode.borrow().update_status(container)
     }
 
     fn change_mode(&mut self, name: &str) {
@@ -1441,4 +1428,20 @@ impl Pane for TextPane {
             None
         }
     }
+
+
+    fn get_filename(&self) -> &Option<PathBuf> {
+        &self.file_name
+    }
+
+    fn resize_cursor(&mut self, size: (usize, usize)) {
+        let mut cursor = self.cursor.borrow_mut();
+        cursor.resize(size);
+    }
+
+    fn set_cursor_size(&mut self, size: (usize, usize)) {
+        let mut cursor = self.cursor.borrow_mut();
+        cursor.set_size(size);
+    }
+
 }

@@ -2,7 +2,7 @@ use std::{io, collections::HashMap, rc::Rc, cell::RefCell, time::Instant};
 
 use crossterm::{event::{KeyEvent, KeyCode, KeyModifiers}, execute, cursor::SetCursorStyle};
 
-use crate::{window::Pane, cursor::{Direction, CursorMove, self}, settings::{Keys, Key}};
+use crate::{window::{Pane, PaneContainer}, cursor::{Direction, CursorMove, self}, settings::{Keys, Key}};
 
 
 
@@ -15,7 +15,7 @@ pub trait Mode {
 
     fn change_mode(&mut self, name: &str, pane: &mut dyn Pane);
 
-    fn update_status(&self, pane: &dyn Pane) -> (String, String);
+    fn update_status(&self, pane: &PaneContainer) -> (String, String);
 
     fn add_keybindings(&mut self, bindings: HashMap<Keys, String>);
 
@@ -253,7 +253,7 @@ impl Mode for Normal {
 
     }
 
-    fn update_status(&self, pane: &dyn Pane) -> (String, String) {
+    fn update_status(&self, pane: &PaneContainer) -> (String, String) {
         let (row, col) = pane.get_cursor().borrow().get_cursor();
         let mut first = format!("Normal {}:{}", col + 1, row + 1);
         if !self.number_buffer.is_empty() {
@@ -452,7 +452,7 @@ impl Mode for Insert {
     
     }
 
-    fn update_status(&self, pane: &dyn Pane) -> (String, String) {
+    fn update_status(&self, pane: &PaneContainer) -> (String, String) {
         let (row, col) = pane.get_cursor().borrow().get_cursor();
         let first = format!("Insert {}:{}", col + 1, row + 1);
 
@@ -495,7 +495,7 @@ impl Mode for Command {
         "Command".to_string()
     }
 
-    fn update_status(&self, _pane: &dyn Pane) -> (String, String) {
+    fn update_status(&self, _pane: &PaneContainer) -> (String, String) {
         let first = format!(":{}", self.command);
         let second = String::new();
 
