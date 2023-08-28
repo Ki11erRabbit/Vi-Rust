@@ -6,7 +6,10 @@ tab_size = 4
 use_spaces = true
 key_timeout = 100
     
-
+[color]
+foreground_color = "grey"
+background_color = "cyan"
+underline_color = "magenta"
 
     
 [normal]

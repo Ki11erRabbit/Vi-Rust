@@ -1,6 +1,6 @@
 use std::{io, collections::HashMap, rc::Rc, cell::RefCell, time::Instant};
 
-use crossterm::{event::{KeyEvent, KeyCode, KeyModifiers}, execute, cursor::SetCursorStyle};
+use crossterm::{event::{KeyEvent, KeyCode, KeyModifiers}, execute, cursor::SetCursorStyle, style::{Stylize, StyledContent}};
 
 use crate::{window::{Pane, PaneContainer}, cursor::{Direction, CursorMove, self}, settings::{Keys, Key}};
 
@@ -253,9 +253,15 @@ impl Mode for Normal {
 
     }
 
-    fn update_status(&self, pane: &PaneContainer) -> (String, String) {
+    fn update_status(&self, pane: &PaneContainer) -> (String, String){
         let (row, col) = pane.get_cursor().borrow().get_cursor();
-        let mut first = format!("Normal {}:{}", col + 1, row + 1);
+        let mut first = String::from("Normal");
+
+
+        let coords = format!("{}:{}", col + 1, row + 1);
+
+        first.push_str(&format!(" {}", coords));
+            
         if !self.number_buffer.is_empty() {
             first.push_str(&format!(" {}", self.number_buffer));
         }
@@ -263,8 +269,7 @@ impl Mode for Normal {
         let mut second = String::new();
         if !self.key_buffer.is_empty() {
             for key in &self.key_buffer {
-                second.push_str(&format!("{}", key));
-                second.push_str(" ");
+                second.push_str(&format!("{} ", key));
             }
         }
         let corners = pane.get_corners();
@@ -454,7 +459,10 @@ impl Mode for Insert {
 
     fn update_status(&self, pane: &PaneContainer) -> (String, String) {
         let (row, col) = pane.get_cursor().borrow().get_cursor();
-        let first = format!("Insert {}:{}", col + 1, row + 1);
+        let mut first = String::from("Insert");
+
+        let coords = format!("{}:{}", col + 1, row + 1);
+        first.push_str(&format!(" {}", coords));
 
         let mut second = String::new();
 
@@ -495,8 +503,10 @@ impl Mode for Command {
         "Command".to_string()
     }
 
-    fn update_status(&self, _pane: &PaneContainer) -> (String, String) {
+    fn update_status(&self, pane: &PaneContainer) -> (String, String) {
+
         let first = format!(":{}", self.command);
+        
         let second = String::new();
 
         (first, second)

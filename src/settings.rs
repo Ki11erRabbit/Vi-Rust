@@ -1,7 +1,7 @@
 use core::fmt;
 use std::collections::HashMap;
 
-use crossterm::event::{KeyCode, KeyModifiers, KeyEvent};
+use crossterm::{event::{KeyCode, KeyModifiers, KeyEvent}, style::{Attribute, Color}};
 use serde::Deserialize;
 
 pub struct KeyCodeWrapper(KeyCode);
@@ -91,6 +91,7 @@ pub type Keys = Vec<Key>;
 pub struct Settings {
     pub editor_settings: EditorSettings,
     pub mode_keybindings: HashMap<Mode, HashMap<Keys, Command>>,
+    pub colors: EditorColors,
     
 }
 
@@ -443,10 +444,12 @@ impl Default for Settings {
         mode_keybindings.insert("Insert".to_string(), insert_keybindings);
         mode_keybindings.insert("Command".to_string(), command_keybindings);
 
+        let colors = EditorColors::default();
         
         Self {
             editor_settings,
             mode_keybindings,
+            colors,
         }
     }
 }
@@ -474,6 +477,40 @@ impl Default for EditorSettings {
             border: true,
             minimum_width: 24,
             minimum_height: 1,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ColorScheme {
+    pub foreground_color: Color,
+    pub background_color: Color,
+    pub underline_color: Color,
+    pub attributes: Attribute,
+}
+
+impl Default for ColorScheme {
+    fn default() -> Self {
+        Self {
+            foreground_color: Color::Cyan,
+            background_color: Color::Green,
+            underline_color: Color::Reset,
+            attributes: Attribute::NoHidden,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EditorColors {
+    pub pane: ColorScheme,
+    pub ui: ColorScheme,
+}
+
+impl Default for EditorColors {
+    fn default() -> Self {
+        Self {
+            pane: ColorScheme::default(),
+            ui: ColorScheme::default(),
         }
     }
 }
@@ -643,11 +680,100 @@ pub fn read_settings(settings_file: &str, mode_info: HashMap<String,Vec<String>>
 
         mode_keybindings.insert(name.to_string(), keybindings);
     }
+
+    let colors = match table.get("color") {
+        None => EditorColors::default(),
+        Some(value) => parse_editor_colors(value),
+    };
     
     Settings {
         editor_settings,
         mode_keybindings,
+        colors,
     }
+}
+
+fn parse_editor_colors(table: &toml::Value) -> EditorColors {
+    let table = table.as_table().expect("editor colors were not a table");
+    let mut editor_colors = EditorColors::default();
+
+    match table.get("pane") {
+        None => editor_colors.pane = ColorScheme::default(),
+        Some(value) => editor_colors.pane = parse_color_scheme(value),
+    }
+
+    match table.get("ui") {
+        None => editor_colors.ui = ColorScheme::default(),
+        Some(value) => editor_colors.ui = parse_color_scheme(value),
+    }
+
+    editor_colors
+}
+
+fn parse_color_scheme(table: &toml::Value) -> ColorScheme {
+    let table = table.as_table().expect("color scheme was not a table");
+    let mut color_scheme = ColorScheme::default();
+    
+    match table.get("foreground_color") {
+        None => color_scheme.foreground_color = Color::Reset,
+        Some(value) => color_scheme.foreground_color = parse_color(value),
+    }
+
+    match table.get("background_color") {
+        None => color_scheme.background_color = Color::Reset,
+        Some(value) => color_scheme.background_color = parse_color(value),
+    }
+
+    match table.get("underline_color") {
+        None => color_scheme.underline_color = Color::Reset,
+        Some(value) => color_scheme.underline_color = parse_color(value),
+    }
+
+    color_scheme
+}
+
+fn parse_color(value: &toml::Value) -> Color {
+
+    if value.is_str() {
+        let value = value.as_str().expect("color was not a string");
+
+        match value {
+            "black" => Color::Black,
+            "red" => Color::Red,
+            "green" => Color::Green,
+            "yellow" => Color::Yellow,
+            "blue" => Color::Blue,
+            "magenta" => Color::Magenta,
+            "cyan" => Color::Cyan,
+            "white" => Color::White,
+            "dark-grey" => Color::DarkGrey,
+            "dark-red" => Color::DarkRed,
+            "dark-green" => Color::DarkGreen,
+            "dark-yellow" => Color::DarkYellow,
+            "dark-blue" => Color::DarkBlue,
+            "dark-magenta" => Color::DarkMagenta,
+            "dark-cyan" => Color::DarkCyan,
+            "grey" => Color::Grey,
+            _ => unreachable!(),
+        }
+    }
+    else if value.is_array() {
+        let value = value.as_array().expect("color was not an array");
+
+        if value.len() != 3 {
+            panic!("color array was not of length 3");
+        }
+
+        Color::Rgb {
+            r: value[0].as_integer().expect("color array value was not an integer") as u8,
+            g: value[1].as_integer().expect("color array value was not an integer") as u8,
+            b: value[2].as_integer().expect("color array value was not an integer") as u8,
+        }
+    }
+    else {
+        panic!("color was not a string or array");
+    }
+    
 }
 
 
