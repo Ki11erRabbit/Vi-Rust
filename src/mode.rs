@@ -1,8 +1,8 @@
 use std::{io, collections::HashMap, rc::Rc, cell::RefCell, time::Instant};
 
-use crossterm::{event::{KeyEvent, KeyCode, KeyModifiers}, execute, cursor::SetCursorStyle, style::{Stylize, StyledContent}};
+use crossterm::{event::{KeyEvent, KeyCode, KeyModifiers}, execute, cursor::{SetCursorStyle, MoveTo}, style::{Stylize, StyledContent}};
 
-use crate::{window::{Pane, PaneContainer}, cursor::{Direction, CursorMove, self}, settings::{Keys, Key}};
+use crate::{window::{Pane, PaneContainer}, cursor::{Direction, CursorMove, self, Cursor}, settings::{Keys, Key}};
 
 
 
@@ -15,7 +15,7 @@ pub trait Mode {
 
     fn change_mode(&mut self, name: &str, pane: &mut dyn Pane);
 
-    fn update_status(&self, pane: &PaneContainer) -> (String, String);
+    fn update_status(&mut self, pane: &PaneContainer) -> (String, String, String);
 
     fn add_keybindings(&mut self, bindings: HashMap<Keys, String>);
 
@@ -26,7 +26,6 @@ pub trait Mode {
     fn execute_command(&mut self, command: &str, pane: &mut dyn Pane);
 
     fn refresh(&mut self);
-
 }
 
 
@@ -253,14 +252,13 @@ impl Mode for Normal {
 
     }
 
-    fn update_status(&self, pane: &PaneContainer) -> (String, String){
+    fn update_status(&mut self, pane: &PaneContainer) -> (String, String, String){
         let (row, col) = pane.get_cursor().borrow().get_cursor();
-        let mut first = String::from("Normal");
 
 
-        let coords = format!("{}:{}", col + 1, row + 1);
+        let mut first = format!("{}:{}", col + 1, row + 1);
 
-        first.push_str(&format!(" {}", coords));
+        
             
         if !self.number_buffer.is_empty() {
             first.push_str(&format!(" {}", self.number_buffer));
@@ -272,14 +270,14 @@ impl Mode for Normal {
                 second.push_str(&format!("{} ", key));
             }
         }
-        let corners = pane.get_corners();
+        /*let corners = pane.get_corners();
 
         let width = corners.1.0 - corners.0.0;
         let height = corners.1.1 - corners.0.1;
 
-        second.push_str(&format!("{:?} ({}, {})", pane.get_corners(), width, height));
+        second.push_str(&format!("{:?} ({}, {})", pane.get_corners(), width, height));*/
 
-        (first, second)
+        (self.get_name(), first, second)
     }
 
 }
@@ -403,49 +401,73 @@ impl Mode for Insert {
     
     fn process_keypress(&mut self, key: KeyEvent, pane: &mut dyn Pane) -> io::Result<bool> {
         self.refresh();
-        
-        match key {
-            KeyEvent {
-                code: KeyCode::Enter,
-                modifiers: KeyModifiers::NONE,
-                ..
-            } => self.insert_newline(pane),
-            KeyEvent {
-                code: KeyCode::Delete,
-                modifiers: KeyModifiers::NONE,
-                ..
-            } => self.delete_char(pane),
-            KeyEvent {
-                code: KeyCode::Backspace,
-                modifiers: KeyModifiers::NONE,
-                ..
-            } => self.backspace(pane),
-            KeyEvent {
-                code: code @ (KeyCode::Char(..) | KeyCode::Tab),
-                modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
-                ..
-            } => self.insert_char(pane, match code {
-                KeyCode::Char(c) => c,
-                KeyCode::Tab => '\t',
-                _ => unreachable!(),
-            }),
-            key_event => {
-                let key = Key::from(key_event);
 
-                let mut flush = false;
-                if key.key == KeyCode::Esc {
-                    flush = true;
-                }
-                self.key_buffer.push(key);
-                if let Some(command) = self.keybindings.clone().borrow().get(&self.key_buffer) {
-                    self.execute_command(command.as_str(), pane);
-                    flush = true;
-                }
-                if flush {
-                    self.flush_key_buffer();
-                }
+        if self.key_buffer.is_empty() {
+            match key {
+                KeyEvent {
+                    code: KeyCode::Enter,
+                    modifiers: KeyModifiers::NONE,
+                    ..
+                } => self.insert_newline(pane),
+                KeyEvent {
+                    code: KeyCode::Delete,
+                    modifiers: KeyModifiers::NONE,
+                    ..
+                } => self.delete_char(pane),
+                KeyEvent {
+                    code: KeyCode::Backspace,
+                    modifiers: KeyModifiers::NONE,
+                    ..
+                } => self.backspace(pane),
+                KeyEvent {
+                    code: code @ (KeyCode::Char(..) | KeyCode::Tab),
+                    modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+                    ..
+                } => self.insert_char(pane, match code {
+                    KeyCode::Char(c) => c,
+                    KeyCode::Tab => '\t',
+                    _ => unreachable!(),
+                }),
+                key_event => {
+                    let key = Key::from(key_event);
 
-                Ok(true)
+                    let mut flush = false;
+                    if key.key == KeyCode::Esc {
+                        flush = true;
+                    }
+                    self.key_buffer.push(key);
+                    if let Some(command) = self.keybindings.clone().borrow().get(&self.key_buffer) {
+                        self.execute_command(command.as_str(), pane);
+                        flush = true;
+                    }
+                    if flush {
+                        self.flush_key_buffer();
+                    }
+
+                    Ok(true)
+                }
+            }
+        }
+        else {
+            match key {
+                key_event => {
+                    let key = Key::from(key_event);
+
+                    let mut flush = false;
+                    if key.key == KeyCode::Esc {
+                        flush = true;
+                    }
+                    self.key_buffer.push(key);
+                    if let Some(command) = self.keybindings.clone().borrow().get(&self.key_buffer) {
+                        self.execute_command(command.as_str(), pane);
+                        flush = true;
+                    }
+                    if flush {
+                        self.flush_key_buffer();
+                    }
+
+                    Ok(true)
+                }
             }
         }
 
@@ -457,19 +479,25 @@ impl Mode for Insert {
     
     }
 
-    fn update_status(&self, pane: &PaneContainer) -> (String, String) {
+    fn update_status(&mut self, pane: &PaneContainer) -> (String, String, String) {
         let (row, col) = pane.get_cursor().borrow().get_cursor();
-        let mut first = String::from("Insert");
 
-        let coords = format!("{}:{}", col + 1, row + 1);
-        first.push_str(&format!(" {}", coords));
+        let first = format!("{}:{}", col + 1, row + 1);
+        
 
         let mut second = String::new();
 
         //second.push_str(&format!("{:?} {}", &pane.borrow_buffer().chars().collect::<String>(), pane.borrow_buffer().line_len()));
-        second.push_str(&format!("{:?}", pane.get_cursor().borrow()));
+        //second.push_str(&format!("{:?}", pane.get_cursor().borrow()));
 
-        (first, second)
+        if !self.key_buffer.is_empty() {
+            for key in &self.key_buffer {
+                second.push_str(&format!("{} ", key));
+            }
+        }
+
+
+        (self.get_name(), first, second)
     }
 
 }
@@ -482,6 +510,7 @@ pub struct Command {
     key_buffer: Vec<Key>,
     timeout: u64,
     time: Instant,
+    cursor_location: Option<Cursor>,
 }
 
 impl Command {
@@ -493,8 +522,17 @@ impl Command {
             key_buffer: Vec::new(),
             timeout: 1000,
             time: Instant::now(),
+            cursor_location: None,
         }
     }
+
+
+    fn backup_cursor(&mut self, pane: &dyn Pane) {
+        if self.cursor_location.is_none() {
+            self.cursor_location = Some(*pane.get_cursor().borrow());
+        }
+    }
+
 }
 
 impl Mode for Command {
@@ -503,19 +541,46 @@ impl Mode for Command {
         "Command".to_string()
     }
 
-    fn update_status(&self, pane: &PaneContainer) -> (String, String) {
+    fn update_status(&mut self, pane: &PaneContainer) -> (String, String, String) {
 
+
+        execute!(io::stdout(),SetCursorStyle::BlinkingBar).unwrap();
+
+        let pane = pane.pane.borrow();
+        let pane = &*pane;
+
+        self.backup_cursor(pane);
+        
+        let cursor = pane.get_cursor();
+        
+        let mut cursor = cursor.borrow_mut();
+
+        let offset = self.get_name().len() - 1;// + 1 for the space and + 1 for the colon
+
+        cursor.set_cursor(CursorMove::Where(offset + self.edit_pos), CursorMove::ToBottom, pane, (0, 0));
+        
         let first = format!(":{}", self.command);
         
         let second = String::new();
+        
 
-        (first, second)
+        (self.get_name(), first, second)
     }
 
     fn change_mode(&mut self, name: &str, pane: &mut dyn Pane) {
         self.command.clear();
         self.edit_pos = 0;
         pane.change_mode(name);
+
+        let cursor = self.cursor_location.take().unwrap();
+
+        execute!(io::stdout(), SetCursorStyle::BlinkingBlock).unwrap();
+        let (x, y) = cursor.get_real_cursor();
+
+        *pane.get_cursor().borrow_mut() = cursor;
+
+        execute!(io::stdout(), MoveTo(x as u16,y as u16)).unwrap();
+        
     }
 
     fn add_keybindings(&mut self, keybindings: HashMap<Keys, String>) {
@@ -559,6 +624,7 @@ impl Mode for Command {
             },
             command => {
                 pane.run_command(command);
+
             }
 
         }
@@ -566,6 +632,7 @@ impl Mode for Command {
 
     fn process_keypress(&mut self, key: KeyEvent, pane: &mut dyn Pane) -> io::Result<bool> {
         self.refresh();
+
 
         match key {
             KeyEvent {
@@ -634,7 +701,5 @@ impl Mode for Command {
             }
 
         }
-
     }
-
 }

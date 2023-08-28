@@ -15,7 +15,7 @@ use crossterm::{terminal::{self, ClearType}, execute, cursor, queue};
 
 use crate::mode::{Mode, Normal, Insert, Command};
 use crate::cursor::{Cursor, Direction, CursorMove};
-use crate::settings::{Settings, Keys};
+use crate::{apply_colors, settings::Settings};
 
 
 
@@ -58,6 +58,8 @@ impl Window {
             .unwrap();
         let pane: Rc<RefCell<dyn Pane>> = Rc::new(RefCell::new(TextPane::new(settings.clone(), channels.0.clone())));
 
+        pane.borrow_mut().set_cursor_size(win_size);
+        
         let panes = vec![PaneContainer::new(win_size, win_size, pane.clone(), settings.clone())];
         let mut known_file_types = HashSet::new();
         known_file_types.insert("txt".to_string());
@@ -112,6 +114,8 @@ impl Window {
 
         self.panes[self.active_pane].change_pane(new_active_pane);
         self.panes[new_active_pane_index].change_pane(active_pane);
+
+        self.panes[self.active_pane].get_pane().borrow_mut().set_cursor_size(self.panes[self.active_pane].get_size());
     }
 
     fn insert_pane(&mut self, index: usize, pane: PaneContainer) {
@@ -415,15 +419,14 @@ impl Window {
     
     fn draw_rows(&mut self) {
         let rows = self.size.1;
-        let cols = self.size.0;
+        //let cols = self.size.0;
 
 
         //eprintln!("panes: {}", self.panes.len());
-        let panes = self.panes.len();
+        //let panes = self.panes.len();
 
-        let mut offset = 0;
+        let offset = 0;
         for i in 0..rows {
-            let mut row_drawn = false;
 
             let mut pane_index = 0;
             let mut window_index = 0;
@@ -455,19 +458,15 @@ impl Window {
                 offset = 1;
             }*/
             
-            queue!(
+            /*queue!(
                 self.contents,
                 terminal::Clear(ClearType::UntilNewLine),
-            ).unwrap();
+            ).unwrap();*/
 
-            let color_settings = self.settings.borrow().colors.pane;
+            let color_settings = &self.settings.borrow().colors.pane;
 
-            self.contents.push_str("\r\n"
-                                   .attribute(color_settings.attributes)
-                                   .with(color_settings.foreground_color)
-                                   .on(color_settings.background_color)
-                                   .underline(color_settings.underline_color)
-            );
+            self.contents.push_str(apply_colors!("\r\n", color_settings));
+
 
         }
 
@@ -481,32 +480,28 @@ impl Window {
             terminal::Clear(ClearType::UntilNewLine),
         ).unwrap();
 
+        let settings = self.settings.borrow();
         
-        
-        let color_settings = self.settings.borrow().colors.ui;
+        let color_settings = &settings.colors.ui;
 
-        let (first, second) = self.panes[self.active_pane].get_status();
-        let total = first.len() + second.len();
+        let (name, first, second) = self.panes[self.active_pane].get_status();
+        let total = name.len() + 1 + first.len() + second.len();// plus one for the space
+
+        let mode_color = &settings.colors.mode.get(&name).unwrap_or(&color_settings);
+
+        self.contents.push_str(apply_colors!(format!("{}", name), mode_color));
+
+        self.contents.push_str(apply_colors!(" ", color_settings));
+
+
+        self.contents.push_str(apply_colors!(first, color_settings));
         
-        self.contents.push_str(first.as_str()
-                                 .attribute(color_settings.attributes)
-                                 .with(color_settings.foreground_color)
-                                 .on(color_settings.background_color)
-                                 .underline(color_settings.underline_color)
-        );
         let remaining = self.size.0.saturating_sub(total);
-        self.contents.push_str(" ".to_owned().repeat(remaining).as_str()
-                               .attribute(color_settings.attributes)
-                               .with(color_settings.foreground_color)
-                               .on(color_settings.background_color)
-                               .underline(color_settings.underline_color)
-        );
-        self.contents.push_str(second.as_str()
-                                 .attribute(color_settings.attributes)
-                                 .with(color_settings.foreground_color)
-                                 .on(color_settings.background_color)
-                                 .underline(color_settings.underline_color)
-        );
+
+        self.contents.push_str(apply_colors!(" ".repeat(remaining), color_settings));
+
+
+        self.contents.push_str(apply_colors!(second, color_settings));
     }
 
     pub fn refresh_screen(&mut self) -> io::Result<()> {
@@ -742,7 +737,7 @@ impl Clone for PaneContainer {
 }
 
 pub struct PaneContainer {
-    pane: Rc<RefCell<dyn Pane>>,
+    pub pane: Rc<RefCell<dyn Pane>>,
     duplicate: bool,
     max_size: (usize, usize),
     size: (usize, usize),
@@ -955,7 +950,7 @@ impl PaneContainer {
         (self.position, (x, y))
     }
 
-    pub fn get_status(&self) -> (String, String) {
+    pub fn get_status(&self) -> (String, String, String) {
         self.pane.borrow().get_status(self)
     }
 
@@ -999,7 +994,7 @@ pub trait Pane {
 
     fn scroll_cursor(&mut self, container: &PaneContainer);
 
-    fn get_status(&self, container: &PaneContainer) -> (String, String);
+    fn get_status(&self, container: &PaneContainer) -> (String, String, String);
 
     fn run_command(&mut self, command: &str);
 
@@ -1128,15 +1123,10 @@ impl Pane for TextPane {
 
         if self.settings.borrow().editor_settings.border {
 
-            let color_settings = self.settings.borrow().colors.ui;
+            let color_settings = &self.settings.borrow().colors.ui;
             
             if index == 0 && y1 != 0 {
-                output.push_str("-".repeat(cols).as_str()
-                                .attribute(color_settings.attributes)
-                                .with(color_settings.foreground_color)
-                                .on(color_settings.background_color)
-                                .underline(color_settings.underline_color)
-                );
+                output.push_str(apply_colors!("-".repeat(cols), color_settings));
                 return;
             }
             else {
@@ -1144,12 +1134,7 @@ impl Pane for TextPane {
             }
 
             if x1 != 0 {
-                output.push_str("|"
-                                .attribute(color_settings.attributes)
-                                .with(color_settings.foreground_color)
-                                .on(color_settings.background_color)
-                                .underline(color_settings.underline_color)
-                );
+                output.push_str(apply_colors!("|", color_settings));
                 cols = cols.saturating_sub(1);
             }
         }
@@ -1162,14 +1147,11 @@ impl Pane for TextPane {
             number_of_lines += 1;
         }
 
-        //number_of_lines = self.borrow_buffer().chars().filter(|c| *c == '\n').count();
-
-
         let mut num_width = 0;
 
         if self.settings.borrow().editor_settings.line_number {
 
-            let color_settings = self.settings.borrow().colors.ui;
+            let color_settings = &self.settings.borrow().colors.ui;
             
 
             if !self.settings.borrow().editor_settings.relative_line_number {
@@ -1182,12 +1164,7 @@ impl Pane for TextPane {
                 }
 
                 if real_row + 1 <= number_of_lines {
-                    output.push_str(format!("{:width$}", real_row + 1, width = num_width).as_str()
-                                .attribute(color_settings.attributes)
-                                .with(color_settings.foreground_color)
-                                .on(color_settings.background_color)
-                                .underline(color_settings.underline_color)
-                    );
+                    output.push_str(apply_colors!(format!("{:width$}", real_row + 1, width = num_width), color_settings));
                 }
 
             }
@@ -1200,32 +1177,20 @@ impl Pane for TextPane {
                     num_width += 1;
                 }
                 if real_row == self.cursor.borrow().get_cursor().1 && real_row + 1 <= number_of_lines {
-                    output.push_str(format!("{:<width$}", real_row + 1 , width = num_width).as_str()
-                                .attribute(color_settings.attributes)
-                                .with(color_settings.foreground_color)
-                                .on(color_settings.background_color)
-                                .underline(color_settings.underline_color)
-                    );
+                    output.push_str(apply_colors!(format!("{:<width$}", real_row + 1 , width = num_width), color_settings));
                 }
                 else if real_row + 1 <= number_of_lines {
-                    output.push_str(format!("{:width$}",
+                    output.push_str(apply_colors!(format!("{:width$}",
                                             ((real_row) as isize - (self.cursor.borrow().get_cursor().1 as isize)).abs() as usize,
-                                            width = num_width).as_str()
-                                .attribute(color_settings.attributes)
-                                .with(color_settings.foreground_color)
-                                .on(color_settings.background_color)
-                                .underline(color_settings.underline_color)
-                    );
+                                            width = num_width), color_settings));
                 }
             }
 
-            //output.push_str(format!("{}", Attribute::Reset).as_str());
         }
-        //cols -= num_width;
 
         self.cursor.borrow_mut().number_line_size = num_width;
 
-        let color_settings = self.settings.borrow().colors.pane;
+        let color_settings = &self.settings.borrow().colors.pane;
 
 
         
@@ -1236,22 +1201,12 @@ impl Pane for TextPane {
                 match c {
                     '\t' => {
                         count += self.settings.borrow().editor_settings.tab_size;
-                        output.push_str(" ".repeat(self.settings.borrow().editor_settings.tab_size).as_str()
-                                        .attribute(color_settings.attributes)
-                                        .with(color_settings.foreground_color)
-                                        .on(color_settings.background_color)
-                                        .underline(color_settings.underline_color)
-                        )
+                        output.push_str(apply_colors!(" ".repeat(self.settings.borrow().editor_settings.tab_size), color_settings));
                     },
-                    '\n' => output.push_str(""),
+                    '\n' => output.push_str(apply_colors!(" ", color_settings)),
                     c => {
                         count += 1;
-                        output.push_str(c.to_string()
-                                    .attribute(color_settings.attributes)
-                                    .with(color_settings.foreground_color)
-                                    .on(color_settings.background_color)
-                                    .underline(color_settings.underline_color)
-                        )
+                        output.push_str(apply_colors!(c.to_string(), color_settings));
                     },
                 }
             }
@@ -1259,43 +1214,20 @@ impl Pane for TextPane {
                                      output.push_str("");
             });
 
-            output.push_str(" ".repeat(cols.saturating_sub(count + num_width)).as_str()
-                            .attribute(color_settings.attributes)
-                            .with(color_settings.foreground_color)
-                            .on(color_settings.background_color)
-                            .underline(color_settings.underline_color)
-            );
-
-            //output.push_str(" ".repeat(cols - row.chars().count() / 2).as_str());
-
-            /*queue!(
-                output,
-                terminal::Clear(ClearType::UntilNewLine),
-            ).unwrap();*/
+            output.push_str(apply_colors!(" ".repeat(cols.saturating_sub(count + num_width)), color_settings));
         }
         else if real_row >= number_of_lines {
-            output.push_str(" ".repeat(cols).as_str()
-                            .attribute(color_settings.attributes)
-                            .with(color_settings.foreground_color)
-                            .on(color_settings.background_color)
-                            .underline(color_settings.underline_color)
-            );
-
-            /*queue!(
-                output,
-                terminal::Clear(ClearType::UntilNewLine),
-            ).unwrap();*/
+            output.push_str(apply_colors!(" ".repeat(cols), color_settings));
         }
         else {
-            output.push_str(" ".repeat(cols.saturating_sub(num_width)).as_str()
+            output.push_str(apply_colors!(" ".repeat(cols.saturating_sub(num_width)), color_settings));
+        }
+        /*output.push_str(" "
                             .attribute(color_settings.attributes)
                             .with(color_settings.foreground_color)
                             .on(color_settings.background_color)
                             .underline(color_settings.underline_color)
-            );
-        }
-
-        //output.push_str("\r\n");
+        );*/
     }
 
     fn scroll_cursor(&mut self, container: &PaneContainer) {
@@ -1332,8 +1264,8 @@ impl Pane for TextPane {
     }
 
 
-    fn get_status(&self, container: &PaneContainer) -> (String, String) {
-        self.mode.borrow().update_status(container)
+    fn get_status(&self, container: &PaneContainer) -> (String, String, String) {
+        self.mode.borrow_mut().update_status(container)
     }
 
     fn change_mode(&mut self, name: &str) {

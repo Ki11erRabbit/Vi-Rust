@@ -6,12 +6,22 @@ tab_size = 4
 use_spaces = true
 key_timeout = 100
     
-[color]
-foreground_color = "grey"
-background_color = "cyan"
-underline_color = "magenta"
+[color.pane]
+foreground = "grey"
+background = "cyan"
+underline = "magenta"
+attribute = []
 
-    
+[color.ui]
+foreground = "grey"
+background = "cyan"
+underline = "magenta"
+attribute = []
+
+[color]
+mode = [{ mode = "Normal", color = { foreground = "black", background = "cyan", attribute = ["bold"] } }, { mode = "Insert", color = { foreground = "black", background = "green", attribute = ["bold"] } }, { mode = "Command", color = { foreground = "black", background = "magenta", attirbute ["bold"] } }]
+
+        
 [normal]
 left = [{ keys = [{ key = "h", mod = [] }] }, { keys = [{ key = "left", mod = [] }] }]
 down = [{ keys = [{ key = "j", mod = [] }] }, { keys = [{ key = "down", mod = [] }] }, { keys = [{ key = "enter", mod = [] }] }]

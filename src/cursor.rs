@@ -4,9 +4,11 @@ use crate::window::{Pane, PaneContainer};
 
 pub enum CursorMove {
     Amount(usize),
+    Where(usize),
     ToEnd,
     ToStart,
     Nothing,
+    ToBottom,
 }
 
 pub enum Direction {
@@ -130,7 +132,10 @@ impl Cursor {
             CursorMove::Amount(n) => {
                 self.x = n % (number_of_cols + 1);
             },
-            CursorMove::ToEnd => {
+            CursorMove::Where(n) => {
+                self.x = n;
+            },
+            CursorMove::ToEnd | CursorMove::ToBottom => {
                 self.x = self.cols.min(number_of_cols);
                 self.went_right = true;
             },
@@ -144,6 +149,9 @@ impl Cursor {
             CursorMove::Amount(n) => {
                 self.y = n % (number_of_lines + 1)
             },
+            CursorMove::Where(n) => {
+                self.y = n;
+            },
             CursorMove::ToEnd => {
                 self.y = self.rows.min(number_of_lines);
                 self.went_down = true;
@@ -151,6 +159,9 @@ impl Cursor {
             CursorMove::ToStart => {
                 self.y = 0;
                 self.went_down = false;
+            },
+            CursorMove::ToBottom => {
+                self.y = self.rows + 1;
             },
             CursorMove::Nothing => {},
         }

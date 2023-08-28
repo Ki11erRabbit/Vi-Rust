@@ -1,8 +1,24 @@
 use core::fmt;
 use std::collections::HashMap;
 
-use crossterm::{event::{KeyCode, KeyModifiers, KeyEvent}, style::{Attribute, Color}};
+use crossterm::{event::{KeyCode, KeyModifiers, KeyEvent}, style::{Attribute, Color, Attributes}};
 use serde::Deserialize;
+
+#[macro_export]
+macro_rules! apply_colors {
+    ($input:expr, $settings:expr) => {
+        {
+            let mut inter = $input.with($settings.foreground_color)
+                .on($settings.background_color)
+                .underline($settings.underline_color);
+
+            for attribute in $settings.attributes.iter() {
+                inter = inter.attribute(*attribute);
+            }
+            inter
+        }
+    };
+}
 
 pub struct KeyCodeWrapper(KeyCode);
 
@@ -481,36 +497,61 @@ impl Default for EditorSettings {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ColorScheme {
     pub foreground_color: Color,
     pub background_color: Color,
     pub underline_color: Color,
-    pub attributes: Attribute,
+    pub attributes: Vec<Attribute>,
 }
 
 impl Default for ColorScheme {
     fn default() -> Self {
         Self {
-            foreground_color: Color::Cyan,
-            background_color: Color::Green,
+            foreground_color: Color::Reset,
+            background_color: Color::Reset,
             underline_color: Color::Reset,
-            attributes: Attribute::NoHidden,
+            attributes: Vec::new(),
         }
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EditorColors {
     pub pane: ColorScheme,
     pub ui: ColorScheme,
+    pub mode: HashMap<String, ColorScheme>,
 }
 
 impl Default for EditorColors {
     fn default() -> Self {
+        let mut mode = HashMap::new();
+
+        mode.insert("Normal".to_string(), ColorScheme {
+            foreground_color: Color::Black,
+            background_color: Color::Cyan,
+            underline_color: Color::Reset,
+            attributes: vec![Attribute::Bold],
+        });
+
+        mode.insert("Insert".to_string(), ColorScheme {
+            foreground_color: Color::Black,
+            background_color: Color::Green,
+            underline_color: Color::Reset,
+            attributes: vec![Attribute::Bold],
+        });
+
+        mode.insert("Command".to_string(), ColorScheme {
+            foreground_color: Color::Black,
+            background_color: Color::Magenta,
+            underline_color: Color::Reset,
+            attributes: vec![Attribute::Bold],
+        });
+        
         Self {
             pane: ColorScheme::default(),
             ui: ColorScheme::default(),
+            mode,
         }
     }
 }
@@ -729,7 +770,60 @@ fn parse_color_scheme(table: &toml::Value) -> ColorScheme {
         Some(value) => color_scheme.underline_color = parse_color(value),
     }
 
+    match table.get("attributes") {
+        None => color_scheme.attributes = Vec::new(),
+        Some(value) => color_scheme.attributes = parse_attributes(value),
+    }
+
     color_scheme
+}
+
+fn parse_attributes(list: &toml::Value) -> Vec<Attribute> {
+    let list = list.as_array().expect("attributes were not an array");
+
+    let mut attributes = Vec::new();
+
+    for attribute in list {
+        let attribute = attribute.as_str().expect("attribute was not a string");
+
+        match attribute {
+            "reset" => attributes.push(Attribute::Reset),
+            "bold" => attributes.push(Attribute::Bold),
+            "dim" => attributes.push(Attribute::Dim),
+            "italic" => attributes.push(Attribute::Italic),
+            "underlined" => attributes.push(Attribute::Underlined),
+            "double_underlined" => attributes.push(Attribute::DoubleUnderlined),
+            "under_curled" => attributes.push(Attribute::Undercurled),
+            "under_dotted" => attributes.push(Attribute::Underdotted),
+            "under_dashed" => attributes.push(Attribute::Underdashed),
+            "slow_blink" => attributes.push(Attribute::SlowBlink),
+            "rapid_blink" => attributes.push(Attribute::RapidBlink),
+            "reverse" => attributes.push(Attribute::Reverse),
+            "hidden" => attributes.push(Attribute::Hidden),
+            "crossed_out" => attributes.push(Attribute::CrossedOut),
+            "fraktur" => attributes.push(Attribute::Fraktur),
+            "no_bold" => attributes.push(Attribute::NoBold),
+            "normal_intensity" => attributes.push(Attribute::NormalIntensity),
+            "no_italic" => attributes.push(Attribute::NoItalic),
+            "no_underline" => attributes.push(Attribute::NoUnderline),
+            "no_blink" => attributes.push(Attribute::NoBlink),
+            "no_reverse" => attributes.push(Attribute::NoReverse),
+            "no_hidden" => attributes.push(Attribute::NoHidden),
+            "not_crossed_out" => attributes.push(Attribute::NotCrossedOut),
+            "framed" => attributes.push(Attribute::Framed),
+            "encircled" => attributes.push(Attribute::Encircled),
+            "overlined" => attributes.push(Attribute::OverLined),
+            "not_framed_or_encircled" => attributes.push(Attribute::NotFramedOrEncircled),
+            "not_overlined" => attributes.push(Attribute::NotOverLined),
+            value => {
+                panic!("unknown attribute: {}", value);
+            }
+
+        }
+
+    }
+
+    attributes
 }
 
 fn parse_color(value: &toml::Value) -> Color {
