@@ -523,14 +523,24 @@ impl Window {
         self.draw_rows();
         self.draw_status_bar();
 
-        let (x, y) = self.panes[self.active_pane].get_cursor().borrow().get_real_cursor();
+        let cursor = self.panes[self.active_pane].get_cursor();
+        let cursor = cursor.borrow();
+
+        let (x, y) = cursor.get_real_cursor();
         //eprintln!("x: {} y: {}", x, y);
         let x = x + self.panes[self.active_pane].get_position().0;
         let y = y + self.panes[self.active_pane].get_position().1;
         //eprintln!("x: {} y: {}", x, y);
 
         
-        let x = x + self.panes[self.active_pane].get_cursor().borrow().number_line_size;
+        let x = x + cursor.number_line_size;
+
+        let (x, y) = if cursor.ignore_offset {
+            cursor.get_draw_cursor()
+        }
+        else {
+            (x, y)
+        };
 
         queue!(
             self.contents,

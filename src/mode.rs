@@ -1,6 +1,6 @@
 use std::{io, collections::HashMap, rc::Rc, cell::RefCell, time::Instant};
 
-use crossterm::{event::{KeyEvent, KeyCode, KeyModifiers}, execute, cursor::{SetCursorStyle, MoveTo}, style::{Stylize, StyledContent}};
+use crossterm::{event::{KeyEvent, KeyCode, KeyModifiers}, execute, cursor::{SetCursorStyle, MoveTo}, style::{Stylize, StyledContent}, terminal};
 
 use crate::{window::{Pane, PaneContainer}, cursor::{Direction, CursorMove, self, Cursor}, settings::{Keys, Key}};
 
@@ -554,10 +554,12 @@ impl Mode for Command {
         let cursor = pane.get_cursor();
         
         let mut cursor = cursor.borrow_mut();
+        cursor.number_line_size = 0;
+        cursor.ignore_offset = true;
 
-        let offset = self.get_name().len() - 1;// + 1 for the space and + 1 for the colon
+        let offset = self.get_name().len() + 2;// + 1 for the space and + 1 for the colon
 
-        cursor.set_cursor(CursorMove::Where(offset + self.edit_pos), CursorMove::ToBottom, pane, (0, 0));
+        cursor.set_draw_cursor(offset + self.edit_pos, terminal::size().unwrap().1 as usize);
         
         let first = format!(":{}", self.command);
         

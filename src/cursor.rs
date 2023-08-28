@@ -1,4 +1,5 @@
 use crop::Rope;
+use crossterm::terminal;
 
 use crate::window::{Pane, PaneContainer};
 
@@ -28,6 +29,8 @@ pub enum Direction {
 pub struct Cursor {
     x: usize,
     y: usize,
+    draw_x: usize,
+    draw_y: usize,
     went_down: bool,
     went_right: bool,
     rows: usize,
@@ -35,6 +38,7 @@ pub struct Cursor {
     pub row_offset: usize,
     pub col_offset: usize,
     pub number_line_size: usize,
+    pub ignore_offset: bool,
 }
 
 impl Cursor {
@@ -42,6 +46,8 @@ impl Cursor {
         Cursor {
             x: 0,
             y: 0,
+            draw_x: 0,
+            draw_y: 0,
             went_down: false,
             went_right: false,
             rows: win_size.1,
@@ -49,7 +55,17 @@ impl Cursor {
             row_offset: 0,
             col_offset: 0,
             number_line_size: 0,
+            ignore_offset: false,
         }
+    }
+
+    pub fn set_draw_cursor(&mut self, x: usize, y: usize) {
+        self.draw_x = x;
+        self.draw_y = y;
+    }
+
+    pub fn get_draw_cursor(&self) -> (usize, usize) {
+        (self.draw_x, self.draw_y)
     }
 
     pub fn resize(&mut self, win_size: (usize, usize)) {
@@ -131,37 +147,46 @@ impl Cursor {
         match x {
             CursorMove::Amount(n) => {
                 self.x = n % (number_of_cols + 1);
+                self.draw_x = self.x;
             },
             CursorMove::Where(n) => {
                 self.x = n;
+                self.draw_x = self.x;
             },
             CursorMove::ToEnd | CursorMove::ToBottom => {
                 self.x = self.cols.min(number_of_cols);
                 self.went_right = true;
+                self.draw_x = self.x;
             },
             CursorMove::ToStart => {
                 self.x = 0;
                 self.went_right = false;
+                self.draw_x = self.x;
             },
             CursorMove::Nothing => {},
         }
         match y {
             CursorMove::Amount(n) => {
-                self.y = n % (number_of_lines + 1)
+                self.y = n % (number_of_lines + 1);
+                self.draw_y = self.y;
             },
             CursorMove::Where(n) => {
                 self.y = n;
+                self.draw_y = self.y;
             },
             CursorMove::ToEnd => {
                 self.y = self.rows.min(number_of_lines);
                 self.went_down = true;
+                self.draw_y = self.y;
             },
             CursorMove::ToStart => {
                 self.y = 0;
                 self.went_down = false;
+                self.draw_y = self.y;
             },
             CursorMove::ToBottom => {
-                self.y = self.rows + 1;
+                self.y = terminal::size().unwrap().1 as usize;
+                self.draw_y = self.y;
             },
             CursorMove::Nothing => {},
         }
@@ -181,6 +206,7 @@ impl Cursor {
             Direction::Up => {
                 self.y = self.y.saturating_sub(n);
                 self.went_down = false;
+                self.draw_y = self.y;
             },
             Direction::Down => {
                 if self.y < number_of_lines {
@@ -193,10 +219,12 @@ impl Cursor {
                     }
                 }
                 self.went_down = true;
+                self.draw_y = self.y;
             },
             Direction::Left => {
                 self.x = self.x.saturating_sub(n);
                 self.went_right = false;
+                self.draw_x = self.x;
             },
             Direction::Right => {
                 if self.x < number_of_cols {
@@ -214,29 +242,36 @@ impl Cursor {
                     self.x = number_of_cols;
                 }
                 self.went_right = true;
+
+                self.draw_x = self.x;
             },
             Direction::LineStart => {
                 self.x = 0;
                 self.went_right = false;
+                self.draw_x = self.x;
             },
             Direction::LineEnd => {
                 self.x = number_of_cols;
                 self.went_right = true;
+                self.draw_x = self.x;
             },
             Direction::FileTop => {
                 self.y = 0;
                 self.row_offset = 0;
                 self.went_down = false;
+                self.draw_y = self.y;
             },
             Direction::FileBottom => {
                 self.y = number_of_lines - 1;
                 self.row_offset = number_of_lines.saturating_sub(self.rows + 1);
                 self.went_down = true;
+                self.draw_y = self.y;
             },
             Direction::PageUp => {
                 self.y = self.y.saturating_sub(self.rows * n);
                 self.row_offset = self.row_offset.saturating_sub(self.rows * n);
                 self.went_down = false;
+                self.draw_y = self.y;
             },
             Direction::PageDown => {
                 let new_y = (self.y + (self.rows * n)) % number_of_lines;
@@ -248,6 +283,7 @@ impl Cursor {
                 }
                 self.row_offset = self.row_offset.saturating_add(self.rows * n);
                 self.went_down = true;
+                self.draw_y = self.y;
             },
         }
         
