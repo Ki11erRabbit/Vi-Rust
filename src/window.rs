@@ -64,7 +64,8 @@ impl Window {
 
         pane.borrow_mut().set_cursor_size(win_size);
         
-        let panes = vec![vec![PaneContainer::new(win_size, win_size, pane.clone(), settings.clone())]];
+        let mut panes = vec![vec![PaneContainer::new(win_size, win_size, pane.clone(), settings.clone())]];
+        
         let mut known_file_types = HashSet::new();
         known_file_types.insert("txt".to_string());
         let buffers = vec![TextBuffer::new()];
@@ -433,7 +434,7 @@ impl Window {
     
     fn draw_rows(&mut self) {
         let rows = self.size.1;
-        //let cols = self.size.0;
+        let cols = self.size.0;
 
 
         //eprintln!("panes: {}", self.panes.len());
@@ -451,17 +452,30 @@ impl Window {
                     }
                     let ((start_x, start_y), (end_x, end_y)) = self.panes[l][pane_index].get_corners();
                     if start_y <= i && end_y >= i {
-                        self.buffers[l].contents.push(Vec::new());
+                        if self.buffers[l].contents.len() <= i {
+                            self.buffers[l].contents.push(Vec::new());
+                        }
+
+                        let mut counter = 0;
+                        while start_x != counter && self.buffers[l].contents[i].len() < start_x -1 {
+                            self.buffers[l].contents[i].push(None);
+                            counter += 1;
+                        }
+                        
                         self.panes[l][pane_index].draw_row(i - start_y + offset, &mut self.buffers[l].contents[i]);
                         window_index += end_x - start_x + 1;
+                        
                     }
                     else {
-                        self.buffers[l].contents[i].push(None);
-                        window_index += 1;
-
-                        continue;
+                        if self.buffers[l].contents.len() <= i {
+                            self.buffers[l].contents.push(Vec::new());
+                        }
                     }
                     pane_index += 1;
+                }
+
+                while self.buffers[l].contents[i].len() < cols {
+                    self.buffers[l].contents[i].push(None);
                 }
 
                 let color_settings = &self.settings.borrow().colors.pane;
@@ -512,7 +526,7 @@ impl Window {
 
 
     pub fn draw_status_bar(&mut self) {
-        Self::clear_screen().unwrap();
+        //Self::clear_screen().unwrap();
         queue!(
             self.contents,
             terminal::Clear(ClearType::UntilNewLine),
@@ -618,6 +632,7 @@ impl StyledChar {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct TextBuffer {
     pub contents: Vec<Vec<Option<StyledChar>>>,
 }
@@ -659,13 +674,17 @@ impl FinalTextBuffer {
             for x in 0..layers[0].contents[y].len() {
 
                 let mut curr_layer = top_layer;
-                while layers[curr_layer].contents[y][x].is_none() && curr_layer > 0 {
+                
+                while layers[curr_layer].contents[y].len() == 0 || layers[curr_layer].contents[y][x].is_none() && curr_layer > 0 {
                     curr_layer -= 1;
                 }
 
                 if let Some(chr) = layers[curr_layer].contents[y][x].take() {
                     self.contents.push(Vec::new());
                     self.contents[y].push(chr);
+                }
+                else {
+                    self.contents[y].push(StyledChar::new(' ', ColorScheme::default()));
                 }
             }
         }
