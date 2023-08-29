@@ -532,7 +532,14 @@ impl Window {
                 }
                 let ((start_x, start_y), (end_x, end_y)) = self.panes[pane_index].get_corners();
                 if start_y <= i && end_y >= i {
-                    self.panes[pane_index].draw_row(i - start_y + offset, &mut self.contents);
+
+                    
+                    let buffer = self.panes[pane_index].draw_row(i - start_y + offset);
+
+                    for segment in buffer {
+                        self.contents.push_str(apply_colors!(segment.text, segment.color));
+                    }
+                    
                     window_index += end_x - start_x + 1;
                 }
                 pane_index += 1;

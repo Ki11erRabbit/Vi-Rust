@@ -188,6 +188,8 @@ impl Pane for TextPane {
 
         let ((x1, y1), _) = container.get_corners();
 
+        let mut output = Vec::new();
+
         if self.settings.borrow().editor_settings.border {
 
             let color_settings = &self.settings.borrow().colors.ui;
@@ -359,12 +361,8 @@ impl Pane for TextPane {
             
             //output.push_str(apply_colors!(" ".repeat(cols.saturating_sub(num_width)), color_settings));
         }
-        /*output.push_str(" "
-                            .attribute(color_settings.attributes)
-                            .with(color_settings.foreground_color)
-                            .on(color_settings.background_color)
-                            .underline(color_settings.underline_color)
-        );*/
+
+        output
     }
 
     fn scroll_cursor(&mut self, container: &PaneContainer) {
