@@ -7,7 +7,7 @@ use crop::{Rope, RopeSlice};
 use crossterm::event::KeyEvent;
 use crossterm::style::Stylize;
 
-use crate::{cursor::{Cursor, Direction}, mode::{Mode, Normal, Insert, Command}, settings::Settings, window::{Message, WindowContents}, apply_colors};
+use crate::{cursor::{Cursor, Direction}, mode::{Mode, base::{Normal, Insert, Command}}, settings::Settings, window::{Message, WindowContents}, apply_colors};
 
 use super::PaneContainer;
 
