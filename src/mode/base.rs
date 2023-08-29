@@ -247,6 +247,7 @@ impl Mode for Normal {
                 second.push_str(&format!("{} ", key));
             }
         }
+
         /*let corners = pane.get_corners();
 
         let width = corners.1.0 - corners.0.0;

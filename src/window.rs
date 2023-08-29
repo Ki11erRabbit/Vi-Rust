@@ -64,16 +64,19 @@ impl Window {
 
         pane.borrow_mut().set_cursor_size(win_size);
         
-        let mut panes = vec![vec![PaneContainer::new(win_size, win_size, pane.clone(), settings.clone())]];
+        let mut panes = vec![vec![PaneContainer::new(win_size, win_size, pane.clone(), settings.clone())], vec![PaneContainer::new(win_size, (10, 10), pane.clone(), settings.clone()), PaneContainer::new(win_size, (10, 10), pane.clone(), settings.clone())]];
+
+        panes[1][0].set_position((10, 10));
+        panes[1][1].set_position((30, 10));
         
         let mut known_file_types = HashSet::new();
         known_file_types.insert("txt".to_string());
-        let buffers = vec![TextBuffer::new()];
+        let buffers = vec![TextBuffer::new(); 2];
         
         Self {
             size: win_size,
             contents: WindowContents::new(),
-            active_panes: vec![0],
+            active_panes: vec![0, 0],
             active_layer: 0,
             panes,
             buffers,
@@ -180,9 +183,14 @@ impl Window {
     fn horizontal_split(&mut self) {
         //eprintln!("split panes: {:?}", self.panes.len());
         let active_pane_size = self.panes[self.active_layer][self.active_panes[self.active_layer]].get_size();
-        let new_pane_size = (active_pane_size.0, active_pane_size.1 / 2);
+        let new_pane_size = if active_pane_size.0 % 2 == 0 {
+            (active_pane_size.0, active_pane_size.1 / 2)
+        }
+        else {
+            (active_pane_size.0, active_pane_size.1 / 2 -1)
+        };
         let old_pane_size = if active_pane_size.1 % 2 == 0 {
-            new_pane_size
+            (new_pane_size.0, new_pane_size.1)
         }
         else {
             (new_pane_size.0, new_pane_size.1 + 1)
@@ -196,6 +204,7 @@ impl Window {
         let mut new_pane = self.panes[self.active_layer][self.active_panes[self.active_layer]].clone();
 
         let ((x,_), (_, y)) = self.panes[self.active_layer][self.active_panes[self.active_layer]].get_corners();
+        
         let new_pane_position = (x, y + 1);
 
         new_pane.set_position(new_pane_position);
@@ -210,7 +219,12 @@ impl Window {
 
     fn vertical_split(&mut self) {
         let active_pane_size = self.panes[self.active_layer][self.active_panes[self.active_layer]].get_size();
-        let new_pane_size = (active_pane_size.0 / 2, active_pane_size.1);
+        let new_pane_size = if active_pane_size.0 % 2 == 0 {
+            (active_pane_size.0 / 2, active_pane_size.1)
+        }
+        else {
+            (active_pane_size.0 / 2 - 1, active_pane_size.1)
+        };
         let old_pane_size = if active_pane_size.0 % 2 == 0 {
             new_pane_size
         }
@@ -440,8 +454,6 @@ impl Window {
         //eprintln!("panes: {}", self.panes.len());
         //let panes = self.panes.len();
 
-        let offset = 0;
-
         for l in 0..self.panes.len() {
             for i in 0..rows {
                 let mut pane_index = 0;
@@ -451,24 +463,35 @@ impl Window {
                         break;
                     }
                     let ((start_x, start_y), (end_x, end_y)) = self.panes[l][pane_index].get_corners();
-                    if start_y <= i && end_y >= i {
-                        if self.buffers[l].contents.len() <= i {
-                            self.buffers[l].contents.push(Vec::new());
-                        }
 
-                        let mut counter = 0;
-                        while start_x != counter && self.buffers[l].contents[i].len() < start_x -1 {
+
+                    if self.buffers[l].contents.len() <= i {
+                        self.buffers[l].contents.push(Vec::new());
+                    }
+
+                    while window_index <= start_x {
+                        self.buffers[l].contents[i].push(None);
+                        window_index += 1;
+                    }
+                    
+                    if start_y <= i && end_y >= i {
+
+                        /*while window_index < start_x.saturating_sub(1) {
                             self.buffers[l].contents[i].push(None);
-                            counter += 1;
-                        }
+                            window_index += 1;
+                        }*/
+
+                        /*while self.buffers[l].contents[i].len() < start_x.saturating_sub(1) {
+                            self.buffers[l].contents[i].push(None);
+                        }*/
                         
-                        self.panes[l][pane_index].draw_row(i - start_y + offset, &mut self.buffers[l].contents[i]);
+                        self.panes[l][pane_index].draw_row(i - start_y, &mut self.buffers[l].contents[i]);
                         window_index += end_x - start_x + 1;
                         
                     }
                     else {
                         if self.buffers[l].contents.len() <= i {
-                            self.buffers[l].contents.push(Vec::new());
+                            self.buffers[l].contents.push(vec![None; cols]);
                         }
                     }
                     pane_index += 1;
@@ -557,6 +580,12 @@ impl Window {
     }
 
     pub fn refresh_screen(&mut self) -> io::Result<()> {
+
+        for pane in self.panes[self.active_layer].iter() {
+            eprintln!("{:?}", pane.get_corners());
+        }
+        eprintln!("");
+        
 
         if !self.contents.will_change() {
             return Ok(());
@@ -669,9 +698,12 @@ impl FinalTextBuffer {
     pub fn merge(&mut self, layers: &mut Vec<TextBuffer>) {
         let top_layer = layers.len() - 1;
 
-        for y in 0..layers[0].contents.len() {
+        let min_y = layers.iter().map(|layer| layer.contents.len()).min().unwrap_or(0);
+        let min_x = layers.iter().map(|layer| layer.contents.iter().map(|row| row.len()).min().unwrap_or(0)).min().unwrap_or(0);
 
-            for x in 0..layers[0].contents[y].len() {
+        for y in 0..min_y {
+
+            for x in 0..min_x {
 
                 let mut curr_layer = top_layer;
                 
@@ -684,6 +716,9 @@ impl FinalTextBuffer {
                     self.contents[y].push(chr);
                 }
                 else {
+                    if self.contents.len() <= y {
+                        self.contents.push(Vec::new());
+                    }
                     self.contents[y].push(StyledChar::new(' ', ColorScheme::default()));
                 }
             }
