@@ -5,7 +5,7 @@ use std::{rc::Rc, cell::RefCell, path::PathBuf, io, cmp};
 
 use crossterm::event::KeyEvent;
 
-use crate::{settings::Settings, window::WindowContents, cursor::Cursor};
+use crate::{settings::Settings, window::{WindowContents, OutputSegment}, cursor::Cursor};
 
 
 impl Clone for PaneContainer {
@@ -244,8 +244,8 @@ impl PaneContainer {
         self.pane.borrow_mut().refresh();
     }
 
-    pub fn draw_row(&self, index: usize, contents: &mut WindowContents) {
-        self.pane.borrow().draw_row(index, self, contents);
+    pub fn draw_row(&self, index: usize) -> Vec<OutputSegment> {
+        self.pane.borrow().draw_row(index, self)
     }
 
     pub fn process_keypress(&mut self, key: KeyEvent) -> io::Result<bool> {
@@ -268,7 +268,7 @@ impl PaneContainer {
 }
 
 pub trait Pane {
-    fn draw_row(&self, index: usize, container: &PaneContainer, contents: &mut WindowContents);
+    fn draw_row(&self, index: usize, container: &PaneContainer) -> Vec<OutputSegment>;
 
     fn refresh(&mut self);
 

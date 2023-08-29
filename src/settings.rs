@@ -1,5 +1,5 @@
 use core::fmt;
-use std::collections::HashMap;
+use std::{collections::HashMap, cell::RefCell, rc::Rc};
 
 use crossterm::{event::{KeyCode, KeyModifiers, KeyEvent}, style::{Attribute, Color, Attributes}};
 use serde::Deserialize;
@@ -502,7 +502,7 @@ pub struct ColorScheme {
     pub foreground_color: Color,
     pub background_color: Color,
     pub underline_color: Color,
-    pub attributes: Vec<Attribute>,
+    pub attributes: Rc<Vec<Attribute>>,
 }
 
 impl Default for ColorScheme {
@@ -511,7 +511,7 @@ impl Default for ColorScheme {
             foreground_color: Color::Reset,
             background_color: Color::Reset,
             underline_color: Color::Reset,
-            attributes: Vec::new(),
+            attributes: Rc::new(Vec::new()),
         }
     }
 }
@@ -531,21 +531,21 @@ impl Default for EditorColors {
             foreground_color: Color::Black,
             background_color: Color::Cyan,
             underline_color: Color::Reset,
-            attributes: vec![Attribute::Bold],
+            attributes: Rc::new(vec![Attribute::Bold]),
         });
 
         mode.insert("Insert".to_string(), ColorScheme {
             foreground_color: Color::Black,
             background_color: Color::Green,
             underline_color: Color::Reset,
-            attributes: vec![Attribute::Bold],
+            attributes: Rc::new(vec![Attribute::Bold]),
         });
 
         mode.insert("Command".to_string(), ColorScheme {
             foreground_color: Color::Black,
             background_color: Color::Magenta,
             underline_color: Color::Reset,
-            attributes: vec![Attribute::Bold],
+            attributes: Rc::new(vec![Attribute::Bold]),
         });
         
         Self {
@@ -771,8 +771,8 @@ fn parse_color_scheme(table: &toml::Value) -> ColorScheme {
     }
 
     match table.get("attributes") {
-        None => color_scheme.attributes = Vec::new(),
-        Some(value) => color_scheme.attributes = parse_attributes(value),
+        None => color_scheme.attributes = Rc::new(Vec::new()),
+        Some(value) => color_scheme.attributes = Rc::new(parse_attributes(value)),
     }
 
     color_scheme

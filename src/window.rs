@@ -13,6 +13,7 @@ use crossterm::style::{Stylize, StyledContent};
 use crossterm::{terminal::{self, ClearType}, execute, cursor, queue};
 
 use crate::mode::Mode;
+use crate::settings::ColorScheme;
 use crate::{apply_colors, settings::Settings};
 use crate::pane::{Pane, PaneContainer};
 use crate::pane::text::TextPane;
@@ -36,6 +37,7 @@ pub struct Window{
     contents: WindowContents,
     active_pane: usize,
     panes: Vec<PaneContainer>,
+    floating_panes: Vec<Option<Rc<RefCell<PaneContainer>>>>,
     known_file_types: HashSet<String>,
     settings: Rc<RefCell<Settings>>,
     duration: Duration,
@@ -63,12 +65,15 @@ impl Window {
         let panes = vec![PaneContainer::new(win_size, win_size, pane.clone(), settings.clone())];
         let mut known_file_types = HashSet::new();
         known_file_types.insert("txt".to_string());
+
+        let floating_panes = vec![None; win_size.1];
         
         Self {
             size: win_size,
             contents: WindowContents::new(),
             active_pane: 0,
             panes,
+            floating_panes,
             known_file_types,
             duration,
             settings,
@@ -440,7 +445,14 @@ impl Window {
                 //eprintln!("pane corners: {:?}", self.panes[pane_index].borrow().get_corners());
                 let ((start_x, start_y), (end_x, end_y)) = self.panes[pane_index].get_corners();
                 if start_y <= i && end_y >= i {
-                    self.panes[pane_index].draw_row(i - start_y + offset, &mut self.contents);
+
+                    
+                    let buffer = self.panes[pane_index].draw_row(i - start_y + offset);
+
+                    for segment in buffer {
+                        self.contents.push_str(apply_colors!(segment.text, segment.color));
+                    }
+                    
                     window_index += end_x - start_x + 1;
                     /*if window_index < self.size.0 {
                         self.contents.push_str("|");
@@ -559,6 +571,11 @@ impl Window {
         self.panes[self.active_pane].process_keypress(key)
     }
 
+}
+
+pub struct OutputSegment {
+    pub text: String,
+    pub color: ColorScheme,
 }
 
 pub trait WindowContentsUtils<T> {

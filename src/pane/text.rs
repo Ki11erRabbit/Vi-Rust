@@ -1,5 +1,5 @@
 use std::io::Write;
-use crate::{pane::Pane, window::WindowContentsUtils, cursor::CursorMove};
+use crate::{pane::Pane, window::{WindowContentsUtils, OutputSegment}, cursor::CursorMove};
 
 use std::{collections::HashMap, rc::Rc, cell::RefCell, path::PathBuf, sync::mpsc::Sender, cmp, io};
 
@@ -182,26 +182,43 @@ impl TextPane {
 impl Pane for TextPane {
 
 
-    fn draw_row(&self, mut index: usize, container: &PaneContainer, output: &mut WindowContents) {
+    fn draw_row(&self, mut index: usize, container: &PaneContainer) -> Vec<OutputSegment> {
+        
         let rows = container.get_size().1;
         let mut cols = container.get_size().0;
 
         let ((x1, y1), _) = container.get_corners();
+
+        let mut output = Vec::new();
 
         if self.settings.borrow().editor_settings.border {
 
             let color_settings = &self.settings.borrow().colors.ui;
             
             if index == 0 && y1 != 0 {
-                output.push_str(apply_colors!("-".repeat(cols), color_settings));
-                return;
+                let string = "-".repeat(cols);
+
+                //output.push_str(apply_colors!(string, color_settings));
+
+                output.push(OutputSegment {
+                    text: string,
+                    color: color_settings.clone(),
+                });
+                
+                return output;
             }
             else {
                 index = index;
             }
 
             if x1 != 0 {
-                output.push_str(apply_colors!("|", color_settings));
+                //output.push_str(apply_colors!("|", color_settings));
+
+                output.push(OutputSegment {
+                    text: "|".to_string(),
+                    color: color_settings.clone(),
+                });
+                
                 cols = cols.saturating_sub(1);
             }
         }
@@ -231,7 +248,14 @@ impl Pane for TextPane {
                 }
 
                 if real_row + 1 <= number_of_lines {
-                    output.push_str(apply_colors!(format!("{:width$}", real_row + 1, width = num_width), color_settings));
+                    let string = format!("{:width$}", real_row + 1, width = num_width);
+
+                    output.push(OutputSegment {
+                        text: string,
+                        color: color_settings.clone(),
+                    });
+                    
+                    //output.push_str(apply_colors!(string.as_str(), color_settings));
                 }
 
             }
@@ -244,12 +268,24 @@ impl Pane for TextPane {
                     num_width += 1;
                 }
                 if real_row == self.cursor.borrow().get_cursor().1 && real_row + 1 <= number_of_lines {
-                    output.push_str(apply_colors!(format!("{:<width$}", real_row + 1 , width = num_width), color_settings));
+                    let string = format!("{:<width$}", real_row + 1, width = num_width);
+
+                    output.push(OutputSegment {
+                        text: string,
+                        color: color_settings.clone(),
+                    });
+                    
+                    //output.push_str(apply_colors!(string.as_str(), color_settings));
                 }
                 else if real_row + 1 <= number_of_lines {
-                    output.push_str(apply_colors!(format!("{:width$}",
-                                            ((real_row) as isize - (self.cursor.borrow().get_cursor().1 as isize)).abs() as usize,
-                                            width = num_width), color_settings));
+                    let string = format!("{:width$}", ((real_row) as isize - (self.cursor.borrow().get_cursor().1 as isize)).abs() as usize, width = num_width);
+
+                    output.push(OutputSegment {
+                        text: string,
+                        color: color_settings.clone(),
+                    });
+                    
+                    //output.push_str(apply_colors!(string.as_str(), color_settings));
                 }
             }
 
@@ -268,33 +304,73 @@ impl Pane for TextPane {
                 match c {
                     '\t' => {
                         count += self.settings.borrow().editor_settings.tab_size;
-                        output.push_str(apply_colors!(" ".repeat(self.settings.borrow().editor_settings.tab_size), color_settings));
+                        let string = " ".repeat(self.settings.borrow().editor_settings.tab_size);
+
+                        output.push(OutputSegment {
+                            text: string,
+                            color: color_settings.clone(),
+                        });
+                        
+                        //output.push_str(apply_colors!(string, color_settings));
+
                     },
-                    '\n' => output.push_str(apply_colors!(" ", color_settings)),
+                    '\n' => {
+
+                        output.push(OutputSegment {
+                            text: " ".to_string(),
+                            color: color_settings.clone(),
+                        });
+                        //output.push_str(apply_colors!(" ", color_settings));
+
+                    },
                     c => {
                         count += 1;
-                        output.push_str(apply_colors!(c.to_string(), color_settings));
+
+                        output.push(OutputSegment {
+                            text: c.to_string(),
+                            color: color_settings.clone(),
+                        });
+                        
+                        //output.push_str(apply_colors!(c.to_string(), color_settings));
+
                     },
                 }
             }
                                  else {
-                                     output.push_str("");
+                                     //output.push_str("");
+                                 });
+
+            let string = " ".repeat(cols.saturating_sub(count + num_width));
+
+            output.push(OutputSegment {
+                text: string,
+                color: color_settings.clone(),
             });
 
-            output.push_str(apply_colors!(" ".repeat(cols.saturating_sub(count + num_width)), color_settings));
+            //output.push_str(apply_colors!(string, color_settings));
         }
         else if real_row >= number_of_lines {
-            output.push_str(apply_colors!(" ".repeat(cols), color_settings));
+            let string = " ".repeat(cols);
+
+            output.push(OutputSegment {
+                text: string,
+                color: color_settings.clone(),
+            });
+            
+            //output.push_str(apply_colors!(string, color_settings));
         }
         else {
-            output.push_str(apply_colors!(" ".repeat(cols.saturating_sub(num_width)), color_settings));
+            let string = " ".repeat(cols.saturating_sub(num_width));
+
+            output.push(OutputSegment {
+                text: string,
+                color: color_settings.clone(),
+            });
+            
+            //output.push_str(apply_colors!(string, color_settings));
         }
-        /*output.push_str(" "
-                            .attribute(color_settings.attributes)
-                            .with(color_settings.foreground_color)
-                            .on(color_settings.background_color)
-                            .underline(color_settings.underline_color)
-        );*/
+
+        output
     }
 
     fn scroll_cursor(&mut self, container: &PaneContainer) {
