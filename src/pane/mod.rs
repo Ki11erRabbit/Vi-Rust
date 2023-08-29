@@ -5,7 +5,7 @@ use std::{rc::Rc, cell::RefCell, path::PathBuf, io, cmp};
 
 use crossterm::event::KeyEvent;
 
-use crate::{settings::Settings, window::WindowContents, cursor::Cursor};
+use crate::{settings::Settings, window::{WindowContents, StyledChar}, cursor::Cursor};
 
 
 impl Clone for PaneContainer {
@@ -244,7 +244,7 @@ impl PaneContainer {
         self.pane.borrow_mut().refresh();
     }
 
-    pub fn draw_row(&self, index: usize, contents: &mut WindowContents) {
+    pub fn draw_row(&self, index: usize, contents: &mut Vec<Option<StyledChar>>) {
         self.pane.borrow().draw_row(index, self, contents);
     }
 
@@ -268,7 +268,7 @@ impl PaneContainer {
 }
 
 pub trait Pane {
-    fn draw_row(&self, index: usize, container: &PaneContainer, contents: &mut WindowContents);
+    fn draw_row(&self, index: usize, container: &PaneContainer, contents: &mut Vec<Option<StyledChar>>);
 
     fn refresh(&mut self);
 

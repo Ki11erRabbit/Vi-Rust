@@ -13,6 +13,7 @@ use crossterm::style::{Stylize, StyledContent};
 use crossterm::{terminal::{self, ClearType}, execute, cursor, queue};
 
 use crate::mode::Mode;
+use crate::settings::ColorScheme;
 use crate::{apply_colors, settings::Settings};
 use crate::pane::{Pane, PaneContainer};
 use crate::pane::text::TextPane;
@@ -34,8 +35,11 @@ pub enum Message {
 pub struct Window{
     size: (usize, usize),
     contents: WindowContents,
-    active_pane: usize,
-    panes: Vec<PaneContainer>,
+    active_panes: Vec<usize>,
+    active_layer: usize,
+    panes: Vec<Vec<PaneContainer>>,
+    buffers: Vec<TextBuffer>,
+    final_buffer: FinalTextBuffer,
     known_file_types: HashSet<String>,
     settings: Rc<RefCell<Settings>>,
     duration: Duration,
@@ -60,15 +64,19 @@ impl Window {
 
         pane.borrow_mut().set_cursor_size(win_size);
         
-        let panes = vec![PaneContainer::new(win_size, win_size, pane.clone(), settings.clone())];
+        let panes = vec![vec![PaneContainer::new(win_size, win_size, pane.clone(), settings.clone())]];
         let mut known_file_types = HashSet::new();
         known_file_types.insert("txt".to_string());
+        let buffers = vec![TextBuffer::new()];
         
         Self {
             size: win_size,
             contents: WindowContents::new(),
-            active_pane: 0,
+            active_panes: vec![0],
+            active_layer: 0,
             panes,
+            buffers,
+            final_buffer: FinalTextBuffer::new(),
             known_file_types,
             duration,
             settings,
@@ -87,7 +95,7 @@ impl Window {
             }
         };
         let pane = Rc::new(RefCell::new(pane));
-        self.panes.push(PaneContainer::new((0,0), (0, 0), pane.clone(), self.settings.clone()));
+        self.panes[self.active_layer].push(PaneContainer::new((0,0), (0, 0), pane.clone(), self.settings.clone()));
         self.panes.len() - 1
     }
 
@@ -96,7 +104,7 @@ impl Window {
         eprintln!("switching to pane: {:?}", filename);
         let mut pane_index = None;
         for (i, pane) in self.panes.iter().enumerate() {
-            if pane.get_pane().borrow().get_filename() == &Some(filename.clone()) {//todo: remove the clone
+            if pane[self.active_layer].get_pane().borrow().get_filename() == &Some(filename.clone()) {//todo: remove the clone
                 pane_index = Some(i);
                 break;
             }
@@ -109,41 +117,42 @@ impl Window {
             self.open_file(filename)
         };
 
-        let active_pane = self.panes[self.active_pane].get_pane().clone();
-        let new_active_pane = self.panes[new_active_pane_index].get_pane().clone();
+        let active_pane = self.panes[self.active_layer][self.active_panes[self.active_layer]].get_pane().clone();
+        let new_active_pane = self.panes[self.active_layer][new_active_pane_index].get_pane().clone();
 
-        self.panes[self.active_pane].change_pane(new_active_pane);
-        self.panes[new_active_pane_index].change_pane(active_pane);
+        self.panes[self.active_layer][self.active_panes[self.active_layer]].change_pane(new_active_pane);
+        self.panes[self.active_layer][new_active_pane_index].change_pane(active_pane);
 
-        self.panes[self.active_pane].get_pane().borrow_mut().set_cursor_size(self.panes[self.active_pane].get_size());
+        self.panes[self.active_layer][self.active_panes[self.active_layer]].get_pane().borrow_mut().set_cursor_size(self.panes[self.active_layer][self.active_panes[self.active_layer]].get_size());
     }
 
     fn insert_pane(&mut self, index: usize, pane: PaneContainer) {
         let parent_pane = index - 1;
-        self.panes.insert(index, pane);
+        self.panes[self.active_layer].insert(index, pane);
     }
 
     fn remove_panes(&mut self) {
         let mut panes_to_remove = Vec::new();
-        for (i, pane) in self.panes.iter().enumerate() {
-            if pane.can_close() {
-                panes_to_remove.push(i);
+        for (i, layer) in self.panes.iter().enumerate() {
+            for (j, pane) in layer.iter().enumerate() {
+                if pane.can_close() {
+                    panes_to_remove.push((i, j));
+                }
             }
         }
-
         
-        for i in panes_to_remove.iter().rev() {
+        for (i, j) in panes_to_remove.iter().rev() {
             
             loop {
                 if *i + 1 < self.panes.len() {
-                    let corners = self.panes[*i].get_corners();
-                    if self.panes[*i + 1].combine(corners) {
+                    let corners = self.panes[*i][*j].get_corners();
+                    if self.panes[*i][*j + 1].combine(corners) {
                         break;
                     }
                 }
                 if *i != 0 {
-                    let corners = self.panes[*i].get_corners();
-                    if self.panes[*i - 1].combine(corners) {
+                    let corners = self.panes[*i][*j].get_corners();
+                    if self.panes[*i][*j - 1].combine(corners) {
                         break;
                     }
                 }
@@ -153,20 +162,23 @@ impl Window {
             
             self.panes.remove(*i);
         }
-        if self.panes.len() == 0 {
-            self.active_pane = 0;
-        }
-        else {
-            self.active_pane = cmp::min(self.active_pane, self.panes.len() - 1);
-        }
 
+        for (i, layer) in self.panes.iter().enumerate() {
+            if layer.len() == 0 {
+                self.active_panes[i] = 0;
+            }
+            else {
+                self.active_panes[i] = cmp::min(self.active_panes[i], layer.len() - 1);
+            }
+        }
+           
     }
 
 
 
     fn horizontal_split(&mut self) {
         //eprintln!("split panes: {:?}", self.panes.len());
-        let active_pane_size = self.panes[self.active_pane].get_size();
+        let active_pane_size = self.panes[self.active_layer][self.active_panes[self.active_layer]].get_size();
         let new_pane_size = (active_pane_size.0, active_pane_size.1 / 2);
         let old_pane_size = if active_pane_size.1 % 2 == 0 {
             new_pane_size
@@ -176,27 +188,27 @@ impl Window {
         };
 
             
-        self.panes[self.active_pane].set_size(old_pane_size);
+        self.panes[self.active_layer][self.active_panes[self.active_layer]].set_size(old_pane_size);
 
 
-        let new_pane_index = self.active_pane + 1;
-        let mut new_pane = self.panes[self.active_pane].clone();
+        let new_pane_index = self.active_panes[self.active_layer] + 1;
+        let mut new_pane = self.panes[self.active_layer][self.active_panes[self.active_layer]].clone();
 
-        let ((x,_), (_, y)) = self.panes[self.active_pane].get_corners();
+        let ((x,_), (_, y)) = self.panes[self.active_layer][self.active_panes[self.active_layer]].get_corners();
         let new_pane_position = (x, y + 1);
 
         new_pane.set_position(new_pane_position);
-        self.panes.insert(new_pane_index, new_pane);
+        self.panes[self.active_layer].insert(new_pane_index, new_pane);
 
 
         // This is for testing purposes, we need to make sure that we can actually access the new pane
-        self.active_pane = new_pane_index;
+        self.active_panes[self.active_layer] = new_pane_index;
 
         //eprintln!("split panes: {:?}", self.panes.len());
     }
 
     fn vertical_split(&mut self) {
-        let active_pane_size = self.panes[self.active_pane].get_size();
+        let active_pane_size = self.panes[self.active_layer][self.active_panes[self.active_layer]].get_size();
         let new_pane_size = (active_pane_size.0 / 2, active_pane_size.1);
         let old_pane_size = if active_pane_size.0 % 2 == 0 {
             new_pane_size
@@ -204,25 +216,25 @@ impl Window {
         else {
             (new_pane_size.0 + 1, new_pane_size.1)
         };
-        self.panes[self.active_pane].set_size(old_pane_size);
+        self.panes[self.active_layer][self.active_panes[self.active_layer]].set_size(old_pane_size);
 
 
-        let new_pane_index = self.active_pane + 1;
-        let mut new_pane = self.panes[self.active_pane].clone();
+        let new_pane_index = self.active_panes[self.active_layer] + 1;
+        let mut new_pane = self.panes[self.active_layer][self.active_panes[self.active_layer]].clone();
 
-        let ((_,y), (x, _)) = self.panes[self.active_pane].get_corners();
+        let ((_,y), (x, _)) = self.panes[self.active_layer][self.active_panes[self.active_layer]].get_corners();
         let new_pane_position = (x + 1, y);
 
         new_pane.set_position(new_pane_position);
-        self.panes.insert(new_pane_index, new_pane);
+        self.panes[self.active_layer].insert(new_pane_index, new_pane);
         
 
-        self.active_pane = new_pane_index;
+        self.active_panes[self.active_layer] = new_pane_index;
     }
 
 
     fn pane_up(&mut self) {
-        let ((x1, y1), (x2, _)) = self.panes[self.active_pane].get_corners();
+        let ((x1, y1), (x2, _)) = self.panes[self.active_layer][self.active_panes[self.active_layer]].get_corners();
 
         let pane_top = y1.saturating_sub(1);
 
@@ -230,7 +242,7 @@ impl Window {
 
         let mut pane_index = None;
         // This loop tries to find the pane that is above the current pane
-        for (i, pane) in self.panes.iter().enumerate() {
+        for (i, pane) in self.panes[self.active_layer].iter().enumerate() {
             let ((x1, _), (x2, y2)) = pane.get_corners();
             if y2 == pane_top && x1 <= pane_middle && pane_middle <= x2 {
                 pane_index = Some(i);
@@ -240,14 +252,14 @@ impl Window {
 
         match pane_index {
             Some(index) => {
-                self.active_pane = index;
+                self.active_panes[self.active_layer] = index;
             }
             None => {}
         }
     }
 
     fn pane_down(&mut self) {
-        let ((x1, _), (x2, y2)) = self.panes[self.active_pane].get_corners();
+        let ((x1, _), (x2, y2)) = self.panes[self.active_layer][self.active_panes[self.active_layer]].get_corners();
 
         // We add 1 to make sure that we aren't on the current pane
         let pane_bottom = y2 + 1;
@@ -255,7 +267,7 @@ impl Window {
 
         let mut pane_index = None;
         // This loop tries to find the pane that is below the current pane
-        for (i, pane) in self.panes.iter().enumerate() {
+        for (i, pane) in self.panes[self.active_layer].iter().enumerate() {
             let ((x1, y1), (x2, _)) = pane.get_corners();
             if y1 == pane_bottom && x1 <= pane_middle && pane_middle <= x2 {
                 pane_index = Some(i);
@@ -265,14 +277,14 @@ impl Window {
 
         match pane_index {
             Some(index) => {
-                self.active_pane = index;
+                self.active_panes[self.active_layer] = index;
             }
             None => {}
         }
     }
 
     fn pane_right(&mut self) {
-        let ((_, y1), (x2, y2)) = self.panes[self.active_pane].get_corners();
+        let ((_, y1), (x2, y2)) = self.panes[self.active_layer][self.active_panes[self.active_layer]].get_corners();
 
         // We add 1 to make sure that we aren't on the current pane
         let pane_right = x2 + 1;
@@ -281,7 +293,7 @@ impl Window {
 
         let mut pane_index = None;
         // This loop tries to find the pane that is to the right of the current pane
-        for (i, pane) in self.panes.iter().enumerate() {
+        for (i, pane) in self.panes[self.active_layer].iter().enumerate() {
             let ((x1, y1), (_, y2)) = pane.get_corners();
             if x1 == pane_right && y1 <= pane_middle && pane_middle <= y2 {
                 pane_index = Some(i);
@@ -291,14 +303,14 @@ impl Window {
 
         match pane_index {
             Some(index) => {
-                self.active_pane = index;
+                self.active_panes[self.active_layer] = index;
             }
             None => {}
         }
     }
 
     fn pane_left(&mut self) {
-        let ((x1, y1), (_, y2)) = self.panes[self.active_pane].get_corners();
+        let ((x1, y1), (_, y2)) = self.panes[self.active_layer][self.active_panes[self.active_layer]].get_corners();
 
         let pane_left = x1.saturating_sub(1);
 
@@ -306,7 +318,7 @@ impl Window {
 
         let mut pane_index = None;
         // This loop tries to find the pane that is to the left of the current pane
-        for (i, pane) in self.panes.iter().enumerate() {
+        for (i, pane) in self.panes[self.active_layer].iter().enumerate() {
             let ((_, y1), (x2, y2)) = pane.get_corners();
             if x2 == pane_left && y1 <= pane_middle && pane_middle <= y2 {
                 pane_index = Some(i);
@@ -316,7 +328,7 @@ impl Window {
 
         match pane_index {
             Some(index) => {
-                self.active_pane = index;
+                self.active_panes[self.active_layer] = index;
             }
             None => {}
         }
@@ -333,8 +345,10 @@ impl Window {
                         self.vertical_split();
                     }
                     Message::ForceQuitAll => {
-                        for pane in self.panes.iter_mut() {
-                            pane.close();
+                        for layers in self.panes.iter_mut() {
+                            for pane in layers.iter_mut() {
+                                pane.close();
+                            }
                         }
                     }
                     Message::PaneUp => {
@@ -353,8 +367,8 @@ impl Window {
                         self.switch_pane(path);
                     }
                     Message::ClosePane => {
-                        self.panes.remove(self.active_pane);
-                        self.active_pane = self.active_pane.saturating_sub(1);
+                        self.panes.remove(self.active_panes[self.active_layer]);
+                        self.active_panes[self.active_layer] = self.active_panes[self.active_layer].saturating_sub(1);
                     }
                 }
             },
@@ -380,7 +394,7 @@ impl Window {
         }
         self.refresh_screen()?;
 
-        let ((x1, y1), (x2, y2)) = self.panes[self.active_pane].get_corners();
+        let ((x1, y1), (x2, y2)) = self.panes[self.active_layer][self.active_panes[self.active_layer]].get_corners();
 
         if x1 == x2 || y1 == y2 {
             return Ok(false);
@@ -405,7 +419,7 @@ impl Window {
 
     fn resize(&mut self, width: u16, height: u16) {
         self.size = (width as usize, height as usize - 1);
-        for pane in self.panes.iter_mut() {
+        for pane in self.panes[self.active_layer].iter_mut() {
             pane.resize((width as usize, height as usize));
         }
     }
@@ -426,49 +440,73 @@ impl Window {
         //let panes = self.panes.len();
 
         let offset = 0;
-        for i in 0..rows {
+
+        for l in 0..self.panes.len() {
+            for i in 0..rows {
+                let mut pane_index = 0;
+                let mut window_index = 0;
+                while window_index < self.size.0 {
+                    if pane_index >= self.panes[l].len() {
+                        break;
+                    }
+                    let ((start_x, start_y), (end_x, end_y)) = self.panes[l][pane_index].get_corners();
+                    if start_y <= i && end_y >= i {
+                        self.buffers[l].contents.push(Vec::new());
+                        self.panes[l][pane_index].draw_row(i - start_y + offset, &mut self.buffers[l].contents[i]);
+                        window_index += end_x - start_x + 1;
+                    }
+                    else {
+                        self.buffers[l].contents[i].push(None);
+                        window_index += 1;
+
+                        continue;
+                    }
+                    pane_index += 1;
+                }
+
+                let color_settings = &self.settings.borrow().colors.pane;
+
+                self.buffers[l].contents[i].push(Some(StyledChar::new('\r', color_settings.clone())));
+                self.buffers[l].contents[i].push(Some(StyledChar::new('\n', color_settings.clone())));
+
+            }
+
+
+        }
+
+        self.final_buffer.merge(&mut self.buffers);
+
+        self.final_buffer.draw(&mut self.contents);
+
+        self.final_buffer.clear();
+        for buffer in self.buffers.iter_mut() {
+            buffer.clear();
+        }
+        
+        /*for i in 0..rows {
 
             let mut pane_index = 0;
             let mut window_index = 0;
-            //eprintln!("size: {:?} i: {}", self.size, i);
             while window_index < self.size.0 {
-                //eprintln!("window_index: {} pane_index: {}\r\n", window_index, pane_index);
                 if pane_index >= self.panes.len() {
                     break;
                 }
-                //eprintln!("pane size: {:?} pane_index: {}", self.panes[pane_index].borrow().size, pane_index);
-                //eprintln!("pane corners: {:?}", self.panes[pane_index].borrow().get_corners());
                 let ((start_x, start_y), (end_x, end_y)) = self.panes[pane_index].get_corners();
                 if start_y <= i && end_y >= i {
                     self.panes[pane_index].draw_row(i - start_y + offset, &mut self.contents);
                     window_index += end_x - start_x + 1;
-                    /*if window_index < self.size.0 {
-                        self.contents.push_str("|");
-                        window_index += 1;
-                    }
-                    row_drawn = true;*/
                 }
                 pane_index += 1;
             }
 
 
-            //self.contents.merge(&mut self.panes[self.active_pane].borrow().draw_row(i));
-            /*if !row_drawn {
-                self.contents.push_str("-".repeat(cols).as_str());
-                offset = 1;
-            }*/
-            
-            /*queue!(
-                self.contents,
-                terminal::Clear(ClearType::UntilNewLine),
-            ).unwrap();*/
 
             let color_settings = &self.settings.borrow().colors.pane;
 
             self.contents.push_str(apply_colors!("\r\n", color_settings));
 
 
-        }
+        }*/
 
     }
 
@@ -484,7 +522,7 @@ impl Window {
         
         let color_settings = &settings.colors.ui;
 
-        let (name, first, second) = self.panes[self.active_pane].get_status();
+        let (name, first, second) = self.panes[0][self.active_panes[0]].get_status();
         let total = name.len() + 1 + first.len() + second.len();// plus one for the space
 
         let mode_color = &settings.colors.mode.get(&name).unwrap_or(&color_settings);
@@ -510,9 +548,9 @@ impl Window {
             return Ok(());
         }
         
-        self.panes[self.active_pane].refresh();
+        self.panes[self.active_layer][self.active_panes[self.active_layer]].refresh();
 
-        self.panes[self.active_pane].scroll_cursor();
+        self.panes[self.active_layer][self.active_panes[self.active_layer]].scroll_cursor();
 
         queue!(
             self.contents,
@@ -523,13 +561,13 @@ impl Window {
         self.draw_rows();
         self.draw_status_bar();
 
-        let cursor = self.panes[self.active_pane].get_cursor();
+        let cursor = self.panes[self.active_layer][self.active_panes[self.active_layer]].get_cursor();
         let cursor = cursor.borrow();
 
         let (x, y) = cursor.get_real_cursor();
         //eprintln!("x: {} y: {}", x, y);
-        let x = x + self.panes[self.active_pane].get_position().0;
-        let y = y + self.panes[self.active_pane].get_position().1;
+        let x = x + self.panes[self.active_layer][self.active_panes[self.active_layer]].get_position().0;
+        let y = y + self.panes[self.active_layer][self.active_panes[self.active_layer]].get_position().1;
         //eprintln!("x: {} y: {}", x, y);
 
         
@@ -552,14 +590,98 @@ impl Window {
     }
 
     pub fn open_file_start(&mut self, filename: &str) -> io::Result<()> {
-        self.panes[self.active_pane].open_file(&PathBuf::from(filename.to_owned()))
+        self.panes[self.active_layer][self.active_panes[self.active_layer]].open_file(&PathBuf::from(filename.to_owned()))
     }
 
     pub fn process_keypress(&mut self, key: KeyEvent) -> io::Result<bool> {
-        self.panes[self.active_pane].process_keypress(key)
+        self.panes[self.active_layer][self.active_panes[self.active_layer]].process_keypress(key)
     }
 
 }
+
+#[derive(Clone, Debug)]
+pub struct StyledChar {
+    pub chr: char,
+    pub color: ColorScheme,
+}
+
+impl StyledChar {
+    pub fn new(chr: char, color: ColorScheme) -> Self {
+        Self {
+            chr,
+            color,
+        }
+    }
+
+    pub fn style(&self) -> StyledContent<String> {
+        apply_colors!(self.chr.to_string(), self.color)
+    }
+}
+
+pub struct TextBuffer {
+    pub contents: Vec<Vec<Option<StyledChar>>>,
+}
+
+impl TextBuffer {
+    pub fn new() -> Self {
+        Self {
+            contents: Vec::new(),
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.contents.clear();
+    }
+    
+}
+
+
+pub struct FinalTextBuffer {
+    pub contents: Vec<Vec<StyledChar>>,
+}
+
+impl FinalTextBuffer {
+    pub fn new() -> Self {
+        Self {
+            contents: Vec::new(),
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.contents.clear();
+    }
+
+    pub fn merge(&mut self, layers: &mut Vec<TextBuffer>) {
+        let top_layer = layers.len() - 1;
+
+        for y in 0..layers[0].contents.len() {
+
+            for x in 0..layers[0].contents[y].len() {
+
+                let mut curr_layer = top_layer;
+                while layers[curr_layer].contents[y][x].is_none() && curr_layer > 0 {
+                    curr_layer -= 1;
+                }
+
+                if let Some(chr) = layers[curr_layer].contents[y][x].take() {
+                    self.contents.push(Vec::new());
+                    self.contents[y].push(chr);
+                }
+            }
+        }
+    }
+
+    pub fn draw(&self, output: &mut WindowContents) {
+        for y in 0..self.contents.len() {
+            for x in 0..self.contents[y].len() {
+                output.push_str(self.contents[y][x].style());
+            }
+        }
+    }
+}
+
+
+
 
 pub trait WindowContentsUtils<T> {
     fn push_str(&mut self, s: T);
