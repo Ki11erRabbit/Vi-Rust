@@ -95,9 +95,9 @@ impl PaneContainer {
 
 
     pub fn combine(&mut self, corners: ((usize, usize), (usize, usize))) -> bool {
-        //eprintln!("Combine: {:?}", corners);
+        eprintln!("Combine: {:?}", corners);
         let ((other_start_x, other_start_y), (other_end_x, other_end_y)) = corners;
-        //eprintln!("Combine: {:?}", self.get_corners());
+        eprintln!("Combine: {:?}", self.get_corners());
         let ((start_x, start_y), (end_x, end_y)) = self.get_corners();
 
 
@@ -108,7 +108,7 @@ impl PaneContainer {
             if end_x + 1 == other_start_x && start_y == other_start_y && end_y == other_end_y {
                 let width = other_end_x - start_x;
                 let height = end_y - start_y;
-                //eprintln!("Width: {}, Height: {}", width, height);
+                eprintln!("Width: {}, Height: {}", width, height);
 
                 self.size.0 = width;
                 self.size.1 = height;
@@ -122,7 +122,7 @@ impl PaneContainer {
             else if other_start_x - 1 == end_x && start_y == other_start_y && end_y == other_end_y {
                 let width = end_x - other_start_x;
                 let height = end_y - start_y;
-                //eprintln!("Width: {}, Height: {}", width, height);
+                eprintln!("Width: {}, Height: {}", width, height);
 
                 self.size.0 = width;
                 self.size.1 = height;
@@ -138,7 +138,7 @@ impl PaneContainer {
             if end_y + 1 == other_start_y && start_x == other_start_x && end_x == other_end_x {
                 let width = end_x - start_x;
                 let height = other_end_y - start_y;
-                //eprintln!("Width: {}, Height: {}", width, height);
+                eprintln!("Width: {}, Height: {}", width, height);
 
                 self.size.0 = width;
                 self.size.1 = height;
@@ -152,7 +152,7 @@ impl PaneContainer {
             else if other_start_y - 1 == end_y && start_x == other_start_x && end_x == other_end_x {
                 let width = end_x - start_x;
                 let height = end_y - other_start_y;
-                //eprintln!("Width: {}, Height: {}", width, height);
+                eprintln!("Width: {}, Height: {}", width, height);
 
                 self.size.0 = width;
                 self.size.1 = height;

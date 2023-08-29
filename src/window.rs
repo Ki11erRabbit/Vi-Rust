@@ -139,6 +139,7 @@ impl Window {
         let mut panes_to_remove = Vec::new();
         for (i, layer) in self.panes.iter().enumerate() {
             for (j, pane) in layer.iter().enumerate() {
+                eprintln!("pane can close: {}, {}", i, j);
                 if pane.can_close() {
                     panes_to_remove.push((i, j));
                 }
@@ -146,15 +147,16 @@ impl Window {
         }
         
         for (i, j) in panes_to_remove.iter().rev() {
+            eprintln!("removing pane: {}, {}", i, j);
             
             loop {
-                if *i + 1 < self.panes.len() {
+                if *j + 1 < self.panes[*i].len() {
                     let corners = self.panes[*i][*j].get_corners();
                     if self.panes[*i][*j + 1].combine(corners) {
                         break;
                     }
                 }
-                if *i != 0 {
+                if *j != 0 {
                     let corners = self.panes[*i][*j].get_corners();
                     if self.panes[*i][*j - 1].combine(corners) {
                         break;
@@ -164,7 +166,7 @@ impl Window {
             }
 
             
-            self.panes.remove(*i);
+            self.panes.remove(*j);
         }
 
         for (i, layer) in self.panes.iter().enumerate() {
@@ -382,8 +384,12 @@ impl Window {
                         self.switch_pane(path);
                     }
                     Message::ClosePane => {
-                        self.panes.remove(self.active_panes[self.active_layer]);
-                        self.active_panes[self.active_layer] = self.active_panes[self.active_layer].saturating_sub(1);
+                        eprintln!("Closing pane");
+
+                        
+                        self.panes[self.active_layer][self.active_panes[self.active_layer]].close();
+                        //self.panes.remove(self.active_panes[self.active_layer]);
+                        //self.active_panes[self.active_layer] = self.active_panes[self.active_layer].saturating_sub(1);
                     }
                 }
             },
