@@ -1,8 +1,8 @@
 use std::{io, collections::HashMap, rc::Rc, cell::RefCell, time::Instant};
 
-use crossterm::{event::{KeyEvent, KeyCode, KeyModifiers}, execute, cursor::{SetCursorStyle, MoveTo}, style::{Stylize, StyledContent}, terminal};
+use crossterm::{event::{KeyEvent, KeyCode, KeyModifiers}, execute, cursor::{SetCursorStyle, MoveTo}, terminal};
 
-use crate::{window::{Pane, PaneContainer}, cursor::{Direction, CursorMove, self, Cursor}, settings::{Keys, Key}};
+use crate::{pane::{Pane, PaneContainer}, cursor::{Direction, Cursor}, settings::{Keys, Key}};
 
 
 

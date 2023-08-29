@@ -1,12 +1,14 @@
-use std::{io, time::Duration};
+use std::io;
 
-use crossterm::{terminal, event::{self, KeyEvent, Event}, execute, cursor::SetCursorStyle, cursor::MoveTo};
-use window::{Window, Pane, TextPane};
+use crossterm::{terminal, execute, cursor::SetCursorStyle, cursor::MoveTo};
+use window::Window;
 
 pub mod window;
 pub mod mode;
 pub mod cursor;
 pub mod settings;
+pub mod pane;
+
 
 struct CleanUp;
 

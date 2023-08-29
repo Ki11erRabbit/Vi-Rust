@@ -1,7 +1,7 @@
-use crop::Rope;
 use crossterm::terminal;
 
-use crate::window::{Pane, PaneContainer};
+use crate::pane::PaneContainer;
+use crate::pane::Pane;
 
 pub enum CursorMove {
     Amount(usize),
