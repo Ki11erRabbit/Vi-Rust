@@ -1,11 +1,17 @@
 
 pub(crate) mod text;
+pub mod popup;
 
 use std::{rc::Rc, cell::RefCell, path::PathBuf, io, cmp};
 
 use crossterm::event::KeyEvent;
 
 use crate::{settings::Settings, window::{WindowContents, StyledChar}, cursor::Cursor};
+
+
+pub enum PaneMessage {
+    String(String),
+}
 
 
 impl Clone for PaneContainer {

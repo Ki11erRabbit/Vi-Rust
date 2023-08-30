@@ -1,12 +1,14 @@
 
 pub mod base;
+pub mod prompt;
 
 
-use std::{io, collections::HashMap, rc::Rc, cell::RefCell, time::Instant};
 
-use crossterm::{event::{KeyEvent, KeyCode, KeyModifiers}, execute, cursor::{SetCursorStyle, MoveTo}, terminal};
+use std::{io, collections::HashMap};
 
-use crate::{pane::{Pane, PaneContainer}, cursor::{Direction, Cursor}, settings::{Keys, Key}};
+use crossterm::event::KeyEvent;
+
+use crate::{pane::{Pane, PaneContainer}, settings::Keys};
 
 
 

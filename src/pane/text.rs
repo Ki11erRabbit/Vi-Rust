@@ -1,5 +1,5 @@
-use std::io::Write;
 use crate::{pane::Pane, window::{WindowContentsUtils, StyledChar}, cursor::CursorMove};
+use std::{io::Write, sync::mpsc::Receiver};
 
 use std::{collections::HashMap, rc::Rc, cell::RefCell, path::PathBuf, sync::mpsc::Sender, cmp, io};
 
@@ -9,7 +9,7 @@ use crossterm::style::Stylize;
 
 use crate::{cursor::{Cursor, Direction}, mode::{Mode, base::{Normal, Insert, Command}}, settings::Settings, window::{Message, WindowContents}, apply_colors};
 
-use super::PaneContainer;
+use super::{PaneContainer, PaneMessage};
 
 
 #[derive(Debug, Clone)]
@@ -99,6 +99,7 @@ pub struct TextPane {
     settings: Rc<RefCell<Settings>>,
     jump_table: JumpTable,
     sender: Sender<Message>,
+    receiver: Option<Receiver<PaneMessage>>,
 }
 
 impl TextPane {
@@ -131,6 +132,7 @@ impl TextPane {
             settings,
             jump_table: JumpTable::new(),
             sender,
+            receiver: None,
         }
     }
 
