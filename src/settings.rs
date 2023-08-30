@@ -516,6 +516,19 @@ impl Default for ColorScheme {
     }
 }
 
+impl ColorScheme {
+    pub fn add_attribute(&self, attribute: Attribute) -> Self {
+        let mut attributes = *self.attributes.clone();
+        attributes.push(attribute);
+        Self {
+            foreground_color: self.foreground_color,
+            background_color: self.background_color,
+            underline_color: self.underline_color,
+            attributes: Rc::new(attributes),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EditorColors {
     pub pane: ColorScheme,

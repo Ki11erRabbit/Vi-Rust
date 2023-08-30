@@ -1,8 +1,11 @@
+use std::fmt::Display;
 use std::{io, collections::HashMap, cell::RefCell, rc::Rc};
 
 use crossterm::event::{KeyEvent, KeyCode, KeyModifiers};
+use crossterm::style::Attribute;
 
 use crate::pane::PaneContainer;
+use crate::settings::ColorScheme;
 use crate::{mode::Mode, pane::Pane, settings::Keys};
 use crate::window::OutputSegment;
 
@@ -30,6 +33,109 @@ pub enum PromptType {
     Radio(Vec<String>, Option<usize>, usize),
 }
 
+impl PromptType {
+    pub fn is_text(&self) -> bool {
+        match self {
+            PromptType::Text(_, _, _) => true,
+            _ => false
+        }
+    }
+    pub fn is_button(&self) -> bool {
+        match self {
+            PromptType::Button(_, _) => true,
+            _ => false
+        }
+    }
+    pub fn is_checkbox(&self) -> bool {
+        match self {
+            PromptType::Checkbox(_, _) => true,
+            _ => false
+        }
+    }
+    pub fn is_radio(&self) -> bool {
+        match self {
+            PromptType::Radio(_, _, _) => true,
+            _ => false
+        }
+    }
+    
+    pub fn draw_text(&self) -> Option<String> {
+        match self {
+            PromptType::Text(text, len, hide) => {
+                let count = text.chars().count();
+                let mut output = if hide {
+                    format!("{}", "*".repeat(count))
+                } else {
+                    format!("{}", text)
+                };
+                if let Some(len) = len {
+                    output.push_str("_".repeat(len - count).as_str());
+                }
+
+                Some(output)
+                
+            },
+            _ => None
+            
+        }
+    }
+
+    pub fn draw_button(&self, index: usize) -> Option<String> {
+        match self {
+            PromptType::Button(buttons, selected) => {
+                if index >= buttons.len() {
+                    return None;
+                }
+
+                let output = buttons[index].0.clone();
+
+                Some(output)
+            },
+            _ => None
+        }
+    }
+
+    pub fn draw_checkbox(&self, index: usize) -> Option<String> {
+        match self {
+            PromptType::Checkbox(checkboxes, selected) => {
+                if index >= checkboxes.len() {
+                    return None;
+                }
+
+                let output = if index == *selected {
+                    format!("[x] {}", checkboxes[index].0)
+                } else {
+                    format!("[ ] {}", checkboxes[index].0)
+                };
+
+                Some(output)
+            },
+            _ => None
+        }
+    }
+
+    pub fn draw_radio(&self, index: usize) -> Option<String> {
+        match self {
+            PromptType::Radio(radios, selected, pos) => {
+                if index >= radios.len() {
+                    return None;
+                }
+
+                let output = if index == *selected.unwrap_or(pos) {
+                    format!("(*) {}", radios[index])
+                } else {
+                    format!("( ) {}", radios[index])
+                };
+
+                Some(output)
+            },
+            _ => None
+        }
+    }
+
+}
+
+
 
 pub struct Prompt {
     /// The type of prompt to display on each line
@@ -47,6 +153,224 @@ impl Prompt {
         }
     }
 }
+
+
+impl Promptable for Prompt {
+    fn draw_prompt(&mut self, row: usize, container: &PaneContainer) -> Vec<OutputSegment> {
+
+        let width = container.size().0 - 2;// - 2 for the border
+        
+        let prompt = &self.prompts[self.current_prompt];
+
+        let color_settings = container.settings.colors.ui.clone();
+
+        let mut output = Vec::new();
+
+        match prompt {
+            PromptType::Text(..) => {
+                let text = prompt.draw_text().unwrap();
+
+                output.push(OutputSegment {
+                    text: format!("{:^width$}", text, width = width),
+                    color: color_settings.clone(),
+                });
+            },
+            PromptType::Button(buttons, selected) => {
+                let button_count = buttons.len();
+
+                for i in 0..button_count {
+                    let button = prompt.draw_button(i).unwrap();
+
+                    if i == *selected {
+
+                        output.push(OutputSegment {
+                            text: " ".repeat(width - button.chars().count() / button_count),
+                            color: color_settings,
+
+                        });
+
+                        let button_color = ColorScheme::add_attribute(&color_settings.clone(), Attribute::Reverse);
+                        
+                        output.push(OutputSegment {
+                            text: button,
+                            color: button_color,
+                        });
+
+                        
+                        output.push(OutputSegment {
+                            text: " ".repeat(width - button.chars().count() / button_count),
+                            color: color_settings,
+
+                        });
+                        
+                    } else {
+                        output.push(OutputSegment {
+                            text: " ".repeat(width - button.chars().count() / button_count),
+                            color: color_settings,
+
+                        });
+                        
+                        output.push(OutputSegment {
+                            text: button,
+                            color: color_settings,
+                        });
+
+                        
+                        output.push(OutputSegment {
+                            text: " ".repeat(width - button.chars().count() / button_count),
+                            color: color_settings,
+
+                        });
+                    }
+                }
+            },
+            PromptType::Checkbox(checkboxes, selected) => {
+                let checkbox_count = checkboxes.len();
+
+                for i in 0..checkbox_count {
+                    let checkbox = prompt.draw_checkbox(i).unwrap();
+
+                    if i == *selected {
+
+                        output.push(OutputSegment {
+                            text: " ".repeat(width - checkbox.chars().count() / checkbox_count),
+                            color: color_settings,
+
+                        });
+
+                        let checkbox_color = ColorScheme::add_attribute(&color_settings.clone(), Attribute::Reverse);
+                        
+                        output.push(OutputSegment {
+                            text: checkbox,
+                            color: checkbox_color,
+                        });
+
+                        
+                        output.push(OutputSegment {
+                            text: " ".repeat(width - checkbox.chars().count() / checkbox_count),
+                            color: color_settings,
+
+                        });
+                        
+                    } else {
+                        output.push(OutputSegment {
+                            text: " ".repeat(width - checkbox.chars().count() / checkbox_count),
+                            color: color_settings,
+
+                        });
+                        
+                        output.push(OutputSegment {
+                            text: checkbox,
+                            color: color_settings,
+                        });
+
+                        
+                        output.push(OutputSegment {
+                            text: " ".repeat(width - checkbox.chars().count() / checkbox_count),
+                            color: color_settings,
+
+                        });
+                    }
+                }
+            },
+            PromptType::Radio(radios, selected, pos) => {
+                let radio_count = radios.len();
+
+                for i in 0..radio_count {
+                    let radio = prompt.draw_radio(i).unwrap();
+
+                    if i == pos {
+
+                        output.push(OutputSegment {
+                            text: " ".repeat(width - radio.chars().count() / radio_count),
+                            color: color_settings,
+
+                        });
+
+                        let radio_color = ColorScheme::add_attribute(&color_settings.clone(), Attribute::Reverse);
+                        
+                        output.push(OutputSegment {
+                            text: radio,
+                            color: radio_color,
+                        });
+
+                        
+                        output.push(OutputSegment {
+                            text: " ".repeat(width - radio.chars().count() / radio_count),
+                            color: color_settings,
+
+                        });
+                        
+                    } else {
+                        output.push(OutputSegment {
+                            text: " ".repeat(width - radio.chars().count() / radio_count),
+                            color: color_settings,
+
+                        });
+                        
+                        output.push(OutputSegment {
+                            text: radio,
+                            color: color_settings,
+                        });
+
+                        
+                        output.push(OutputSegment {
+                            text: " ".repeat(width - radio.chars().count() / radio_count),
+                            color: color_settings,
+
+                        });
+                    }
+                }
+            },
+            
+
+        }
+        
+
+        output
+    }
+
+    fn max_width(&self) -> usize {
+        let mut max = 0;
+        for prompt in &self.prompts {
+            match prompt {
+                PromptType::Text(text, len, _) => {
+                    if let Some(len) = len {
+                        max = max.max(*len + 2);
+                    }
+                    max = max.max(text.chars().count() + 2);
+                },
+                PromptType::Button(buttons, _) => {
+                    let mut total = 0;
+                    for button in buttons {
+                        total += button.0.chars().count() + 2;
+                    }
+
+                    max = max.max(total);
+                },
+                PromptType::Checkbox(checkboxes, _) => {
+                    let mut total = 0;
+                    for i in 0..checkboxes.len() {
+                        total += prompt.draw_checkbox(i).unwrap().chars().count() + 2;
+                    }
+
+                    max = max.max(total);
+                },
+                PromptType::Radio(radios, _, _) => {
+                    let mut total = 0;
+                    for i in 0..radios.len() {
+                        total += prompt.draw_radio(i).unwrap().chars().count() + 2;
+                    }
+
+                    max = max.max(total);
+                },
+            }
+        }
+
+        max
+    }
+}
+
 
 impl Mode for Prompt {
     fn get_name(&self) -> String {
