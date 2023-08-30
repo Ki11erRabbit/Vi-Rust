@@ -105,7 +105,7 @@ impl Window {
 
     fn switch_pane(&mut self, filename: String) {
         let filename = PathBuf::from(filename);
-        eprintln!("switching to pane: {:?}", filename);
+        //eprintln!("switching to pane: {:?}", filename);
         let mut pane_index = None;
         for (i, pane) in self.panes.iter().enumerate() {
             if pane[self.active_layer].get_pane().borrow().get_filename() == &Some(filename.clone()) {//todo: remove the clone
@@ -139,7 +139,7 @@ impl Window {
         let mut panes_to_remove = Vec::new();
         for (i, layer) in self.panes.iter().enumerate() {
             for (j, pane) in layer.iter().enumerate() {
-                eprintln!("pane can close: {}, {}", i, j);
+                //eprintln!("pane can close: {}, {}", i, j);
                 if pane.can_close() {
                     panes_to_remove.push((i, j));
                 }
@@ -147,7 +147,7 @@ impl Window {
         }
         
         for (i, j) in panes_to_remove.iter().rev() {
-            eprintln!("removing pane: {}, {}", i, j);
+            //eprintln!("removing pane: {}, {}", i, j);
             
             loop {
                 if *j + 1 < self.panes[*i].len() {
@@ -384,12 +384,8 @@ impl Window {
                         self.switch_pane(path);
                     }
                     Message::ClosePane => {
-                        eprintln!("Closing pane");
-
-                        
-                        self.panes[self.active_layer][self.active_panes[self.active_layer]].close();
-                        //self.panes.remove(self.active_panes[self.active_layer]);
-                        //self.active_panes[self.active_layer] = self.active_panes[self.active_layer].saturating_sub(1);
+                        self.panes[self.active_layer].remove(self.active_panes[self.active_layer]);
+                        self.active_panes[self.active_layer] = self.active_panes[self.active_layer].saturating_sub(1);
                     }
                 }
             },
@@ -587,11 +583,6 @@ impl Window {
 
     pub fn refresh_screen(&mut self) -> io::Result<()> {
 
-        for pane in self.panes[self.active_layer].iter() {
-            eprintln!("{:?}", pane.get_corners());
-        }
-        eprintln!("");
-        
 
         if !self.contents.will_change() {
             return Ok(());
