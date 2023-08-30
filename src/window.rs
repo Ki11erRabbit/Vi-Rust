@@ -12,7 +12,6 @@ use crossterm::event::{KeyEvent, self, Event};
 use crossterm::style::{Stylize, StyledContent};
 use crossterm::{terminal::{self, ClearType}, execute, cursor, queue};
 
-use crate::mode::Mode;
 use crate::settings::ColorScheme;
 use crate::{apply_colors, settings::Settings};
 use crate::pane::{Pane, PaneContainer};
@@ -30,6 +29,7 @@ pub enum Message {
     PaneRight,
     OpenFile(String),
     ClosePane,
+    CreatePopup(PaneContainer),
 }
 
 pub struct Window{
@@ -86,6 +86,12 @@ impl Window {
             settings,
             channels,
         }
+    }
+
+    fn create_popup(&mut self, pane: PaneContainer) {
+        self.panes[self.active_layer].push(pane);
+        self.active_layer = self.panes.len() - 1;
+        self.active_panes.push(self.panes[self.active_layer].len() - 1);
     }
 
     fn open_file(&mut self, filename: PathBuf) -> usize {
@@ -386,7 +392,10 @@ impl Window {
                     Message::ClosePane => {
                         self.panes[self.active_layer].remove(self.active_panes[self.active_layer]);
                         self.active_panes[self.active_layer] = self.active_panes[self.active_layer].saturating_sub(1);
-                    }
+                    },
+                    Message::CreatePopup(container) => {
+                        self.create_popup(container);
+                    },
                 }
             },
             Err(_) => {}

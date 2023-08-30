@@ -518,7 +518,7 @@ impl Default for ColorScheme {
 
 impl ColorScheme {
     pub fn add_attribute(&self, attribute: Attribute) -> Self {
-        let mut attributes = *self.attributes.clone();
+        let mut attributes = (*self.attributes).clone();
         attributes.push(attribute);
         Self {
             foreground_color: self.foreground_color,

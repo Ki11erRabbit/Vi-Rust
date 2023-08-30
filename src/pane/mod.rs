@@ -255,7 +255,9 @@ impl PaneContainer {
     }
 
     pub fn process_keypress(&mut self, key: KeyEvent) -> io::Result<bool> {
-        self.pane.borrow_mut().process_keypress(key)
+        let pane = self.pane.clone();
+        let mut pane = pane.borrow_mut();
+        pane.process_keypress(key, self)
     }
 
     pub fn get_cursor(&self) -> Rc<RefCell<Cursor>> {
@@ -282,13 +284,13 @@ pub trait Pane {
     fn open_file(&mut self, filename: &PathBuf) -> io::Result<()>;
 
 
-    fn process_keypress(&mut self, key: KeyEvent) -> io::Result<bool>;
+    fn process_keypress(&mut self, key: KeyEvent, container: &mut PaneContainer) -> io::Result<bool>;
 
     fn scroll_cursor(&mut self, container: &PaneContainer);
 
     fn get_status(&self, container: &PaneContainer) -> (String, String, String);
 
-    fn run_command(&mut self, command: &str);
+    fn run_command(&mut self, command: &str, container: &PaneContainer);
 
     fn change_mode(&mut self, mode_name: &str);
 

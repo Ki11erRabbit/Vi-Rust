@@ -1,17 +1,16 @@
-use std::fmt::Display;
 use std::{io, collections::HashMap, cell::RefCell, rc::Rc};
 
 use crossterm::event::{KeyEvent, KeyCode, KeyModifiers};
 use crossterm::style::Attribute;
 
 use crate::pane::PaneContainer;
-use crate::settings::ColorScheme;
+use crate::settings::{ColorScheme, Key};
 use crate::{mode::Mode, pane::Pane, settings::Keys};
-use crate::window::OutputSegment;
+use crate::window::StyledChar;
 
 
-pub trait Promptable {
-    fn draw_prompt(&mut self, row: usize, container: &PaneContainer) -> Vec<OutputSegment>;
+pub trait Promptable: Mode {
+    fn draw_prompt(&mut self, row: usize, container: &PaneContainer, output: &mut Vec<Option<StyledChar>>);
 
     fn max_width(&self) -> usize;
 }
@@ -63,7 +62,7 @@ impl PromptType {
         match self {
             PromptType::Text(text, len, hide) => {
                 let count = text.chars().count();
-                let mut output = if hide {
+                let mut output = if *hide {
                     format!("{}", "*".repeat(count))
                 } else {
                     format!("{}", text)
@@ -82,7 +81,7 @@ impl PromptType {
 
     pub fn draw_button(&self, index: usize) -> Option<String> {
         match self {
-            PromptType::Button(buttons, selected) => {
+            PromptType::Button(buttons, _) => {
                 if index >= buttons.len() {
                     return None;
                 }
@@ -121,7 +120,7 @@ impl PromptType {
                     return None;
                 }
 
-                let output = if index == *selected.unwrap_or(pos) {
+                let output = if index == selected.unwrap_or(*pos) {
                     format!("(*) {}", radios[index])
                 } else {
                     format!("( ) {}", radios[index])
@@ -139,7 +138,7 @@ impl PromptType {
 
 pub struct Prompt {
     /// The type of prompt to display on each line
-    prompts: Vec<PromptType>,
+    prompts: Rc<RefCell<Vec<PromptType>>>,
     keybindings: Rc<RefCell<HashMap<Keys, String>>>,
     current_prompt: usize,
 }
@@ -147,7 +146,7 @@ pub struct Prompt {
 impl Prompt {
     pub fn new(prompts: Vec<PromptType>) -> Self {
         Self {
-            prompts,
+            prompts: Rc::new(RefCell::new(prompts)),
             keybindings: Rc::new(RefCell::new(HashMap::new())),
             current_prompt: 0,
         }
@@ -156,24 +155,39 @@ impl Prompt {
 
 
 impl Promptable for Prompt {
-    fn draw_prompt(&mut self, row: usize, container: &PaneContainer) -> Vec<OutputSegment> {
+    fn draw_prompt(&mut self, row: usize, container: &PaneContainer, output: &mut Vec<Option<StyledChar>>) {
 
-        let width = container.size().0 - 2;// - 2 for the border
+        let width = container.get_size().0 - 2;// - 2 for the border
         
-        let prompt = &self.prompts[self.current_prompt];
+        let prompt = &self.prompts.borrow()[self.current_prompt];
 
-        let color_settings = container.settings.colors.ui.clone();
-
-        let mut output = Vec::new();
+        let color_settings = container.settings.borrow().colors.ui.clone();
 
         match prompt {
             PromptType::Text(..) => {
                 let text = prompt.draw_text().unwrap();
 
-                output.push(OutputSegment {
-                    text: format!("{:^width$}", text, width = width),
-                    color: color_settings.clone(),
-                });
+                let remaining = width - text.chars().count();
+
+                let side = remaining / 2;
+
+                for _ in 0..side {
+                    output.push(Some(StyledChar::new(' ', color_settings.clone())));
+                }
+
+                let text_color = if self.current_prompt == row {
+                    ColorScheme::add_attribute(&color_settings.clone(), Attribute::Reverse)
+                } else {
+                    color_settings.clone()
+                };
+                
+                for c in text.chars() {
+                    output.push(Some(StyledChar::new(c, text_color.clone())));
+                }
+
+                for _ in 0..side {
+                    output.push(Some(StyledChar::new(' ', color_settings.clone())));
+                }
             },
             PromptType::Button(buttons, selected) => {
                 let button_count = buttons.len();
@@ -181,47 +195,26 @@ impl Promptable for Prompt {
                 for i in 0..button_count {
                     let button = prompt.draw_button(i).unwrap();
 
-                    if i == *selected {
 
-                        output.push(OutputSegment {
-                            text: " ".repeat(width - button.chars().count() / button_count),
-                            color: color_settings,
-
-                        });
-
-                        let button_color = ColorScheme::add_attribute(&color_settings.clone(), Attribute::Reverse);
-                        
-                        output.push(OutputSegment {
-                            text: button,
-                            color: button_color,
-                        });
-
-                        
-                        output.push(OutputSegment {
-                            text: " ".repeat(width - button.chars().count() / button_count),
-                            color: color_settings,
-
-                        });
-                        
-                    } else {
-                        output.push(OutputSegment {
-                            text: " ".repeat(width - button.chars().count() / button_count),
-                            color: color_settings,
-
-                        });
-                        
-                        output.push(OutputSegment {
-                            text: button,
-                            color: color_settings,
-                        });
-
-                        
-                        output.push(OutputSegment {
-                            text: " ".repeat(width - button.chars().count() / button_count),
-                            color: color_settings,
-
-                        });
+                    for _ in 0..(width - button.chars().count() / button_count) {
+                        output.push(Some(StyledChar::new(' ', color_settings.clone())));
                     }
+
+                    let button_color = if i== *selected {
+                        ColorScheme::add_attribute(&color_settings.clone(), Attribute::Reverse)
+                    }
+                    else {
+                        color_settings.clone()
+                    };
+
+                    for c in button.chars() {
+                        output.push(Some(StyledChar::new(c, button_color.clone())));
+                    }
+
+                    for _ in 0..(width - button.chars().count() / button_count) {
+                        output.push(Some(StyledChar::new(' ', color_settings.clone())));
+                    }
+
                 }
             },
             PromptType::Checkbox(checkboxes, selected) => {
@@ -230,47 +223,25 @@ impl Promptable for Prompt {
                 for i in 0..checkbox_count {
                     let checkbox = prompt.draw_checkbox(i).unwrap();
 
-                    if i == *selected {
-
-                        output.push(OutputSegment {
-                            text: " ".repeat(width - checkbox.chars().count() / checkbox_count),
-                            color: color_settings,
-
-                        });
-
-                        let checkbox_color = ColorScheme::add_attribute(&color_settings.clone(), Attribute::Reverse);
-                        
-                        output.push(OutputSegment {
-                            text: checkbox,
-                            color: checkbox_color,
-                        });
-
-                        
-                        output.push(OutputSegment {
-                            text: " ".repeat(width - checkbox.chars().count() / checkbox_count),
-                            color: color_settings,
-
-                        });
-                        
-                    } else {
-                        output.push(OutputSegment {
-                            text: " ".repeat(width - checkbox.chars().count() / checkbox_count),
-                            color: color_settings,
-
-                        });
-                        
-                        output.push(OutputSegment {
-                            text: checkbox,
-                            color: color_settings,
-                        });
-
-                        
-                        output.push(OutputSegment {
-                            text: " ".repeat(width - checkbox.chars().count() / checkbox_count),
-                            color: color_settings,
-
-                        });
+                    
+                    for _ in 0..(width - checkbox.chars().count() / checkbox_count) {
+                        output.push(Some(StyledChar::new(' ', color_settings.clone())));
                     }
+
+                    let checkbox_color = if i == *selected {
+                        ColorScheme::add_attribute(&color_settings.clone(), Attribute::Reverse)
+                    } else {
+                        color_settings.clone()
+                    };
+
+                    for c in checkbox.chars() {
+                        output.push(Some(StyledChar::new(c, checkbox_color.clone())));
+                    }
+
+                    for _ in 0..(width - checkbox.chars().count() / checkbox_count) {
+                        output.push(Some(StyledChar::new(' ', color_settings.clone())));
+                    }
+
                 }
             },
             PromptType::Radio(radios, selected, pos) => {
@@ -279,60 +250,35 @@ impl Promptable for Prompt {
                 for i in 0..radio_count {
                     let radio = prompt.draw_radio(i).unwrap();
 
-                    if i == pos {
-
-                        output.push(OutputSegment {
-                            text: " ".repeat(width - radio.chars().count() / radio_count),
-                            color: color_settings,
-
-                        });
-
-                        let radio_color = ColorScheme::add_attribute(&color_settings.clone(), Attribute::Reverse);
-                        
-                        output.push(OutputSegment {
-                            text: radio,
-                            color: radio_color,
-                        });
-
-                        
-                        output.push(OutputSegment {
-                            text: " ".repeat(width - radio.chars().count() / radio_count),
-                            color: color_settings,
-
-                        });
-                        
-                    } else {
-                        output.push(OutputSegment {
-                            text: " ".repeat(width - radio.chars().count() / radio_count),
-                            color: color_settings,
-
-                        });
-                        
-                        output.push(OutputSegment {
-                            text: radio,
-                            color: color_settings,
-                        });
-
-                        
-                        output.push(OutputSegment {
-                            text: " ".repeat(width - radio.chars().count() / radio_count),
-                            color: color_settings,
-
-                        });
+                    for _ in 0..(width - radio.chars().count() / radio_count) {
+                        output.push(Some(StyledChar::new(' ', color_settings.clone())));
                     }
+
+                    let radio_color = if i == selected.unwrap_or(*pos) {
+                        ColorScheme::add_attribute(&color_settings.clone(), Attribute::Reverse)
+                    } else {
+                        color_settings.clone()
+                    };
+
+                    for c in radio.chars() {
+                        output.push(Some(StyledChar::new(c, radio_color.clone())));
+                    }
+
+                   for _ in 0..(width - radio.chars().count() / radio_count) {
+                        output.push(Some(StyledChar::new(' ', color_settings.clone())));
+                   }
+
                 }
             },
             
 
         }
-        
-
-        output
     }
 
     fn max_width(&self) -> usize {
         let mut max = 0;
-        for prompt in &self.prompts {
+        let prompts = self.prompts.clone();
+        for prompt in prompts.borrow().iter() {
             match prompt {
                 PromptType::Text(text, len, _) => {
                     if let Some(len) = len {
@@ -382,32 +328,34 @@ impl Mode for Prompt {
     }
 
     fn set_key_timeout(&mut self, timeout: u64) {
-        self.timeout = timeout;
+        //self.timeout = timeout;
     }
 
     fn flush_key_buffer(&mut self) {
-        self.key_buffer.clear();
+        //self.key_buffer.clear();
     }
 
     fn refresh(&mut self) {
     }
 
-    fn change_mode(&mut self, mode: &str, pane: &mut dyn Pane) {
+    fn change_mode(&mut self, mode: &str, pane: &mut dyn Pane, container: &mut PaneContainer) {
     }
 
-    fn update_status(&mut self, pane: &PaneContainer) -> (String, String, String) {
+    fn update_status(&mut self, pane: &dyn Pane, container: &PaneContainer) -> (String, String, String) {
         ("".to_string(), "".to_string(), "".to_string())
     }
 
-    fn execute_command(&mut self, command: &str, pane: &mut dyn Pane) {
+    fn execute_command(&mut self, command: &str, pane: &mut dyn Pane, container: &mut PaneContainer) {
         match command {
             "cancel" => {
-                pane.run_command("cancel");
+                pane.run_command("cancel", container);
             },
             "submit" => {
                 let mut command = String::from("submit ");
 
-                match &self.prompts[self.current_prompt] {
+                let prompts = self.prompts.clone();
+                let prompts = prompts.borrow();
+                match &prompts[self.current_prompt] {
                     PromptType::Text(text, _, _) => {
                         command.push_str(&format!("text {}", text));
                     },
@@ -432,14 +380,16 @@ impl Mode for Prompt {
                             },
                         }
                         
-                        command.push_str(&radios[*selected.unwrap()]);
+                        command.push_str(&radios[selected.unwrap()]);
                     },
                 }
 
-                pane.run_command(&command);
+                pane.run_command(&command, container);
             },
             "toggle" => {
-                match &mut self.prompts[self.current_prompt] {
+                let prompts = self.prompts.clone();
+                let mut prompts = prompts.borrow_mut();
+                match &mut prompts[self.current_prompt] {
                     PromptType::Checkbox(checkboxes, selected) => {
                         checkboxes[*selected].1 = !checkboxes[*selected].1;
                     },
@@ -453,34 +403,38 @@ impl Mode for Prompt {
                         let mut command = String::from("submit ");
                         command.push_str(&format!("button {}", buttons[*selected].1(self)));
 
-                        pane.run_command(&command);
+                        pane.run_command(&command, container);
                     },
                     _ => {},
                 }
             },
             "left" => {
-                match &mut self.prompts[self.current_prompt] {
+                let prompts = self.prompts.clone();
+                let mut prompts = prompts.borrow_mut();
+                match &mut prompts[self.current_prompt] {
                     PromptType::Button(buttons, selected) => {
                         *selected = selected.saturating_sub(1);
                     },
                     PromptType::Checkbox(checkboxes, selected) => {
                         *selected = selected.saturating_sub(1);
                     },
-                    PromptType::Radio(radios, selected, _) => {
+                    PromptType::Radio(radios, _, selected) => {
                         *selected = selected.saturating_sub(1);
                     },
                     _ => {},
                 }
             },
             "right" => {
-                match &mut self.prompts[self.current_prompt] {
+                let prompts = self.prompts.clone();
+                let mut prompts = prompts.borrow_mut();
+                match &mut prompts[self.current_prompt] {
                     PromptType::Button(buttons, selected) => {
                         *selected = (*selected + 1).min(buttons.len() - 1);
                     },
                     PromptType::Checkbox(checkboxes, selected) => {
                         *selected = (*selected + 1).min(checkboxes.len() - 1);
                     },
-                    PromptType::Radio(radios, selected, _) => {
+                    PromptType::Radio(radios, _, selected) => {
                         *selected = (*selected + 1).min(radios.len() - 1);
                     },
                     _ => {},
@@ -490,7 +444,7 @@ impl Mode for Prompt {
                 self.current_prompt = self.current_prompt.saturating_sub(1);
             },
             "down" => {
-                self.current_prompt = (self.current_prompt + 1).min(self.prompts.len() - 1);
+                self.current_prompt = (self.current_prompt + 1).min(self.prompts.borrow().len() - 1);
             },
             _ => {},
         }
@@ -498,7 +452,7 @@ impl Mode for Prompt {
     }
 
 
-    fn process_keypress(&mut self, key: KeyEvent, pane: &mut dyn Pane) -> io::Result<bool> {
+    fn process_keypress(&mut self, key: KeyEvent, pane: &mut dyn Pane, container: &mut PaneContainer) -> io::Result<bool> {
 
         match key {
             KeyEvent {
@@ -507,19 +461,27 @@ impl Mode for Prompt {
                 ..
             } => {
                 if code == KeyCode::Char(' ') {
-                    self.execute_command("toggle", pane);
+                    self.execute_command("toggle", pane, container);
                 }
                 else {
-                    match &mut self.prompts[self.current_prompt] {
+                    let prompts = self.prompts.clone();
+                    let mut prompts = prompts.borrow_mut();
+                    match &mut prompts[self.current_prompt] {
                         PromptType::Text(text, limit, _) => {
+
+                            let chr = match code {
+                                KeyCode::Char(chr) => chr,
+                                _ => return Ok(true),
+                            };
                             match limit {
                                 Some(limit) => {
+                                    
                                     if text.chars().count() < *limit {
-                                        text.push(code.into());
+                                        text.push(chr);
                                     }
                                 },
                                 None => {
-                                    text.push(code.into());
+                                    text.push(chr);
                                 },
                             }
                         },
@@ -533,7 +495,8 @@ impl Mode for Prompt {
                 modifiers: KeyModifiers::NONE,
                 ..
             } => {
-                match &mut self.prompts[self.current_prompt] {
+                let prompts = self.prompts.clone();
+                match &mut prompts.borrow_mut()[self.current_prompt] {
                     PromptType::Text(text, _, _) => {
                         text.pop();
                     },
@@ -542,10 +505,11 @@ impl Mode for Prompt {
                 return Ok(true);
             },
             key_event => {
-                let key = Keys::from(key_event);
+                let key = Key::from(key_event);
+                let key = vec![key];
 
-                if let Some(command) = self.keybindings.borrow().get(&key) {
-                    self.execute_command(command, pane);
+                if let Some(command) = self.keybindings.clone().borrow().get(&key) {
+                    self.execute_command(command,pane, container);
                 }
 
                 return Ok(true);

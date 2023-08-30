@@ -5,11 +5,11 @@ use std::{collections::HashMap, rc::Rc, cell::RefCell, path::PathBuf, sync::mpsc
 
 use crop::{Rope, RopeSlice};
 use crossterm::event::KeyEvent;
-use crossterm::style::Stylize;
 
-use crate::{cursor::{Cursor, Direction}, mode::{Mode, base::{Normal, Insert, Command}}, settings::Settings, window::{Message, WindowContents}, apply_colors};
+use crate::{cursor::{Cursor, Direction}, mode::{Mode, base::{Normal, Insert, Command}}, settings::Settings, window::Message};
 
-use super::{PaneContainer, PaneMessage};
+use super::{PaneContainer, PaneMessage, popup::PopUpPane};
+use crate::mode::prompt::PromptType;
 
 
 #[derive(Debug, Clone)]
@@ -190,8 +190,6 @@ impl Pane for TextPane {
 
         let ((x1, y1), _) = container.get_corners();
 
-        let mut output = Vec::new();
-
         if self.settings.borrow().editor_settings.border {
 
             let color_settings = &self.settings.borrow().colors.ui;
@@ -363,21 +361,12 @@ impl Pane for TextPane {
             
             //output.push_str(apply_colors!(" ".repeat(cols.saturating_sub(num_width)), color_settings));
         }
-
-        output
     }
-
-    fn scroll_cursor(&mut self, container: &PaneContainer) {
-        let cursor = self.cursor.clone();
-
-        cursor.borrow_mut().scroll(container);
-        
-    }
-
 
     fn refresh(&mut self) {
         self.mode.borrow_mut().refresh();
     }
+
 
     fn save_buffer(&mut self) -> io::Result<()> {
         if let Some(file_name) = &self.file_name {
@@ -394,25 +383,25 @@ impl Pane for TextPane {
         Ok(())
     }
 
-    fn process_keypress(&mut self, key: KeyEvent) -> io::Result<bool> {
+    fn process_keypress(&mut self, key: KeyEvent, container: &mut PaneContainer) -> io::Result<bool> {
         let mode = self.mode.clone();
-        let result = mode.borrow_mut().process_keypress(key, self);
+        let result = mode.borrow_mut().process_keypress(key, self, container);
         result
+    }
+
+    fn scroll_cursor(&mut self, container: &PaneContainer) {
+        let cursor = self.cursor.clone();
+
+        cursor.borrow_mut().scroll(container);
+        
     }
 
 
     fn get_status(&self, container: &PaneContainer) -> (String, String, String) {
-        self.mode.borrow_mut().update_status(container)
+        self.mode.borrow_mut().update_status(self, container)
     }
 
-    fn change_mode(&mut self, name: &str) {
-        if let Some(mode) = self.get_mode(name) {
-            self.mode = mode;
-        }
-    }
-
-
-    fn run_command(&mut self, command: &str) {
+    fn run_command(&mut self, command: &str, container: &PaneContainer) {
         let mut command_args = command.split_whitespace();
         let command = command_args.next().unwrap_or("");
         match command {
@@ -546,10 +535,42 @@ impl Pane for TextPane {
                     self.sender.send(Message::OpenFile(file_name.to_string())).expect("Failed to send message");
                 }
             },
+            "prompt_jump" => {
+                let (send, recv) = std::sync::mpsc::channel();
+
+                self.receiver = Some(recv);
+
+                let txt_prompt = PromptType::Text(String::new(), None, false);
+                let prompt = vec!["Enter Jump".to_string(), "Target".to_string()];
+
+                let pane = PopUpPane::new(prompt, self.sender.clone(), send, vec![txt_prompt]);
+
+                let pane = Rc::new(RefCell::new(pane));
+
+                let ((x, y), _) = container.get_corners();
+
+                let (x, y) = (x / 2, y / 2);
+
+                let pos = (x - 7, y - 7);
+                
+                let mut container = PaneContainer::new((14, 14), (14, 14), pane, self.settings.clone());
+
+                container.set_position(pos);
+
+                self.sender.send(Message::CreatePopup(container)).expect("Failed to send message");
+
+            },
 
             _ => {}
         }
 
+    }
+
+
+    fn change_mode(&mut self, name: &str) {
+        if let Some(mode) = self.get_mode(name) {
+            self.mode = mode;
+        }
     }
 
     fn insert_newline(&mut self) {
@@ -558,6 +579,37 @@ impl Pane for TextPane {
 
         cursor.move_cursor(Direction::Down, 1, self);
         cursor.set_cursor(CursorMove::ToStart, CursorMove::Nothing, self, (0,0));
+    }
+
+    fn insert_char(&mut self, c: char) {
+        self.set_changed(true);
+        let byte_pos = self.get_byte_offset();
+        let c = c.to_string();
+        if self.contents.chars().count() == 0 {
+            self.contents.insert(0, c);
+            return;
+        }
+        let byte_pos = if byte_pos >= self.contents.byte_len() {
+            self.contents.byte_len()
+        } else {
+            byte_pos
+        };
+        self.contents.insert(byte_pos, c);
+    }
+
+    fn insert_str(&mut self, s: &str) {
+        self.set_changed(true);
+        let byte_pos = self.get_byte_offset();
+        if self.contents.chars().count() == 0 {
+            self.contents.insert(0, s);
+            return;
+        }
+        let byte_pos = if byte_pos >= self.contents.byte_len() {
+            self.contents.byte_len()
+        } else {
+            byte_pos
+        };
+        self.contents.insert(byte_pos, s);
     }
 
     ///TODO: add check to make sure we have a valid byte range
@@ -598,37 +650,6 @@ impl Pane for TextPane {
         
 
         self.contents.delete(byte_pos.saturating_sub(1)..byte_pos);
-    }
-
-    fn insert_char(&mut self, c: char) {
-        self.set_changed(true);
-        let byte_pos = self.get_byte_offset();
-        let c = c.to_string();
-        if self.contents.chars().count() == 0 {
-            self.contents.insert(0, c);
-            return;
-        }
-        let byte_pos = if byte_pos >= self.contents.byte_len() {
-            self.contents.byte_len()
-        } else {
-            byte_pos
-        };
-        self.contents.insert(byte_pos, c);
-    }
-
-    fn insert_str(&mut self, s: &str) {
-        self.set_changed(true);
-        let byte_pos = self.get_byte_offset();
-        if self.contents.chars().count() == 0 {
-            self.contents.insert(0, s);
-            return;
-        }
-        let byte_pos = if byte_pos >= self.contents.byte_len() {
-            self.contents.byte_len()
-        } else {
-            byte_pos
-        };
-        self.contents.insert(byte_pos, s);
     }
 
     fn get_cursor(&self) -> Rc<RefCell<Cursor>> {

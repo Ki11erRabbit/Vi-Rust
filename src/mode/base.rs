@@ -53,75 +53,75 @@ impl Mode for Normal {
         }
     }
 
-    fn execute_command(&mut self, command: &str, pane: &mut dyn Pane) {
+    fn execute_command(&mut self, command: &str, pane: &mut dyn Pane, container: &mut PaneContainer) {
         match command {
             "left" => {
-                pane.run_command(&format!("move left {}", self.number_buffer));
+                pane.run_command(&format!("move left {}", self.number_buffer), container);
                 self.number_buffer.clear();
             },
             "right" => {
-                pane.run_command(&format!("move right {}", self.number_buffer));
+                pane.run_command(&format!("move right {}", self.number_buffer), container);
                 self.number_buffer.clear();
             },
             "up" => {
-                pane.run_command(&format!("move up {}", self.number_buffer));
+                pane.run_command(&format!("move up {}", self.number_buffer), container);
                 self.number_buffer.clear();
             },
             "down" => {
-                pane.run_command(&format!("move down {}", self.number_buffer));
+                pane.run_command(&format!("move down {}", self.number_buffer), container);
                 self.number_buffer.clear();
             },
             "line_start" => {
-                pane.run_command("move line_start");
+                pane.run_command("move line_start", container);
             },
             "line_end" => {
-                pane.run_command("move line_end");
+                pane.run_command("move line_end", container);
             },
             "file_top" => {
-                pane.run_command("move file_top");
+                pane.run_command("move file_top", container);
             },
             "file_bottom" => {
-                pane.run_command("move file_bottom");
+                pane.run_command("move file_bottom", container);
             },
             "page_up" => {
-                pane.run_command(&format!("move page_up {}", self.number_buffer));
+                pane.run_command(&format!("move page_up {}", self.number_buffer), container);
                 self.number_buffer.clear();
             },
             "page_down" => {
-                pane.run_command(&format!("move page_down {}", self.number_buffer));
+                pane.run_command(&format!("move page_down {}", self.number_buffer), container);
                 self.number_buffer.clear();
             },
             "insert_before" => {
                 execute!(io::stdout(),SetCursorStyle::BlinkingBar).unwrap();
-                self.change_mode("Insert", pane);
+                self.change_mode("Insert", pane, container);
             },
             "insert_after" => {
                 execute!(io::stdout(),SetCursorStyle::BlinkingBar).unwrap();
-                pane.run_command("move right 1");
-                self.change_mode("Insert", pane);
+                pane.run_command("move right 1", container);
+                self.change_mode("Insert",pane, container);
             },
             "insert_beginning" => {
                 execute!(io::stdout(),SetCursorStyle::BlinkingBar).unwrap();
-                pane.run_command("move line_start");
-                self.change_mode("Insert", pane);
+                pane.run_command("move line_start", container);
+                self.change_mode("Insert", pane, container);
             },
             "insert_end" => {
                 execute!(io::stdout(),SetCursorStyle::BlinkingBar).unwrap();
-                pane.run_command("move line_end");
-                self.change_mode("Insert", pane);
+                pane.run_command("move line_end", container);
+                self.change_mode("Insert", pane, container);
             },
             "start_command" => {
-                self.change_mode("Command", pane);
+                self.change_mode("Command", pane, container);
             },
             command => {
-                pane.run_command(command);
+                pane.run_command(command, container);
             }
 
         }
 
     }
 
-    fn process_keypress(&mut self, key: KeyEvent, pane: &mut dyn Pane) -> io::Result<bool> {
+    fn process_keypress(&mut self, key: KeyEvent, pane: &mut dyn Pane, container: &mut PaneContainer) -> io::Result<bool> {
         self.refresh();
 
         match key {
@@ -211,7 +211,7 @@ impl Mode for Normal {
                 }
                 self.key_buffer.push(key);
                 if let Some(command) = self.keybindings.clone().borrow().get(&self.key_buffer) {
-                    self.execute_command(command.as_str(), pane);
+                    self.execute_command(command.as_str(), pane, container);
                     flush = true;
                 }
                 if flush {
@@ -223,13 +223,13 @@ impl Mode for Normal {
         }
     }
 
-    fn change_mode(&mut self, name: &str, pane: &mut dyn Pane) {
+    fn change_mode(&mut self, name: &str, pane: &mut dyn Pane, container: &mut PaneContainer) {
 
         pane.change_mode(name);
 
     }
 
-    fn update_status(&mut self, pane: &PaneContainer) -> (String, String, String){
+    fn update_status(&mut self, pane: &dyn Pane, container: &PaneContainer) -> (String, String, String){
         let (row, col) = pane.get_cursor().borrow().get_cursor();
 
 
@@ -289,7 +289,7 @@ impl Insert {
             _ => return Ok(false),
         };
 
-        cursor.move_cursor(direction, 1, pane);
+        cursor.move_cursor(direction, 1, &mut *pane);
         Ok(true)
     }
 
@@ -309,7 +309,7 @@ impl Insert {
         pane.insert_char(c);
         let cursor = pane.get_cursor();
         let mut cursor = cursor.borrow_mut();
-        cursor.move_cursor(Direction::Right, 1, pane);
+        cursor.move_cursor(Direction::Right, 1, &mut *pane);
         Ok(true)
     }
 }
@@ -339,45 +339,45 @@ impl Mode for Insert {
         }
     }
 
-    fn execute_command(&mut self, command: &str, pane: &mut dyn Pane) {
+    fn execute_command(&mut self, command: &str, pane: &mut dyn Pane, container: &mut PaneContainer) {
         match command {
             "left" => {
-                pane.run_command("move left 1");
+                pane.run_command("move left 1", container);
             },
             "right" => {
-                pane.run_command("move right 1");
+                pane.run_command("move right 1", container);
             },
             "up" => {
-                pane.run_command("move up 1");
+                pane.run_command("move up 1", container);
             },
             "down" => {
-                pane.run_command("move down 1");
+                pane.run_command("move down 1", container);
             },
             "file_top" => {
-                pane.run_command("move file_top");
+                pane.run_command("move file_top", container);
             },
             "file_bottom" => {
-                pane.run_command("move file_bottom");
+                pane.run_command("move file_bottom", container);
             },
             "page_up" => {
-                pane.run_command("move page_up");
+                pane.run_command("move page_up", container);
             },
             "page_down" => {
-                pane.run_command("move page_down");
+                pane.run_command("move page_down", container);
             },
             "leave" => {
                 execute!(io::stdout(),SetCursorStyle::BlinkingBlock).unwrap();
-                pane.run_command("move left 1");
-                self.change_mode("Normal", pane);
+                pane.run_command("move left 1", container);
+                self.change_mode("Normal", pane, container);
             },
             command => {
-                pane.run_command(command);
+                pane.run_command(command, container);
             }
 
         }
     }
     
-    fn process_keypress(&mut self, key: KeyEvent, pane: &mut dyn Pane) -> io::Result<bool> {
+    fn process_keypress(&mut self, key: KeyEvent, pane: &mut dyn Pane, container: &mut PaneContainer) -> io::Result<bool> {
         self.refresh();
 
         if self.key_buffer.is_empty() {
@@ -415,7 +415,7 @@ impl Mode for Insert {
                     }
                     self.key_buffer.push(key);
                     if let Some(command) = self.keybindings.clone().borrow().get(&self.key_buffer) {
-                        self.execute_command(command.as_str(), pane);
+                        self.execute_command(command.as_str(), pane, container);
                         flush = true;
                     }
                     if flush {
@@ -437,7 +437,7 @@ impl Mode for Insert {
                     }
                     self.key_buffer.push(key);
                     if let Some(command) = self.keybindings.clone().borrow().get(&self.key_buffer) {
-                        self.execute_command(command.as_str(), pane);
+                        self.execute_command(command.as_str(), pane, container);
                         flush = true;
                     }
                     if flush {
@@ -451,13 +451,12 @@ impl Mode for Insert {
 
     }
 
-    fn change_mode(&mut self, name: &str, pane: &mut dyn Pane) {
-            
+    fn change_mode(&mut self, name: &str, pane: &mut dyn Pane, container: &mut PaneContainer) {
         pane.change_mode(name);
     
     }
 
-    fn update_status(&mut self, pane: &PaneContainer) -> (String, String, String) {
+    fn update_status(&mut self, pane: &dyn Pane, container: &PaneContainer) -> (String, String, String) {
         let (row, col) = pane.get_cursor().borrow().get_cursor();
 
         let first = format!("{}:{}", col + 1, row + 1);
@@ -519,12 +518,11 @@ impl Mode for Command {
         "Command".to_string()
     }
 
-    fn update_status(&mut self, pane: &PaneContainer) -> (String, String, String) {
+    fn update_status(&mut self, pane: &dyn Pane, container: &PaneContainer) -> (String, String, String) {
 
 
         execute!(io::stdout(),SetCursorStyle::BlinkingBar).unwrap();
 
-        let pane = pane.pane.borrow();
         let pane = &*pane;
 
         self.backup_cursor(pane);
@@ -547,7 +545,7 @@ impl Mode for Command {
         (self.get_name(), first, second)
     }
 
-    fn change_mode(&mut self, name: &str, pane: &mut dyn Pane) {
+    fn change_mode(&mut self, name: &str, pane: &mut dyn Pane, container: &mut PaneContainer) {
         self.command.clear();
         self.edit_pos = 0;
         pane.change_mode(name);
@@ -583,7 +581,7 @@ impl Mode for Command {
     }
 
 
-    fn execute_command(&mut self, command: &str, pane: &mut dyn Pane) {
+    fn execute_command(&mut self, command: &str, pane: &mut dyn Pane, container: &mut PaneContainer) {
         match command {
             "left" => {
                 self.edit_pos = self.edit_pos.saturating_sub(1);
@@ -600,17 +598,17 @@ impl Mode for Command {
                 self.edit_pos = self.command.len();
             },
             "leave" => {
-                self.change_mode("Normal", pane);
+                self.change_mode("Normal", pane, container);
             },
             command => {
-                pane.run_command(command);
+                pane.run_command(command, container);
 
             }
 
         }
     }
 
-    fn process_keypress(&mut self, key: KeyEvent, pane: &mut dyn Pane) -> io::Result<bool> {
+    fn process_keypress(&mut self, key: KeyEvent, pane: &mut dyn Pane, container: &mut PaneContainer) -> io::Result<bool> {
         self.refresh();
 
 
@@ -620,9 +618,9 @@ impl Mode for Command {
                 modifiers: KeyModifiers::NONE,
                 ..
             } => {
-                pane.run_command(&self.command);
+                pane.run_command(&self.command, container);
 
-                self.change_mode("Normal", pane);
+                self.change_mode("Normal", pane,container);
                 Ok(true)
             },
             KeyEvent {
@@ -670,7 +668,7 @@ impl Mode for Command {
                 }
                 self.key_buffer.push(key);
                 if let Some(command) = self.keybindings.clone().borrow().get(&self.key_buffer) {
-                    self.execute_command(command.as_str(), pane);
+                    self.execute_command(command.as_str(), pane, container);
                     flush = true;
                 }
                 if flush {
