@@ -1,7 +1,7 @@
 use std::{rc::Rc, cell::RefCell, sync::mpsc::Sender, path::PathBuf, io};
 
 
-use crate::{mode::prompt::{PromptType, Promptable}, cursor::Cursor, window::{StyledChar, Message}};
+use crate::{mode::{Mode, prompt::{PromptType, Promptable}}, cursor::Cursor, window::{StyledChar, Message}, settings::Settings};
 use super::{PaneMessage, PaneContainer, Pane};
 
 
@@ -18,12 +18,15 @@ pub struct PopUpPane {
     prompt: Vec<String>,
     drawn_prompt: RefCell<usize>,
     prompt_level: RefCell<usize>,
+    settings: Rc<RefCell<Settings>>,
 }
 
 impl PopUpPane {
-    pub fn new(prompt: Vec<String>, window_sender: Sender<Message>, pane_sender: Sender<PaneMessage>, prompts: Vec<PromptType>) -> PopUpPane {
+    pub fn new(settings: Rc<RefCell<Settings>>, prompt: Vec<String>, window_sender: Sender<Message>, pane_sender: Sender<PaneMessage>, prompts: Vec<PromptType>) -> PopUpPane {
 
         let mode = Rc::new(RefCell::new(crate::mode::prompt::Prompt::new(prompts)));
+
+        mode.borrow_mut().add_keybindings(settings.borrow().mode_keybindings.get("Prompt").unwrap().clone());
         
         PopUpPane {
             mode,
@@ -32,6 +35,7 @@ impl PopUpPane {
             prompt,
             drawn_prompt: RefCell::new(0),
             prompt_level: RefCell::new(0),
+            settings,
         }
     }
 
@@ -57,6 +61,7 @@ impl Pane for PopUpPane {
     fn draw_row(&self, index: usize, container: &PaneContainer, output: &mut Vec<Option<StyledChar>>){
 
         let (width, height) = container.get_size();
+        eprintln!("{} {}", width, height);
 
         let color_settings = container.settings.borrow().colors.clone().ui;
         
@@ -128,7 +133,7 @@ impl Pane for PopUpPane {
         
         match command {
             "cancel" => {
-                self.window_sender.send(Message::ClosePane).unwrap();
+                self.window_sender.send(Message::ClosePane(true)).unwrap();
             },
             "submit" => {
                 let result_type = command_args.next().unwrap();
@@ -136,22 +141,22 @@ impl Pane for PopUpPane {
                 match result_type {
                     "text" => {
                         let value = command_args.next().unwrap();
-                        self.window_sender.send(Message::ClosePane).unwrap();
+                        self.window_sender.send(Message::ClosePane(true)).unwrap();
                         self.pane_sender.send(PaneMessage::String(value.to_string())).unwrap();
                     },
                     "radio" => {
                         let value = command_args.next().unwrap();
-                        self.window_sender.send(Message::ClosePane).unwrap();
+                        self.window_sender.send(Message::ClosePane(true)).unwrap();
                         self.pane_sender.send(PaneMessage::String(value.to_string())).unwrap();
                     },
                     "button" => {
                         let value = command_args.next().unwrap();
-                        self.window_sender.send(Message::ClosePane).unwrap();
+                        self.window_sender.send(Message::ClosePane(true)).unwrap();
                         self.pane_sender.send(PaneMessage::String(value.to_string())).unwrap();
                     },
                     "checkbox" => {
                         let value = command_args.next().unwrap();
-                        self.window_sender.send(Message::ClosePane).unwrap();
+                        self.window_sender.send(Message::ClosePane(true)).unwrap();
                         self.pane_sender.send(PaneMessage::String(value.to_string())).unwrap();
                     },
                     x => {

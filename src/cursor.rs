@@ -39,6 +39,7 @@ pub struct Cursor {
     pub col_offset: usize,
     pub number_line_size: usize,
     pub ignore_offset: bool,
+    pub hide: bool,
 }
 
 impl Cursor {
@@ -56,6 +57,7 @@ impl Cursor {
             col_offset: 0,
             number_line_size: 0,
             ignore_offset: false,
+            hide: false,
         }
     }
 

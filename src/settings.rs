@@ -362,7 +362,16 @@ impl Default for Settings {
             key: KeyCode::Char('l'),
             modifier: KeyModifiers::NONE,
         }], "pane_right".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('\\'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('j'),
+            modifier: KeyModifiers::NONE,
+        }], "prompt_jump".to_string());
 
+
+        
         let mut insert_keybindings = HashMap::new();
 
         insert_keybindings.insert(vec![Key {
@@ -459,6 +468,31 @@ impl Default for Settings {
         mode_keybindings.insert("Normal".to_string(), normal_keybindings);
         mode_keybindings.insert("Insert".to_string(), insert_keybindings);
         mode_keybindings.insert("Command".to_string(), command_keybindings);
+
+        let mut prompt_keybindings = HashMap::new();
+
+        prompt_keybindings.insert(vec![Key {
+            key: KeyCode::Esc,
+            modifier: KeyModifiers::NONE,
+        }], "cancel".to_string());
+        prompt_keybindings.insert(vec![Key {
+            key: KeyCode::Char('\n'),
+            modifier: KeyModifiers::NONE,
+        }], "submit".to_string());
+        prompt_keybindings.insert(vec![Key {
+            key: KeyCode::Char(' '),
+            modifier: KeyModifiers::NONE,
+        }], "toggle".to_string());
+        prompt_keybindings.insert(vec![Key {
+            key: KeyCode::Left,
+            modifier: KeyModifiers::NONE,
+        }], "left".to_string());
+        prompt_keybindings.insert(vec![Key {
+            key: KeyCode::Right,
+            modifier: KeyModifiers::NONE,
+        }], "right".to_string());
+
+        mode_keybindings.insert("Prompt".to_string(), prompt_keybindings);
 
         let colors = EditorColors::default();
         

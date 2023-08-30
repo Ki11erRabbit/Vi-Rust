@@ -28,8 +28,8 @@ pub enum Message {
     PaneLeft,
     PaneRight,
     OpenFile(String),
-    ClosePane,
-    CreatePopup(PaneContainer),
+    ClosePane(bool),
+    CreatePopup(PaneContainer, bool),
 }
 
 pub struct Window{
@@ -64,19 +64,17 @@ impl Window {
 
         pane.borrow_mut().set_cursor_size(win_size);
         
-        let mut panes = vec![vec![PaneContainer::new(win_size, win_size, pane.clone(), settings.clone())], vec![PaneContainer::new(win_size, (10, 10), pane.clone(), settings.clone()), PaneContainer::new(win_size, (10, 10), pane.clone(), settings.clone())]];
+        let panes = vec![vec![PaneContainer::new(win_size, win_size, pane.clone(), settings.clone())]];
 
-        panes[1][0].set_position((10, 10));
-        panes[1][1].set_position((30, 10));
-        
+
         let mut known_file_types = HashSet::new();
         known_file_types.insert("txt".to_string());
-        let buffers = vec![TextBuffer::new(); 2];
+        let buffers = vec![TextBuffer::new(); 1];
         
         Self {
             size: win_size,
             contents: WindowContents::new(),
-            active_panes: vec![0, 0],
+            active_panes: vec![0],
             active_layer: 0,
             panes,
             buffers,
@@ -88,10 +86,37 @@ impl Window {
         }
     }
 
-    fn create_popup(&mut self, pane: PaneContainer) {
-        self.panes[self.active_layer].push(pane);
-        self.active_layer = self.panes.len() - 1;
-        self.active_panes.push(self.panes[self.active_layer].len() - 1);
+    fn create_popup(&mut self, pane: PaneContainer, make_active: bool) {
+        if make_active {
+            eprintln!("Making new pane active");
+            self.active_layer = self.panes.len() - 1;
+
+        }
+        if self.panes.len() == 1 {
+            eprintln!("Creating new layer");
+            self.panes.push(vec![pane]);
+        }
+        else {
+            eprintln!("Adding to existing layer");
+            self.panes[self.active_layer].push(pane);
+        }
+        if self.buffers.len() == 1 {
+            eprintln!("Creating new buffer");
+            self.buffers.push(TextBuffer::new());
+        }
+        if self.active_panes.len() == 1 {
+            eprintln!("Creating new active pane");
+            self.active_panes.push(self.panes[self.active_layer].len() - 1);
+        }
+        else {
+            eprintln!("Adding to existing active pane");
+            self.active_panes[self.active_layer] = self.panes[self.active_layer].len() - 1;
+        }
+        if make_active {
+            eprintln!("Making new pane active");
+            self.active_layer = self.panes.len() - 1;
+
+        }
     }
 
     fn open_file(&mut self, filename: PathBuf) -> usize {
@@ -389,12 +414,19 @@ impl Window {
                     Message::OpenFile(path) => {
                         self.switch_pane(path);
                     }
-                    Message::ClosePane => {
+                    Message::ClosePane(go_down) => {
+                        eprintln!("Closing pane");
                         self.panes[self.active_layer].remove(self.active_panes[self.active_layer]);
                         self.active_panes[self.active_layer] = self.active_panes[self.active_layer].saturating_sub(1);
+
+                        if go_down {
+                            self.active_layer = self.active_layer.saturating_sub(1);
+                        }
+                        
                     },
-                    Message::CreatePopup(container) => {
-                        self.create_popup(container);
+                    Message::CreatePopup(container, make_active) => {
+                        eprintln!("Creating popup");
+                        self.create_popup(container, make_active);
                     },
                 }
             },
@@ -508,6 +540,10 @@ impl Window {
                     pane_index += 1;
                 }
 
+                while self.buffers[l].contents.len() <= i {
+                    self.buffers[l].contents.push(Vec::new());
+                }
+
                 while self.buffers[l].contents[i].len() < cols {
                     self.buffers[l].contents[i].push(None);
                 }
@@ -531,38 +567,6 @@ impl Window {
             buffer.clear();
         }
         
-        /*for i in 0..rows {
-
-            let mut pane_index = 0;
-            let mut window_index = 0;
-            while window_index < self.size.0 {
-                if pane_index >= self.panes.len() {
-                    break;
-                }
-                let ((start_x, start_y), (end_x, end_y)) = self.panes[pane_index].get_corners();
-                if start_y <= i && end_y >= i {
-
-                    
-                    let buffer = self.panes[pane_index].draw_row(i - start_y + offset);
-
-                    for segment in buffer {
-                        self.contents.push_str(apply_colors!(segment.text, segment.color));
-                    }
-                    
-                    window_index += end_x - start_x + 1;
-                }
-                pane_index += 1;
-            }
-
-
-
-            let color_settings = &self.settings.borrow().colors.pane;
-
-            self.contents.push_str(apply_colors!("\r\n", color_settings));
-
-
-        }*/
-
     }
 
 
@@ -603,7 +607,15 @@ impl Window {
         if !self.contents.will_change() {
             return Ok(());
         }
-        
+
+        eprintln!("Active layer: {}", self.active_layer);
+        eprintln!("Active pane: {}", self.active_panes[self.active_layer]);
+        eprintln!("Active pane len: {}", self.panes[self.active_layer].len());
+
+        for panes in self.panes.iter() {
+            eprintln!("{:?}", panes);
+        }
+
         self.panes[self.active_layer][self.active_panes[self.active_layer]].refresh();
 
         self.panes[self.active_layer][self.active_panes[self.active_layer]].scroll_cursor();
@@ -617,13 +629,13 @@ impl Window {
         self.draw_rows();
         self.draw_status_bar();
 
-        let cursor = self.panes[self.active_layer][self.active_panes[self.active_layer]].get_cursor();
+        let cursor = self.panes[0][self.active_panes[self.active_layer]].get_cursor();
         let cursor = cursor.borrow();
 
         let (x, y) = cursor.get_real_cursor();
         //eprintln!("x: {} y: {}", x, y);
-        let x = x + self.panes[self.active_layer][self.active_panes[self.active_layer]].get_position().0;
-        let y = y + self.panes[self.active_layer][self.active_panes[self.active_layer]].get_position().1;
+        let x = x + self.panes[0][self.active_panes[self.active_layer]].get_position().0;
+        let y = y + self.panes[0][self.active_panes[self.active_layer]].get_position().1;
         //eprintln!("x: {} y: {}", x, y);
 
         
@@ -709,6 +721,7 @@ impl FinalTextBuffer {
     }
 
     pub fn merge(&mut self, layers: &mut Vec<TextBuffer>) {
+        
         let top_layer = layers.len() - 1;
 
         let min_y = layers.iter().map(|layer| layer.contents.len()).min().unwrap_or(0);
@@ -732,7 +745,7 @@ impl FinalTextBuffer {
                     if self.contents.len() <= y {
                         self.contents.push(Vec::new());
                     }
-                    self.contents[y].push(StyledChar::new(' ', ColorScheme::default()));
+                    //self.contents[y].push(StyledChar::new(' ', ColorScheme::default()));
                 }
             }
         }

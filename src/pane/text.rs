@@ -408,7 +408,7 @@ impl Pane for TextPane {
             "q" => {
                 if self.changed {
                 } else {
-                    self.sender.send(Message::ClosePane).unwrap();
+                    self.sender.send(Message::ClosePane(false)).unwrap();
                 }
             },
             "w" => {
@@ -427,10 +427,10 @@ impl Pane for TextPane {
             },
             "wq" => {
                 self.save_buffer().expect("Failed to save file");
-                self.sender.send(Message::ClosePane).unwrap();
+                self.sender.send(Message::ClosePane(false)).unwrap();
             },
             "q!" => {
-                self.sender.send(Message::ClosePane).unwrap();
+                self.sender.send(Message::ClosePane(false)).unwrap();
             },
             "move" => {
                 let direction = command_args.next();
@@ -543,21 +543,23 @@ impl Pane for TextPane {
                 let txt_prompt = PromptType::Text(String::new(), None, false);
                 let prompt = vec!["Enter Jump".to_string(), "Target".to_string()];
 
-                let pane = PopUpPane::new(prompt, self.sender.clone(), send, vec![txt_prompt]);
+                let pane = PopUpPane::new(self.settings.clone(), prompt, self.sender.clone(), send, vec![txt_prompt]);
 
                 let pane = Rc::new(RefCell::new(pane));
 
-                let ((x, y), _) = container.get_corners();
+                let (_, (x, y)) = container.get_corners();
 
                 let (x, y) = (x / 2, y / 2);
 
                 let pos = (x - 7, y - 7);
+
+                let max_size = container.get_size();
                 
-                let mut container = PaneContainer::new((14, 14), (14, 14), pane, self.settings.clone());
+                let mut container = PaneContainer::new(max_size, (14, 14), pane, self.settings.clone());
 
                 container.set_position(pos);
 
-                self.sender.send(Message::CreatePopup(container)).expect("Failed to send message");
+                self.sender.send(Message::CreatePopup(container, true)).expect("Failed to send message");
 
             },
 

@@ -2,7 +2,7 @@
 pub(crate) mod text;
 pub mod popup;
 
-use std::{rc::Rc, cell::RefCell, path::PathBuf, io, cmp};
+use std::{rc::Rc, cell::RefCell, path::PathBuf, io, cmp, fmt::Debug};
 
 use crossterm::event::KeyEvent;
 
@@ -27,6 +27,13 @@ impl Clone for PaneContainer {
         }
     }
 }
+
+impl Debug for PaneContainer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "(PaneContainer)")
+    }
+}
+
 
 pub struct PaneContainer {
     pub pane: Rc<RefCell<dyn Pane>>,
@@ -55,7 +62,7 @@ impl PaneContainer {
     }
     fn shrink(&mut self) {
         let (_, (mut end_x, _)) = self.get_corners();
-        while  end_x > self.max_size.0 {
+        while end_x > self.max_size.0 {
             if self.size.0 == 0 {
                 break;
             }
