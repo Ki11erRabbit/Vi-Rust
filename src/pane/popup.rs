@@ -47,7 +47,7 @@ impl Pane for PopUpPane {
 
     }
 
-    fn refresh(&mut self) {
+    fn refresh(&mut self, container: &mut PaneContainer) {
     }
 
     fn change_mode(&mut self, name: &str) {}

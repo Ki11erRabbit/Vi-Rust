@@ -165,24 +165,26 @@ impl Window {
         let mut panes_to_remove = Vec::new();
         for (i, layer) in self.panes.iter().enumerate() {
             for (j, pane) in layer.iter().enumerate() {
-                //eprintln!("pane can close: {}, {}", i, j);
                 if pane.can_close() {
+                    eprintln!("pane can close: {}, {}", i, j);
                     panes_to_remove.push((i, j));
                 }
             }
         }
         
         for (i, j) in panes_to_remove.iter().rev() {
-            //eprintln!("removing pane: {}, {}", i, j);
+            eprintln!("removing pane: {}, {}", i, j);
             
             loop {
                 if *j + 1 < self.panes[*i].len() {
+                    eprintln!("combining with right pane");
                     let corners = self.panes[*i][*j].get_corners();
                     if self.panes[*i][*j + 1].combine(corners) {
                         break;
                     }
                 }
                 if *j != 0 {
+                    eprintln!("combining with left pane");
                     let corners = self.panes[*i][*j].get_corners();
                     if self.panes[*i][*j - 1].combine(corners) {
                         break;
@@ -192,7 +194,7 @@ impl Window {
             }
 
             
-            self.panes.remove(*j);
+            self.panes[*i].remove(*j);
         }
 
         for (i, layer) in self.panes.iter().enumerate() {
@@ -259,8 +261,6 @@ impl Window {
         else {
             (new_pane_size.0 + 1, new_pane_size.1)
         };
-        eprintln!("old pane size: {:?}", old_pane_size);
-        eprintln!("new pane size: {:?}", new_pane_size);
         
         self.panes[self.active_layer][self.active_panes[self.active_layer]].set_size(old_pane_size);
 
@@ -273,9 +273,12 @@ impl Window {
 
         new_pane.set_position(new_pane_position);
         self.panes[self.active_layer].insert(new_pane_index, new_pane);
-        
 
+        eprintln!("old corners {:?}", self.panes[self.active_layer][self.active_panes[self.active_layer]].get_corners());
+        
         self.active_panes[self.active_layer] = new_pane_index;
+
+        eprintln!("new corners {:?}", self.panes[self.active_layer][self.active_panes[self.active_layer]].get_corners());
     }
 
 
@@ -413,8 +416,8 @@ impl Window {
                         self.switch_pane(path);
                     }
                     Message::ClosePane(go_down) => {
-                        eprintln!("Closing pane");
-                        self.panes[self.active_layer].remove(self.active_panes[self.active_layer]);
+                        //self.panes[self.active_layer].remove(self.active_panes[self.active_layer]);
+                        self.panes[self.active_layer][self.active_panes[self.active_layer]].close();
                         self.active_panes[self.active_layer] = self.active_panes[self.active_layer].saturating_sub(1);
 
                         if go_down {
@@ -423,7 +426,6 @@ impl Window {
                         
                     },
                     Message::CreatePopup(container, make_active) => {
-                        eprintln!("Creating popup");
                         self.create_popup(container, make_active);
                     },
                 }

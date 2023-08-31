@@ -28,15 +28,17 @@ impl JumpTable {
         }
     }
 
-    pub fn add(&mut self, cursor: Cursor) {
+    pub fn add(&mut self, mut cursor: Cursor) {
         if self.index < self.table.len() {
             self.table.truncate(self.index);
         }
+        cursor.ignore_offset = false;
         self.table.push(cursor);
         self.index += 1;
     }
 
-    pub fn add_named(&mut self, name: &str, cursor: Cursor) {
+    pub fn add_named(&mut self, name: &str, mut cursor: Cursor) {
+        cursor.ignore_offset = false;
         self.named.insert(name.to_owned(), cursor);
     }
 
@@ -65,16 +67,20 @@ impl JumpTable {
             self.index = index;
             self.table.truncate(self.index + 1);
             self.table.push(cursor);
-            Some(self.table[self.index])
+            let mut cursor = self.table[self.index];
+            cursor.jumped = true;
+            Some(cursor)
         }
         else {
             None
         }
     }
 
-    pub fn named_jump(&mut self, name: &str, cursor: Cursor) -> Option<Cursor> {
-        if let Some(index) = self.named.get(name).cloned() {
+    pub fn named_jump(&mut self, name: &str, mut cursor: Cursor) -> Option<Cursor> {
+        cursor.ignore_offset = false;
+        if let Some(mut index) = self.named.get(name).cloned() {
             self.add(cursor);
+            index.jumped = true;
             Some(index)
         }
         else {
@@ -178,6 +184,25 @@ impl TextPane {
         let byte_pos = line_pos + row_pos;
 
         byte_pos
+    }
+
+    fn check_messages(&mut self, container: &PaneContainer) {
+        match self.receiver.as_ref() {
+            None => {},
+            Some(receiver) => {
+                match receiver.try_recv() {
+                    Ok(message) => {
+                        match message {
+                            PaneMessage::String(string) => {
+                                let command = format!("jump {}", string);
+                                self.run_command(&command, container);
+                            },
+                        }
+                    },
+                    Err(_) => {},
+                }
+            }
+        }
     }
 
 }
@@ -363,8 +388,9 @@ impl Pane for TextPane {
         }
     }
 
-    fn refresh(&mut self) {
+    fn refresh(&mut self, container: &mut PaneContainer) {
         self.mode.borrow_mut().refresh();
+        self.check_messages(container);
     }
 
 
@@ -488,6 +514,9 @@ impl Pane for TextPane {
                             }
                             else {
                                 if let Some(new_cursor) = self.jump_table.named_jump(other, *cursor) {
+                                    eprintln!("New Cursor: {:?}", new_cursor);
+                                    eprintln!("Old Cursor: {:?}", *cursor);
+                                    eprintln!("Jumping to named jump");
                                     *cursor = new_cursor;
                                 }
 
@@ -500,6 +529,7 @@ impl Pane for TextPane {
 
             },
             "set_jump" => {
+                eprintln!("Setting jump");
                 let cursor = self.cursor.borrow();
                 if let Some(jump) = command_args.next() {
                     self.jump_table.add_named(jump, *cursor);
@@ -547,7 +577,7 @@ impl Pane for TextPane {
 
                 let pane = Rc::new(RefCell::new(pane));
 
-                let ((x1, y1), (x2, y2)) = container.get_corners();
+                let (_, (x2, y2)) = container.get_corners();
                 let (x, y) = container.get_size();
 
                 let (x, y) = (x / 2, y / 2);

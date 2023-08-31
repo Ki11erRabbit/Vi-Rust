@@ -253,7 +253,9 @@ impl PaneContainer {
     }
 
     pub fn refresh(&mut self) {
-        self.pane.borrow_mut().refresh();
+        let pane = self.pane.clone();
+        let mut pane = pane.borrow_mut();
+        pane.refresh(self);
     }
 
     pub fn draw_row(&self, index: usize, contents: &mut Vec<Option<StyledChar>>) {
@@ -284,7 +286,7 @@ impl PaneContainer {
 pub trait Pane {
     fn draw_row(&self, index: usize, container: &PaneContainer, contents: &mut Vec<Option<StyledChar>>);
 
-    fn refresh(&mut self);
+    fn refresh(&mut self, container: &mut PaneContainer);
 
     fn save_buffer(&mut self) -> io::Result<()>;
     fn open_file(&mut self, filename: &PathBuf) -> io::Result<()>;
