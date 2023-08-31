@@ -62,6 +62,7 @@ impl Pane for PopUpPane {
 
         let (width, height) = container.get_size();
         eprintln!("{} {}", width, height);
+        eprintln!("{:?}", container.get_corners());
 
         let color_settings = container.settings.borrow().colors.clone().ui;
         
@@ -87,7 +88,7 @@ impl Pane for PopUpPane {
 
             if *self.drawn_prompt.borrow() < self.prompt.len() {
                 let prompt = *self.drawn_prompt.borrow();
-                let side_len = width - 2 - self.prompt[prompt].chars().count();
+                let side_len = width.saturating_sub(2 + self.prompt[prompt].chars().count());
                 let side_len = side_len / 2;
                 for _ in 0..side_len {
                     output.push(Some(StyledChar::new(' ', color_settings.clone())));

@@ -547,17 +547,26 @@ impl Pane for TextPane {
 
                 let pane = Rc::new(RefCell::new(pane));
 
-                let (_, (x, y)) = container.get_corners();
+                let ((x1, y1), (x2, y2)) = container.get_corners();
+                let (x, y) = container.get_size();
 
                 let (x, y) = (x / 2, y / 2);
 
-                let pos = (x - 7, y - 7);
+                let pos = (x2 - 7 - x, y2 - 7 - y);
+
+                eprintln!("pos: {:?}", pos);
 
                 let max_size = container.get_size();
                 
-                let mut container = PaneContainer::new(max_size, (14, 14), pane, self.settings.clone());
+                let mut container = PaneContainer::new(max_size, (14, 7), pane, self.settings.clone());
+
+                eprintln!("size: {:?}", container.get_size());
 
                 container.set_position(pos);
+                container.set_size((14, 7));
+
+                eprintln!("size: {:?}", container.get_size());
+
 
                 self.sender.send(Message::CreatePopup(container, true)).expect("Failed to send message");
 

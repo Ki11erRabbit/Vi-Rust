@@ -87,30 +87,25 @@ impl Window {
     }
 
     fn create_popup(&mut self, pane: PaneContainer, make_active: bool) {
-        if make_active {
-            eprintln!("Making new pane active");
-            self.active_layer = self.panes.len() - 1;
-
-        }
-        if self.panes.len() == 1 {
+        if self.panes.len() - 1 == self.active_layer {
             eprintln!("Creating new layer");
             self.panes.push(vec![pane]);
         }
         else {
             eprintln!("Adding to existing layer");
-            self.panes[self.active_layer].push(pane);
+            self.panes[self.active_layer + 1].push(pane);
         }
-        if self.buffers.len() == 1 {
+        if self.buffers.len() - 1 == self.active_layer {
             eprintln!("Creating new buffer");
             self.buffers.push(TextBuffer::new());
         }
-        if self.active_panes.len() == 1 {
+        if self.active_panes.len() - 1 == self.active_layer {
             eprintln!("Creating new active pane");
             self.active_panes.push(self.panes[self.active_layer].len() - 1);
         }
         else {
             eprintln!("Adding to existing active pane");
-            self.active_panes[self.active_layer] = self.panes[self.active_layer].len() - 1;
+            self.active_panes[self.active_layer + 1] = self.panes[self.active_layer].len() - 1;
         }
         if make_active {
             eprintln!("Making new pane active");
@@ -264,6 +259,9 @@ impl Window {
         else {
             (new_pane_size.0 + 1, new_pane_size.1)
         };
+        eprintln!("old pane size: {:?}", old_pane_size);
+        eprintln!("new pane size: {:?}", new_pane_size);
+        
         self.panes[self.active_layer][self.active_panes[self.active_layer]].set_size(old_pane_size);
 
 
