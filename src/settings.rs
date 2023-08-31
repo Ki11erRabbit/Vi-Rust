@@ -362,13 +362,27 @@ impl Default for Settings {
             key: KeyCode::Char('l'),
             modifier: KeyModifiers::NONE,
         }], "pane_right".to_string());
+
         normal_keybindings.insert(vec![Key {
             key: KeyCode::Char('\\'),
             modifier: KeyModifiers::NONE,
         }, Key {
             key: KeyCode::Char('j'),
             modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('t'),
+            modifier: KeyModifiers::NONE,
         }], "prompt_jump".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('\\'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('j'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('s'),
+            modifier: KeyModifiers::NONE,
+        }], "prompt_set_jump".to_string());
 
 
         

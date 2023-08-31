@@ -64,12 +64,13 @@ impl JumpTable {
 
     pub fn jump(&mut self, index: usize, cursor: Cursor) -> Option<Cursor> {
         if index < self.table.len() {
+            let mut j_cursor = self.table[self.index];
+            j_cursor.prepare_jump(&cursor);
+
             self.index = index;
             self.table.truncate(self.index + 1);
             self.table.push(cursor);
-            let mut cursor = self.table[self.index];
-            cursor.jumped = true;
-            Some(cursor)
+            Some(j_cursor)
         }
         else {
             None
@@ -78,10 +79,12 @@ impl JumpTable {
 
     pub fn named_jump(&mut self, name: &str, mut cursor: Cursor) -> Option<Cursor> {
         cursor.ignore_offset = false;
-        if let Some(mut index) = self.named.get(name).cloned() {
+        if let Some(index) = self.named.get(name).cloned() {
+            let mut j_cursor = index;
+            j_cursor.prepare_jump(&cursor);
+
             self.add(cursor);
-            index.jumped = true;
-            Some(index)
+            Some(j_cursor)
         }
         else {
             None
@@ -91,7 +94,11 @@ impl JumpTable {
 
 
 
-
+pub enum Waiting {
+    JumpTarget,
+    JumpPosition,
+    None,
+}
 
 
 
@@ -106,6 +113,7 @@ pub struct TextPane {
     jump_table: JumpTable,
     sender: Sender<Message>,
     receiver: Option<Receiver<PaneMessage>>,
+    waiting: Waiting,
 }
 
 impl TextPane {
@@ -139,6 +147,7 @@ impl TextPane {
             jump_table: JumpTable::new(),
             sender,
             receiver: None,
+            waiting: Waiting::None,
         }
     }
 
@@ -194,8 +203,22 @@ impl TextPane {
                     Ok(message) => {
                         match message {
                             PaneMessage::String(string) => {
-                                let command = format!("jump {}", string);
-                                self.run_command(&command, container);
+
+                                match self.waiting {
+                                    Waiting::JumpTarget => {
+                                        self.waiting = Waiting::JumpPosition;
+                                        let command = format!("jump {}", string);
+                                        self.run_command(&command, container);
+                                    },
+                                    Waiting::JumpPosition => {
+                                        self.waiting = Waiting::None;
+                                        let command = format!("set_jump {}", string);
+                                        self.run_command(&command, container);
+                                    },
+                                    Waiting::None => {
+                                        //self.run_command(&string, container);
+                                    },
+                                }
                             },
                         }
                     },
@@ -596,7 +619,40 @@ impl Pane for TextPane {
 
 
                 self.sender.send(Message::CreatePopup(container, true)).expect("Failed to send message");
+                self.waiting = Waiting::JumpTarget;
+            },
+            "prompt_set_jump" => {
+                let (send, recv) = std::sync::mpsc::channel();
 
+                self.receiver = Some(recv);
+
+                let txt_prompt = PromptType::Text(String::new(), None, false);
+                let prompt = vec!["Name the".to_string(), "Target".to_string()];
+
+                let pane = PopUpPane::new(self.settings.clone(), prompt, self.sender.clone(), send, vec![txt_prompt]);
+
+                let pane = Rc::new(RefCell::new(pane));
+
+                let (_, (x2, y2)) = container.get_corners();
+                let (x, y) = container.get_size();
+
+                let (x, y) = (x / 2, y / 2);
+
+                let pos = (x2 - 14 - x, y2 - 6 - y);
+
+
+                let max_size = container.get_size();
+                
+                let mut container = PaneContainer::new(max_size, (14, 5), pane, self.settings.clone());
+
+
+                container.set_position(pos);
+                container.set_size((14, 5));
+
+
+
+                self.sender.send(Message::CreatePopup(container, true)).expect("Failed to send message");
+                self.waiting = Waiting::JumpPosition;
             },
 
             _ => {}

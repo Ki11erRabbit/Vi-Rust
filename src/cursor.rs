@@ -63,6 +63,12 @@ impl Cursor {
         }
     }
 
+    pub fn prepare_jump(&mut self, other: &Cursor) {
+        self.jumped = true;
+        self.rows = other.rows;
+        self.cols = other.cols;
+    }
+
     pub fn set_draw_cursor(&mut self, x: usize, y: usize) {
         self.draw_x = x;
         self.draw_y = y;
