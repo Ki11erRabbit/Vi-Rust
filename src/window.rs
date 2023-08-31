@@ -445,11 +445,11 @@ impl Window {
         //self.refresh_screen()?;
         self.read_messages();
         self.remove_panes();
-        if self.panes.len() == 0 {
+        if self.panes[self.active_layer].len() == 0 {
             return Ok(false);
         }
-        self.refresh_screen()?;
 
+        self.refresh_screen()?;
         let ((x1, y1), (x2, y2)) = self.panes[self.active_layer][self.active_panes[self.active_layer]].get_corners();
 
         if x1 == x2 || y1 == y2 {
@@ -606,13 +606,6 @@ impl Window {
             return Ok(());
         }
 
-        eprintln!("Active layer: {}", self.active_layer);
-        eprintln!("Active pane: {}", self.active_panes[self.active_layer]);
-        eprintln!("Active pane len: {}", self.panes[self.active_layer].len());
-
-        for panes in self.panes.iter() {
-            eprintln!("{:?}", panes);
-        }
 
         self.panes[self.active_layer][self.active_panes[self.active_layer]].refresh();
 

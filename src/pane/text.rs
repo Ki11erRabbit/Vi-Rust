@@ -552,20 +552,17 @@ impl Pane for TextPane {
 
                 let (x, y) = (x / 2, y / 2);
 
-                let pos = (x2 - 7 - x, y2 - 7 - y);
+                let pos = (x2 - 14 - x, y2 - 6 - y);
 
-                eprintln!("pos: {:?}", pos);
 
                 let max_size = container.get_size();
                 
-                let mut container = PaneContainer::new(max_size, (14, 7), pane, self.settings.clone());
+                let mut container = PaneContainer::new(max_size, (14, 5), pane, self.settings.clone());
 
-                eprintln!("size: {:?}", container.get_size());
 
                 container.set_position(pos);
-                container.set_size((14, 7));
+                container.set_size((14, 5));
 
-                eprintln!("size: {:?}", container.get_size());
 
 
                 self.sender.send(Message::CreatePopup(container, true)).expect("Failed to send message");

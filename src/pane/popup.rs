@@ -61,9 +61,7 @@ impl Pane for PopUpPane {
     fn draw_row(&self, index: usize, container: &PaneContainer, output: &mut Vec<Option<StyledChar>>){
 
         let (width, height) = container.get_size();
-        eprintln!("{} {}", width, height);
-        eprintln!("{:?}", container.get_corners());
-
+        
         let color_settings = container.settings.borrow().colors.clone().ui;
         
         if index == 0 {
@@ -94,7 +92,7 @@ impl Pane for PopUpPane {
                     output.push(Some(StyledChar::new(' ', color_settings.clone())));
                 }
 
-                for c in self.prompt[0].chars() {
+                for c in self.prompt[prompt].chars() {
                     output.push(Some(StyledChar::new(c, color_settings.clone())));
                 }
 
@@ -108,11 +106,12 @@ impl Pane for PopUpPane {
                 for _ in 0..width - 2 {
                     output.push(Some(StyledChar::new(' ', color_settings.clone())));
                 }
+                *self.drawn_prompt.borrow_mut() += 1;
             }
             else {
                 let row_offset = *self.prompt_level.borrow();
                 let mode = self.mode.clone();
-                mode.borrow_mut().draw_prompt(index - index - row_offset, container, output);
+                mode.borrow_mut().draw_prompt(index - index + row_offset, container, output);
 
                 *self.prompt_level.borrow_mut() += 1;
             }

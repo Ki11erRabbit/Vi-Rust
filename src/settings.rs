@@ -476,7 +476,7 @@ impl Default for Settings {
             modifier: KeyModifiers::NONE,
         }], "cancel".to_string());
         prompt_keybindings.insert(vec![Key {
-            key: KeyCode::Char('\n'),
+            key: KeyCode::Enter,
             modifier: KeyModifiers::NONE,
         }], "submit".to_string());
         prompt_keybindings.insert(vec![Key {

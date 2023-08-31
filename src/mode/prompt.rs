@@ -164,12 +164,27 @@ impl Promptable for Prompt {
         let color_settings = container.settings.borrow().colors.ui.clone();
 
         match prompt {
-            PromptType::Text(..) => {
-                let text = prompt.draw_text().unwrap();
+            PromptType::Text(_,size,_) => {
+                let mut text = prompt.draw_text().unwrap();
+                if text.chars().count() == 0 {
+                    text = "_".repeat(width);
+                }
+                match size {
+                    None => {
+                        while text.chars().count() < width {
+                            text.push('_');
+                        }
+                    },
+                    Some(size) => {
+                        while text.chars().count() < *size {
+                            text.push('_');
+                        }
+                    },
+                }
 
-                let remaining = width - text.chars().count();
+                let remaining = width.saturating_sub(text.chars().count());
 
-                let side = remaining / 2;
+                let mut side = remaining / 2;
 
                 for _ in 0..side {
                     output.push(Some(StyledChar::new(' ', color_settings.clone())));
@@ -183,6 +198,10 @@ impl Promptable for Prompt {
                 
                 for c in text.chars() {
                     output.push(Some(StyledChar::new(c, text_color.clone())));
+                }
+
+                if remaining % 2 != 0 {
+                    side += 1;
                 }
 
                 for _ in 0..side {
@@ -237,7 +256,7 @@ impl Promptable for Prompt {
                     for c in checkbox.chars() {
                         output.push(Some(StyledChar::new(c, checkbox_color.clone())));
                     }
-
+                    
                     for _ in 0..(width - checkbox.chars().count() / checkbox_count) {
                         output.push(Some(StyledChar::new(' ', color_settings.clone())));
                     }
@@ -383,6 +402,8 @@ impl Mode for Prompt {
                         command.push_str(&radios[selected.unwrap()]);
                     },
                 }
+
+                eprintln!("{}", command);
 
                 pane.run_command(&command, container);
             },
