@@ -2,7 +2,7 @@ use std::{sync::mpsc::{Sender, Receiver}, cell::RefCell, rc::Rc, path::PathBuf, 
 
 use crop::RopeSlice;
 use crossterm::event::KeyEvent;
-use tree_sitter::{Parser, Tree, Point, Language};
+use tree_sitter::{Parser, Tree, Point, Language, InputEdit};
 
 use crate::{window::{Message, StyledChar}, cursor::{Cursor, Direction, CursorMove}, mode::{Mode, base::{Normal, Insert, Command}, prompt::PromptType}, buffer::Buffer, settings::Settings};
 
@@ -238,21 +238,9 @@ impl Pane for TreesitterPane {
         if let Some(row) = self.get_row(real_row, col_offset, cols) {
             let mut count = 0;
             row.chars().for_each(|c| if count != (cols - num_width) {
-                //let byte_offset = self.contents.get_byte_offset(real_row, count).unwrap();
-                let byte_offset = real_row + count;
-                eprintln!("byte offset: {}", byte_offset);
-
                 let point1 = Point::new(real_row, count);
                 let point2 = Point::new(real_row, count + 1);
-
-                eprintln!("point1: {}", point1);
-                eprintln!("point2: {}", point2);
-
                 let node = self.tree.root_node().named_descendant_for_point_range(point1, point2).unwrap();
-
-                //let node = self.tree.root_node().named_descendant_for_byte_range(byte_offset, byte_offset + 1).unwrap();
-                
-                //let node = self.tree.root_node_with_offset(byte_offset, Point::new(real_row, count + col_offset));
                 
                 match c {
                     '\t' => {
@@ -277,11 +265,8 @@ impl Pane for TreesitterPane {
                         let string = c.to_string();
 
                         for c in string.chars() {
-                            eprintln!("{}: {:?}", c, node.kind());
                                 
                             let color_settings = syntax_highlighting.get(&node.kind().to_string()).unwrap_or(color_settings);
-                            eprintln!("color: {:?}", color_settings);
-                            
                             output.push(Some(StyledChar::new(c, color_settings.clone())));
                         }
                     },
@@ -610,18 +595,45 @@ impl Pane for TreesitterPane {
 
     fn insert_char(&mut self, c: char) {
         self.set_changed(true);
+
+        let mut start_byte = 0;
+        let old_end_byte = self.contents.get_byte_count();
+        let mut new_end_byte = 0;
+        
         let byte_pos = self.get_byte_offset();
         let c = c.to_string();
         if self.contents.get_char_count() == 0 {
-            self.contents.insert(0, c);
-            return;
+            self.contents.insert_current(0, c);
+            new_end_byte = self.contents.get_byte_count();
+            start_byte = 0;
         }
-        let byte_pos = match byte_pos {
-            None => self.contents.get_byte_count(),
-            Some(byte_pos) => byte_pos,
-        };
+        else {
+            let byte_pos = match byte_pos {
+                None => self.contents.get_byte_count(),
+                Some(byte_pos) => byte_pos,
+            };
+
+            self.contents.insert_current(byte_pos, c);
+
+            new_end_byte = self.contents.get_byte_count();
+            start_byte = byte_pos;
+        }
+        let (x, y) = self.cursor.borrow().get_cursor();
+
+        let new_char_len = self.contents.get_char_count();
         
-        self.contents.insert_current(byte_pos, c);
+        let edit = InputEdit {
+            start_byte,
+            old_end_byte: start_byte,
+            new_end_byte,
+            start_position: Point::new(y, x),
+            old_end_position: Point::new(y, x + 1),
+            new_end_position: Point::new(y, new_char_len),
+        };
+
+        self.tree.edit(&edit);
+        self.tree = self.parser.parse(&self.contents.to_string(), Some(&self.tree)).unwrap();
+        
     }
 
     fn insert_str(&mut self, s: &str) {
