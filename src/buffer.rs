@@ -1,6 +1,8 @@
-use std::cmp;
+use std::{cmp, cell::RefCell, rc::Rc};
 
 use crop::{Rope, RopeSlice};
+
+use crate::settings::Settings;
 
 
 
@@ -9,15 +11,21 @@ use crop::{Rope, RopeSlice};
 pub struct Buffer {
     current: usize,
     buffers: Vec<Rope>,
+    settings: Rc<RefCell<Settings>>,
 }
 
 
 impl Buffer {
-    pub fn new() -> Self {
+    pub fn new(settings: Rc<RefCell<Settings>>) -> Self {
         Self {
             current: 0,
             buffers: vec![Rope::new()],
+            settings,
         }
+    }
+
+    pub fn set_settings(&mut self, settings: Rc<RefCell<Settings>>) {
+        self.settings = settings;
     }
 
     pub fn undo(&mut self) {
@@ -33,7 +41,11 @@ impl Buffer {
     }
 
     pub fn line_len(&self, row: usize) -> Option<usize> {
-        self.buffers[self.current].lines().nth(row).map(|line| line.chars().count())
+        self.buffers[self.current].lines().nth(row).map(|line| line.chars().map(|c| if c == '\t' {
+            self.settings.borrow().editor_settings.tab_size
+        } else {
+            1
+        }).sum())
     }
 
     pub fn get_line_count(&self) -> usize {
@@ -185,6 +197,7 @@ impl From<&str> for Buffer {
         Self {
             current: 0,
             buffers: vec![Rope::from(s)],
+            settings: Rc::new(RefCell::new(Settings::default())),
         }
     }
 }
@@ -194,6 +207,7 @@ impl From<String> for Buffer {
         Self {
             current: 0,
             buffers: vec![Rope::from(s)],
+            settings: Rc::new(RefCell::new(Settings::default())),
         }
     }
 }
@@ -203,6 +217,7 @@ impl From<&String> for Buffer {
         Self {
             current: 0,
             buffers: vec![Rope::from(s.as_str())],
+            settings: Rc::new(RefCell::new(Settings::default())),
         }
     }
 }

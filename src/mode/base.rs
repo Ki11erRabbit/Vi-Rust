@@ -306,9 +306,20 @@ impl Insert {
         Ok(true)
     }
     fn insert_char(&self, pane: &mut dyn Pane, c: char) -> io::Result<bool> {
-        pane.insert_char(c);
+        if pane.get_settings().borrow().editor_settings.use_spaces && c == '\t' {
+            pane.insert_str(&" ".repeat(pane.get_settings().borrow().editor_settings.tab_size));
+        } else {
+            pane.insert_char(c);
+        };
+        
         let cursor = pane.get_cursor();
         let mut cursor = cursor.borrow_mut();
+        if c == '\t' {
+            let tab_size = pane.get_settings().borrow().editor_settings.tab_size;
+            cursor.move_cursor(Direction::Right, tab_size, &mut *pane);
+        } else {
+            cursor.move_cursor(Direction::Right, 1, &mut *pane);
+        }
         cursor.move_cursor(Direction::Right, 1, &mut *pane);
         Ok(true)
     }

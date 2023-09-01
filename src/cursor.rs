@@ -204,7 +204,7 @@ impl Cursor {
         }
     }
 
-    pub fn move_cursor(&mut self, direction: Direction, n: usize, pane: &dyn Pane) {
+    pub fn move_cursor(&mut self, direction: Direction, mut n: usize, pane: &dyn Pane) {
         self.jumped = false;
         let number_of_lines = pane.get_line_count();
 
@@ -214,6 +214,18 @@ impl Cursor {
         else {
             0
         };
+
+        let buffer = pane.borrow_buffer();
+        let settings = pane.get_settings();
+
+        let number_of_cols = if let Some('\t') = buffer.get_nth_char(self.x) {
+            n += settings.borrow().editor_settings.tab_size - 1;
+            number_of_cols + settings.borrow().editor_settings.tab_size - 1
+        }
+        else {
+            number_of_cols
+        };
+
 
         match direction {
             Direction::Up => {

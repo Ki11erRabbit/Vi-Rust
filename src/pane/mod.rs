@@ -7,7 +7,7 @@ use std::{rc::Rc, cell::RefCell, path::PathBuf, io, cmp, fmt::Debug};
 
 use crossterm::event::KeyEvent;
 
-use crate::{settings::Settings, window::{WindowContents, StyledChar}, cursor::Cursor};
+use crate::{settings::Settings, window::{WindowContents, StyledChar}, cursor::Cursor, buffer::Buffer};
 
 
 pub enum PaneMessage {
@@ -281,6 +281,10 @@ impl PaneContainer {
         self.close
     }
 
+    pub fn backup_buffer(&mut self) {
+        self.pane.borrow_mut().backup_buffer();
+    }
+
 
 }
 
@@ -291,6 +295,7 @@ pub trait Pane {
 
     fn save_buffer(&mut self) -> io::Result<()>;
     fn open_file(&mut self, filename: &PathBuf) -> io::Result<()>;
+    fn backup_buffer(&mut self);
 
 
     fn process_keypress(&mut self, key: KeyEvent, container: &mut PaneContainer) -> io::Result<bool>;
@@ -323,4 +328,10 @@ pub trait Pane {
 
     fn resize_cursor(&mut self, size: (usize, usize));
     fn set_cursor_size(&mut self, size: (usize, usize));
+
+    fn get_settings(&self) -> Rc<RefCell<Settings>>;
+
+    fn borrow_buffer(&self) -> &Buffer;
+    fn borrow_mut_buffer(&mut self) -> &mut Buffer;
+
 }

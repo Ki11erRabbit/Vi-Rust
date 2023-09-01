@@ -139,7 +139,7 @@ impl TextPane {
         Self {
             cursor: Rc::new(RefCell::new(Cursor::new((0,0)))),
             file_name: None,
-            contents: Buffer::new(),
+            contents: Buffer::new(settings.clone()),
             mode: normal,
             modes,
             changed: false,
@@ -772,4 +772,20 @@ impl Pane for TextPane {
         cursor.set_size(size);
     }
 
+    fn backup_buffer(&mut self) {
+        self.contents.add_new_rope();
+    }
+
+
+    fn get_settings(&self) -> Rc<RefCell<Settings>> {
+        self.settings.clone()
+    }
+
+
+    fn borrow_buffer(&self) -> &Buffer {
+        &self.contents
+    }
+    fn borrow_mut_buffer(&mut self) -> &mut Buffer {
+        &mut self.contents
+    }
 }

@@ -125,11 +125,20 @@ impl Window {
                 let language = unsafe { tree_sitter_scheme() };
                 let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language);
                 pane.open_file(&filename).expect("Failed to open file");
+                pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             },
+            "rs" => {
+                let language = tree_sitter_rust::language();
+                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language);
+                pane.open_file(&filename).expect("Failed to open file");
+                pane.backup_buffer();
+                Rc::new(RefCell::new(pane))
+            }
             "txt" | _ => {
                 let mut pane = TextPane::new(self.settings.clone(), self.channels.0.clone());
                 pane.open_file(&filename).expect("Failed to open file");
+                pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
         };
@@ -659,7 +668,7 @@ impl Window {
     }
 
     pub fn open_file_start(&mut self, filename: &str) -> io::Result<()> {
-        let container = self.open_file(filename.try_into().unwrap());
+        let _ = self.open_file(filename.try_into().unwrap());
         let container = self.panes[0].pop().unwrap();
 
         let pane = container.get_pane();

@@ -57,7 +57,7 @@ impl TreesitterPane {
             tree,
             cursor: Rc::new(RefCell::new(Cursor::new((0,0)))),
             file_name: None,
-            contents: Buffer::new(),
+            contents: Buffer::new(settings.clone()),
             mode: normal,
             modes,
             changed: false,
@@ -266,7 +266,18 @@ impl Pane for TreesitterPane {
 
                         for c in string.chars() {
                                 
-                            let color_settings = syntax_highlighting.get(&node.kind().to_string()).unwrap_or(color_settings);
+                            let color_settings = if let Some(settings) = syntax_highlighting.get(&node.kind().to_string()) {
+                                settings
+                            }
+                            else {
+                                let node = self.tree.root_node().descendant_for_point_range(point1, point2).unwrap();
+                                if let Some(settings) = syntax_highlighting.get(&node.kind().to_string()) {
+                                    settings
+                                }
+                                else {
+                                    color_settings
+                                }
+                            };
                             output.push(Some(StyledChar::new(c, color_settings.clone())));
                         }
                     },
@@ -314,6 +325,7 @@ impl Pane for TreesitterPane {
     fn open_file(&mut self, filename: &PathBuf) -> io::Result<()> {
         let file = std::fs::read_to_string(filename)?;
         self.contents = Buffer::from(file);
+        self.contents.set_settings(self.settings.clone());
         self.file_name = Some(PathBuf::from(filename));
 
         self.tree = self.parser.parse(self.contents.to_string().as_bytes(), None).unwrap();
@@ -565,12 +577,15 @@ impl Pane for TreesitterPane {
                 self.cursor.borrow_mut().number_line_size = self.contents.get_line_count();
 
                 self.cursor.borrow_mut().set_cursor(CursorMove::Nothing, CursorMove::Amount(self.contents.get_line_count()), self, (0,0));
-                
+
+                self.tree = self.parser.parse(&self.contents.to_string(),None).unwrap();//TODO: replace this with an incremental parse
+
             },
             "redo" => {
                 self.contents.redo();
                 self.cursor.borrow_mut().number_line_size = self.contents.get_line_count();
 
+                self.tree = self.parser.parse(&self.contents.to_string(),None).unwrap();//TODO: replace this with an incremental parse
             },
 
             _ => {}
@@ -596,9 +611,9 @@ impl Pane for TreesitterPane {
     fn insert_char(&mut self, c: char) {
         self.set_changed(true);
 
-        let mut start_byte = 0;
-        let old_end_byte = self.contents.get_byte_count();
-        let mut new_end_byte = 0;
+        let start_byte;
+        //let old_end_byte = self.contents.get_byte_count();
+        let new_end_byte;
         
         let byte_pos = self.get_byte_offset();
         let c = c.to_string();
@@ -638,29 +653,80 @@ impl Pane for TreesitterPane {
 
     fn insert_str(&mut self, s: &str) {
         self.set_changed(true);
+
+        let start_byte;
+        let new_end_byte;
+        
         let byte_pos = self.get_byte_offset();
         if self.contents.get_char_count() == 0 {
             self.contents.insert(0, s);
-            return;
+            start_byte = 0;
+            new_end_byte = self.contents.get_byte_count();
         }
-        let byte_pos = match byte_pos {
-            None => self.contents.get_byte_count(),
-            Some(byte_pos) => byte_pos,
+        else {
+            let byte_pos = match byte_pos {
+                None => self.contents.get_byte_count(),
+                Some(byte_pos) => byte_pos,
+            };
+            self.contents.insert(byte_pos, s);
+            start_byte = byte_pos;
+            new_end_byte = self.contents.get_byte_count();
+        }
+
+        let (x, y) = self.cursor.borrow().get_cursor();
+
+        let new_char_len = self.contents.get_char_count();
+
+        let insert_char_count = s.chars().count();
+
+
+        let edit = InputEdit {
+            start_byte,
+            old_end_byte: start_byte,
+            new_end_byte,
+            start_position: Point::new(y, x),
+            old_end_position: Point::new(y, x + insert_char_count),
+            new_end_position: Point::new(y, new_char_len),
         };
-        self.contents.insert(byte_pos, s);
+
+        self.tree.edit(&edit);
+        self.tree = self.parser.parse(&self.contents.to_string(), Some(&self.tree)).unwrap();
+        
     }
 
     ///TODO: add check to make sure we have a valid byte range
     fn delete_char(&mut self) {
         self.set_changed(true);
+
+        
         let byte_pos = self.get_byte_offset();
 
         let byte_pos = match byte_pos {
             None => return,
             Some(byte_pos) => byte_pos,
         };
+        let start_byte = byte_pos;
+
+        let old_end_byte = self.contents.get_byte_count();
 
         self.contents.delete(byte_pos..byte_pos.saturating_add(1));
+
+        let new_end_byte = self.contents.get_byte_count();
+
+        let (x, y) = self.cursor.borrow().get_cursor();
+
+        let edit = InputEdit {
+            start_byte,
+            old_end_byte,
+            new_end_byte,
+            start_position: Point::new(y, x),
+            old_end_position: Point::new(y, x - 1),
+            new_end_position: Point::new(y, x),
+        };
+
+        self.tree.edit(&edit);
+
+        self.tree = self.parser.parse(&self.contents.to_string(), Some(&self.tree)).unwrap();
     }
 
     ///TODO: add check to make sure we have a valid byte range
@@ -684,6 +750,8 @@ impl Pane for TreesitterPane {
 
         let mut cursor = self.cursor.borrow_mut();
 
+        let (x, y) = cursor.get_cursor();
+
         if go_up {
             cursor.move_cursor(Direction::Up, 1, self);
             cursor.set_cursor(CursorMove::ToEnd, CursorMove::Nothing, self, (0, 1));
@@ -691,9 +759,27 @@ impl Pane for TreesitterPane {
         else {
             cursor.move_cursor(Direction::Left, 1, self);
         }
+
+        let start_byte = byte_pos.saturating_sub(1);
+        let old_end_byte = self.contents.get_byte_count();
         
 
         self.contents.delete(byte_pos.saturating_sub(1)..byte_pos);
+
+        let new_end_byte = self.contents.get_byte_count();
+
+        let edit = InputEdit {
+            start_byte,
+            old_end_byte,
+            new_end_byte,
+            start_position: Point::new(y, x),
+            old_end_position: Point::new(y, x - 1),
+            new_end_position: Point::new(y, x),
+        };
+
+        self.tree.edit(&edit);
+
+        self.tree = self.parser.parse(&self.contents.to_string(), Some(&self.tree)).unwrap();
     }
 
     fn get_cursor(&self) -> Rc<RefCell<Cursor>> {
@@ -728,4 +814,18 @@ impl Pane for TreesitterPane {
         cursor.set_size(size);
     }
 
+    fn backup_buffer(&mut self) {
+        self.contents.add_new_rope();
+    }
+
+    fn get_settings(&self) -> Rc<RefCell<Settings>> {
+        self.settings.clone()
+    }
+
+    fn borrow_buffer(&self) -> &Buffer {
+        &self.contents
+    }
+    fn borrow_mut_buffer(&mut self) -> &mut Buffer {
+        &mut self.contents
+    }
 }

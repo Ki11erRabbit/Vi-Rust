@@ -112,13 +112,8 @@ pub struct Settings {
     
 }
 
-impl Default for Settings {
-    fn default() -> Self {
-        let editor_settings = EditorSettings::default();
-        let mut mode_keybindings = HashMap::new();
-
-        let mut normal_keybindings = HashMap::new();
-
+impl Settings {
+    fn generate_normal_keybindings(normal_keybindings: &mut HashMap<Keys, Command>) {
         normal_keybindings.insert(vec![Key {
             key: KeyCode::Char('l'),
             modifier: KeyModifiers::NONE,
@@ -394,10 +389,9 @@ impl Default for Settings {
             modifier: KeyModifiers::CONTROL,
         }], "redo".to_string());
 
+    }
 
-        
-        let mut insert_keybindings = HashMap::new();
-
+    fn generate_insert_keybindings(insert_keybindings: &mut HashMap<Keys, Command>) {
         insert_keybindings.insert(vec![Key {
             key: KeyCode::Esc,
             modifier: KeyModifiers::NONE,
@@ -466,8 +460,9 @@ impl Default for Settings {
             modifier: KeyModifiers::NONE,
         }], "vertical_split".to_string());
 
-        let mut command_keybindings = HashMap::new();
+    }
 
+    fn generate_command_keybindings(command_keybindings: &mut HashMap<Keys, Command>) {
         command_keybindings.insert(vec![Key {
             key: KeyCode::Esc,
             modifier: KeyModifiers::NONE,
@@ -489,12 +484,9 @@ impl Default for Settings {
             modifier: KeyModifiers::NONE,
         }], "end".to_string());
 
-        mode_keybindings.insert("Normal".to_string(), normal_keybindings);
-        mode_keybindings.insert("Insert".to_string(), insert_keybindings);
-        mode_keybindings.insert("Command".to_string(), command_keybindings);
+    }
 
-        let mut prompt_keybindings = HashMap::new();
-
+    fn generate_prompt_keybindings(prompt_keybindings: &mut HashMap<Keys, Command>) {
         prompt_keybindings.insert(vec![Key {
             key: KeyCode::Esc,
             modifier: KeyModifiers::NONE,
@@ -515,6 +507,38 @@ impl Default for Settings {
             key: KeyCode::Right,
             modifier: KeyModifiers::NONE,
         }], "right".to_string());
+
+    }
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        let editor_settings = EditorSettings::default();
+        let mut mode_keybindings = HashMap::new();
+
+        let mut normal_keybindings = HashMap::new();
+
+        Self::generate_normal_keybindings(&mut normal_keybindings);
+
+        
+        let mut insert_keybindings = HashMap::new();
+
+        Self::generate_insert_keybindings(&mut insert_keybindings);
+
+
+        let mut command_keybindings = HashMap::new();
+
+        Self::generate_command_keybindings(&mut command_keybindings);
+
+
+        mode_keybindings.insert("Normal".to_string(), normal_keybindings);
+        mode_keybindings.insert("Insert".to_string(), insert_keybindings);
+        mode_keybindings.insert("Command".to_string(), command_keybindings);
+
+        let mut prompt_keybindings = HashMap::new();
+
+        Self::generate_prompt_keybindings(&mut prompt_keybindings);
+
 
         mode_keybindings.insert("Prompt".to_string(), prompt_keybindings);
 
@@ -602,6 +626,7 @@ pub struct EditorColors {
     pub treesitter: Rc<HashMap<String, ColorScheme>>,
 }
 
+
 impl Default for EditorColors {
     fn default() -> Self {
         let mut mode = HashMap::new();
@@ -629,6 +654,371 @@ impl Default for EditorColors {
 
         let mut treesitter = HashMap::new();
 
+        Self::generate_scheme_colors(&mut treesitter);
+        Self::generate_rust_colors(&mut treesitter);
+
+        
+
+
+        let treesitter = Rc::new(treesitter);
+        
+        Self {
+            pane: ColorScheme::default(),
+            ui: ColorScheme::default(),
+            popup: ColorScheme {
+                foreground_color: Color::White,
+                background_color: Color::DarkGrey,
+                underline_color: Color::Reset,
+                attributes: Rc::new(Vec::new()),
+            },
+            mode,
+            treesitter,
+        }
+    }
+}
+
+impl EditorColors {
+    fn generate_rust_colors(treesitter: &mut HashMap<String, ColorScheme>) {
+        treesitter.insert("array_expression".to_string(), ColorScheme {
+            foreground_color: Color::Magenta,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("async_block".to_string(), ColorScheme {
+            foreground_color: Color::Magenta,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("await_expression".to_string(), ColorScheme {
+            foreground_color: Color::Magenta,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("block".to_string(), ColorScheme {
+            foreground_color: Color::Magenta,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("char_literal".to_string(), ColorScheme {
+            foreground_color: Color::Green,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("crate".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("escape_sequence".to_string(), ColorScheme {
+            foreground_color: Color::Green,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("field_identifier".to_string(), ColorScheme {
+            foreground_color: Color::Magenta,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("line_comment".to_string(), ColorScheme {
+            foreground_color: Color::DarkGrey,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("block_comment".to_string(), ColorScheme {
+            foreground_color: Color::DarkGrey,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("metavariable".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("mutable_specifier".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("primitive_type".to_string(), ColorScheme {
+            foreground_color: Color::Yellow,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("raw_string_literal".to_string(), ColorScheme {
+            foreground_color: Color::Green,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("self".to_string(), ColorScheme {
+            foreground_color: Color::Yellow,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("super".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("type_identifier".to_string(), ColorScheme {
+            foreground_color: Color::Yellow,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("as".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("async".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("await".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("break".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("continue".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("const".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("default".to_string(), ColorScheme {
+            foreground_color: Color::Magenta,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("dyn".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("else".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("extern".to_string(), ColorScheme {
+            foreground_color: Color::Magenta,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("false".to_string(), ColorScheme {
+            foreground_color: Color::Red,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("true".to_string(), ColorScheme {
+            foreground_color: Color::Red,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("fn".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("for".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("ident".to_string(), ColorScheme {
+            foreground_color: Color::Magenta,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("if".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("impl".to_string(), ColorScheme {
+            foreground_color: Color::Yellow,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("in".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("let".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("item".to_string(), ColorScheme {
+            foreground_color: Color::Reset,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("lifetime".to_string(), ColorScheme {
+            foreground_color: Color::Red,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("loop".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("macro_rules!".to_string(), ColorScheme {
+            foreground_color: Color::Cyan,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(vec![Attribute::Bold]),
+        });
+        treesitter.insert("match".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(vec![Attribute::Bold]),
+        });
+        treesitter.insert("move".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(vec![Attribute::Bold]),
+        });
+        treesitter.insert("pub".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(vec![Attribute::Bold]),
+        });
+        treesitter.insert("return".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(vec![Attribute::Bold]),
+        });
+        treesitter.insert("struct".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(vec![Attribute::Bold]),
+        });
+        treesitter.insert("enum".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(vec![Attribute::Bold]),
+        });
+        treesitter.insert("trait".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(vec![Attribute::Bold]),
+        });
+        treesitter.insert("type".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(vec![Attribute::Bold]),
+        });
+        treesitter.insert("union".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(vec![Attribute::Bold]),
+        });
+        treesitter.insert("unsafe".to_string(), ColorScheme {
+            foreground_color: Color::Red,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(vec![Attribute::Bold]),
+        });
+        treesitter.insert("use".to_string(), ColorScheme {
+            foreground_color: Color::Cyan,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(vec![Attribute::Bold]),
+        });
+        treesitter.insert("where".to_string(), ColorScheme {
+            foreground_color: Color::Cyan,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(vec![Attribute::Bold]),
+        });
+        treesitter.insert("vis".to_string(), ColorScheme {
+            foreground_color: Color::Cyan,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(vec![Attribute::Bold]),
+        });
+        treesitter.insert("while".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(vec![Attribute::Bold]),
+        });
+        treesitter.insert("mod".to_string(), ColorScheme {
+            foreground_color: Color::Cyan,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(vec![Attribute::Bold]),
+        });
+        
+        
+        
+        
+        
+        
+        
+    }
+    
+    fn generate_scheme_colors(treesitter: &mut HashMap<String, ColorScheme>) {
         treesitter.insert("comment".to_string(), ColorScheme {
             foreground_color: Color::DarkGrey,
             background_color: Color::Reset,
@@ -643,6 +1033,24 @@ impl Default for EditorColors {
         });
         treesitter.insert("directive".to_string(), ColorScheme {
             foreground_color: Color::DarkGrey,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("symbol".to_string(), ColorScheme {
+            foreground_color: Color::Reset,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("keyword".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("list".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
@@ -677,42 +1085,8 @@ impl Default for EditorColors {
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         });
-        treesitter.insert("symbol".to_string(), ColorScheme {
-            foreground_color: Color::Reset,
-            background_color: Color::Reset,
-            underline_color: Color::Reset,
-            attributes: Rc::new(Vec::new()),
-        });
-        treesitter.insert("keyword".to_string(), ColorScheme {
-            foreground_color: Color::Blue,
-            background_color: Color::Reset,
-            underline_color: Color::Reset,
-            attributes: Rc::new(Vec::new()),
-        });
-        treesitter.insert("list".to_string(), ColorScheme {
-            foreground_color: Color::Blue,
-            background_color: Color::Reset,
-            underline_color: Color::Reset,
-            attributes: Rc::new(Vec::new()),
-        });
-        
-
-
-        let treesitter = Rc::new(treesitter);
-        
-        Self {
-            pane: ColorScheme::default(),
-            ui: ColorScheme::default(),
-            popup: ColorScheme {
-                foreground_color: Color::White,
-                background_color: Color::DarkGrey,
-                underline_color: Color::Reset,
-                attributes: Rc::new(Vec::new()),
-            },
-            mode,
-            treesitter,
-        }
     }
+
 }
 
 fn parse_key(value: &toml::Value) -> Keys {
