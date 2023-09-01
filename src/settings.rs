@@ -4,7 +4,6 @@ use std::{collections::HashMap, rc::Rc};
 use crossterm::{event::{KeyCode, KeyModifiers, KeyEvent}, style::{Attribute, Color}};
 use serde::Deserialize;
 
-use crate::pane::treesitter;
 
 #[macro_export]
 macro_rules! apply_colors {
@@ -685,6 +684,12 @@ impl Default for EditorColors {
             attributes: Rc::new(Vec::new()),
         });
         treesitter.insert("keyword".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("list".to_string(), ColorScheme {
             foreground_color: Color::Blue,
             background_color: Color::Reset,
             underline_color: Color::Reset,

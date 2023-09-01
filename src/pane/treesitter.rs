@@ -238,9 +238,21 @@ impl Pane for TreesitterPane {
         if let Some(row) = self.get_row(real_row, col_offset, cols) {
             let mut count = 0;
             row.chars().for_each(|c| if count != (cols - num_width) {
-                let byte_offset = self.contents.get_byte_offset(real_row, count + col_offset).unwrap();
+                //let byte_offset = self.contents.get_byte_offset(real_row, count).unwrap();
+                let byte_offset = real_row + count;
+                eprintln!("byte offset: {}", byte_offset);
+
+                let point1 = Point::new(real_row, count);
+                let point2 = Point::new(real_row, count + 1);
+
+                eprintln!("point1: {}", point1);
+                eprintln!("point2: {}", point2);
+
+                let node = self.tree.root_node().named_descendant_for_point_range(point1, point2).unwrap();
+
+                //let node = self.tree.root_node().named_descendant_for_byte_range(byte_offset, byte_offset + 1).unwrap();
                 
-                let node = self.tree.root_node_with_offset(byte_offset, Point::new(real_row, count + col_offset));
+                //let node = self.tree.root_node_with_offset(byte_offset, Point::new(real_row, count + col_offset));
                 
                 match c {
                     '\t' => {
@@ -253,6 +265,7 @@ impl Pane for TreesitterPane {
                         }
                     },
                     '\n' => {
+                        count += 1;
                         let string = " ".to_string();
 
                         for c in string.chars() {
@@ -264,7 +277,11 @@ impl Pane for TreesitterPane {
                         let string = c.to_string();
 
                         for c in string.chars() {
+                            eprintln!("{}: {:?}", c, node.kind());
+                                
                             let color_settings = syntax_highlighting.get(&node.kind().to_string()).unwrap_or(color_settings);
+                            eprintln!("color: {:?}", color_settings);
+                            
                             output.push(Some(StyledChar::new(c, color_settings.clone())));
                         }
                     },

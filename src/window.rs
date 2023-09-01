@@ -659,7 +659,15 @@ impl Window {
     }
 
     pub fn open_file_start(&mut self, filename: &str) -> io::Result<()> {
-        self.panes[self.active_layer][self.active_panes[self.active_layer]].open_file(&PathBuf::from(filename.to_owned()))
+        let container = self.open_file(filename.try_into().unwrap());
+        let container = self.panes[0].pop().unwrap();
+
+        let pane = container.get_pane();
+
+        self.panes[0][self.active_panes[0]].change_pane(pane);
+
+        Ok(())
+        //self.panes[self.active_layer][self.active_panes[self.active_layer]].open_file(&PathBuf::from(filename.to_owned()))
     }
 
     pub fn process_keypress(&mut self, key: KeyEvent) -> io::Result<bool> {
