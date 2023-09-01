@@ -241,6 +241,7 @@ impl Pane for TreesitterPane {
                 let point1 = Point::new(real_row, count);
                 let point2 = Point::new(real_row, count + 1);
                 let node = self.tree.root_node().named_descendant_for_point_range(point1, point2).unwrap();
+                let parent_node = node.parent().unwrap();
                 
                 match c {
                     '\t' => {
@@ -267,12 +268,26 @@ impl Pane for TreesitterPane {
                         for c in string.chars() {
                                 
                             let color_settings = if let Some(settings) = syntax_highlighting.get(&node.kind().to_string()) {
-                                settings
+                                match settings.color.as_ref() {
+                                    Ok(ref color) => color,
+                                    Err(map) => match map.get(&parent_node.kind().to_string()) {
+                                        Some(color) => color,
+                                        None => color_settings,
+                                    },
+                                        
+                                }
                             }
                             else {
                                 let node = self.tree.root_node().descendant_for_point_range(point1, point2).unwrap();
                                 if let Some(settings) = syntax_highlighting.get(&node.kind().to_string()) {
-                                    settings
+                                    match settings.color.as_ref() {
+                                        Ok(ref color) => color,
+                                        Err(ref map) => match map.get(&parent_node.kind().to_string()) {
+                                            Some(color) => color,
+                                            None => color_settings,
+                                        },
+                                            
+                                    }
                                 }
                                 else {
                                     color_settings
