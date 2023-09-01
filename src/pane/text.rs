@@ -1,4 +1,4 @@
-use crate::{pane::Pane, window::{WindowContentsUtils, StyledChar}, cursor::CursorMove};
+use crate::{pane::Pane, window::{WindowContentsUtils, StyledChar}, cursor::CursorMove, buffer::Buffer};
 use std::{io::Write, sync::mpsc::Receiver};
 
 use std::{collections::HashMap, rc::Rc, cell::RefCell, path::PathBuf, sync::mpsc::Sender, cmp, io};
@@ -105,7 +105,7 @@ pub enum Waiting {
 pub struct TextPane {
     cursor: Rc<RefCell<Cursor>>,
     file_name: Option<PathBuf>,
-    contents: Rope,
+    contents: Buffer,
     mode: Rc<RefCell<dyn Mode>>,
     modes: HashMap<String, Rc<RefCell<dyn Mode>>>,
     changed: bool,
@@ -139,7 +139,7 @@ impl TextPane {
         Self {
             cursor: Rc::new(RefCell::new(Cursor::new((0,0)))),
             file_name: None,
-            contents: Rope::new(),
+            contents: Buffer::new(),
             mode: normal,
             modes,
             changed: false,
@@ -158,7 +158,10 @@ impl TextPane {
 
 
     fn get_row(&self, row: usize, offset: usize, col: usize) -> Option<RopeSlice> {
-        if row >= self.contents.line_len() {
+
+        self.contents.get_row(row, offset, col)
+        
+        /*if row >= self.contents.line_len() {
             return None;
         }
         let line = self.contents.line(row);
@@ -166,14 +169,14 @@ impl TextPane {
         if len == 0 {
             return None;
         }
-        Some(line.line_slice(offset..len))
+        Some(line.line_slice(offset..len))*/
     }
 
-    pub fn borrow_buffer(&self) -> &Rope {
+    pub fn borrow_buffer(&self) -> &Buffer {
         &self.contents
     }
 
-    pub fn borrow_buffer_mut(&mut self) -> &mut Rope {
+    pub fn borrow_buffer_mut(&mut self) -> &mut Buffer {
         &mut self.contents
     }
 
@@ -182,9 +185,12 @@ impl TextPane {
     }
 
 
-    fn get_byte_offset(&self) -> usize {
-        let (x, mut y) = self.cursor.borrow().get_cursor();
-        while y > self.contents.line_len() {
+    fn get_byte_offset(&self) -> Option<usize> {
+        let (x, y) = self.cursor.borrow().get_cursor();
+
+        self.contents.get_byte_offset(x, y)
+        
+        /*while y > self.contents.line_len() {
             y = y.saturating_sub(1);
         }
         let line_pos = self.contents.byte_of_line(y);
@@ -192,7 +198,7 @@ impl TextPane {
 
         let byte_pos = line_pos + row_pos;
 
-        byte_pos
+        byte_pos*/
     }
 
     fn check_messages(&mut self, container: &PaneContainer) {
@@ -271,10 +277,12 @@ impl Pane for TextPane {
         let real_row = self.cursor.borrow().row_offset + index;
         let col_offset = self.cursor.borrow().col_offset;
 
-        let mut number_of_lines = self.borrow_buffer().line_len();
+        let number_of_lines = self.contents.get_line_count();
+
+            /*self.borrow_buffer().line_len();
         if let Some('\n') = self.borrow_buffer().chars().last() {
             number_of_lines += 1;
-        }
+        }*/
 
         let mut num_width = 0;
 
@@ -427,7 +435,7 @@ impl Pane for TextPane {
 
     fn open_file(&mut self, filename: &PathBuf) -> io::Result<()> {
         let file = std::fs::read_to_string(filename)?;
-        self.contents = Rope::from(file);
+        self.contents = Buffer::from(file);
         self.file_name = Some(PathBuf::from(filename));
         Ok(())
     }
@@ -679,29 +687,28 @@ impl Pane for TextPane {
         self.set_changed(true);
         let byte_pos = self.get_byte_offset();
         let c = c.to_string();
-        if self.contents.chars().count() == 0 {
+        if self.contents.get_char_count() == 0 {
             self.contents.insert(0, c);
             return;
         }
-        let byte_pos = if byte_pos >= self.contents.byte_len() {
-            self.contents.byte_len()
-        } else {
-            byte_pos
+        let byte_pos = match byte_pos {
+            None => self.contents.get_byte_count(),
+            Some(byte_pos) => byte_pos,
         };
+        
         self.contents.insert(byte_pos, c);
     }
 
     fn insert_str(&mut self, s: &str) {
         self.set_changed(true);
         let byte_pos = self.get_byte_offset();
-        if self.contents.chars().count() == 0 {
+        if self.contents.get_char_count() == 0 {
             self.contents.insert(0, s);
             return;
         }
-        let byte_pos = if byte_pos >= self.contents.byte_len() {
-            self.contents.byte_len()
-        } else {
-            byte_pos
+        let byte_pos = match byte_pos {
+            None => self.contents.get_byte_count(),
+            Some(byte_pos) => byte_pos,
         };
         self.contents.insert(byte_pos, s);
     }
@@ -711,9 +718,10 @@ impl Pane for TextPane {
         self.set_changed(true);
         let byte_pos = self.get_byte_offset();
 
-        if byte_pos >= self.contents.byte_len() {
-            return;
-        }
+        let byte_pos = match byte_pos {
+            None => return,
+            Some(byte_pos) => byte_pos,
+        };
 
         self.contents.delete(byte_pos..byte_pos.saturating_add(1));
     }
@@ -724,7 +732,12 @@ impl Pane for TextPane {
         let byte_pos = self.get_byte_offset();
         let mut go_up = false;
 
-        if self.borrow_buffer().bytes().nth(byte_pos.saturating_sub(1)) == Some(b'\n') {
+        let byte_pos = match byte_pos {
+            None => return,
+            Some(byte_pos) => byte_pos,
+        };
+
+        if self.borrow_buffer().get_nth_byte(byte_pos.saturating_sub(1)) == Some(b'\n') {
             go_up = true;
         }
 
@@ -751,12 +764,14 @@ impl Pane for TextPane {
     }
 
     fn get_line_count(&self) -> usize {
-        let mut number_of_lines = self.contents.line_len();
+
+        self.contents.get_line_count()
+        /*let mut number_of_lines = self.contents.line_len();
 
         if let Some('\n') = self.contents.chars().last() {
             number_of_lines += 1;
         }
-        number_of_lines
+        number_of_lines*/
     }
 
     fn buffer_to_string(&self) -> String {
@@ -764,12 +779,7 @@ impl Pane for TextPane {
     }
 
     fn get_row_len(&self, row: usize) -> Option<usize> {
-        if let Some(line) = self.contents.lines().nth(row) {
-            Some(line.chars().count())
-        }
-        else {
-            None
-        }
+        self.contents.line_len(row)
     }
 
 

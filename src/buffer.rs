@@ -32,12 +32,24 @@ impl Buffer {
         }
     }
 
+    pub fn line_len(&self, row: usize) -> Option<usize> {
+        self.buffers[self.current].lines().nth(row).map(|line| line.chars().count())
+    }
+
     pub fn get_line_count(&self) -> usize {
         let mut num_lines = self.buffers[self.current].line_len();
         if let Some('\n') = self.buffers[self.current].chars().last() {
             num_lines += 1;
         }
         num_lines
+    }
+
+    pub fn get_char_count(&self) -> usize {
+        self.buffers[self.current].chars().count()
+    }
+
+    pub fn get_byte_count(&self) -> usize {
+        self.buffers[self.current].bytes().count()
     }
 
     pub fn get_row(&self, row: usize, offset: usize, col: usize) -> Option<RopeSlice> {
@@ -102,5 +114,69 @@ impl Buffer {
         self.buffers[self.current].bytes().nth(n)
     }
 
+    pub fn get_nth_char(&self, n: usize) -> Option<char> {
+        self.buffers[self.current].chars().nth(n)
+    }
+
+    pub fn insert_chain<T>(&mut self, values: Vec<(usize, T)>)
+        where T: AsRef<str>
+    {
+        let buffer = self.get_new_rope();
+        for (offset, text) in values.iter().rev() {
+            buffer.insert(*offset, text.as_ref());
+        }
+    }
+
+    pub fn delete_chain<R>(&mut self, values: Box<[R]>)
+        where R: std::ops::RangeBounds<usize> + Copy
+    {
+        let buffer = self.get_new_rope();
+        for range in values.iter().rev() {
+            buffer.delete(*range);
+        }
+    }
+
+    pub fn replace_chain<R, T>(&mut self, values: Box<[(R, T)]>)
+        where R: std::ops::RangeBounds<usize> + Copy, T: AsRef<str>
+    {
+        let buffer = self.get_new_rope();
+        for (range, text) in values.iter().rev() {
+            buffer.replace(*range, text.as_ref());
+        }
+    }
+
 }
-    
+
+impl std::fmt::Display for Buffer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.buffers[self.current])
+    }
+}
+
+
+impl From<&str> for Buffer {
+    fn from(s: &str) -> Self {
+        Self {
+            current: 0,
+            buffers: vec![Rope::from(s)],
+        }
+    }
+}
+
+impl From<String> for Buffer {
+    fn from(s: String) -> Self {
+        Self {
+            current: 0,
+            buffers: vec![Rope::from(s)],
+        }
+    }
+}
+
+impl From<&String> for Buffer {
+    fn from(s: &String) -> Self {
+        Self {
+            current: 0,
+            buffers: vec![Rope::from(s.as_str())],
+        }
+    }
+}
