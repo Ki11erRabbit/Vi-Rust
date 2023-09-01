@@ -40,6 +40,7 @@ pub struct Cursor {
     pub number_line_size: usize,
     pub ignore_offset: bool,
     pub hide: bool,
+    pub jumped: bool,
 }
 
 impl Cursor {
@@ -58,7 +59,14 @@ impl Cursor {
             number_line_size: 0,
             ignore_offset: false,
             hide: false,
+            jumped: false,
         }
+    }
+
+    pub fn prepare_jump(&mut self, other: &Cursor) {
+        self.jumped = true;
+        self.rows = other.rows;
+        self.cols = other.cols;
     }
 
     pub fn set_draw_cursor(&mut self, x: usize, y: usize) {
@@ -112,6 +120,7 @@ impl Cursor {
     }
 
     pub fn scroll(&mut self, pane: &PaneContainer) {
+        self.jumped = false;
         let (pane_x, pane_y) = pane.get_size();
 
         if self.x >= pane_x && self.went_right {
@@ -136,6 +145,7 @@ impl Cursor {
     }
 
     pub fn set_cursor(&mut self, x: CursorMove, y: CursorMove, pane: &dyn Pane, (x_offset, y_offset): (usize, usize)) {
+        self.jumped = false;
         let number_of_lines = pane.get_line_count();
 
         let number_of_cols = if let Some(cols) = pane.get_row_len(self.y) {
@@ -195,6 +205,7 @@ impl Cursor {
     }
 
     pub fn move_cursor(&mut self, direction: Direction, n: usize, pane: &dyn Pane) {
+        self.jumped = false;
         let number_of_lines = pane.get_line_count();
 
         let number_of_cols = if let Some(cols) = pane.get_row_len(self.y) {

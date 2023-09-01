@@ -28,15 +28,17 @@ impl JumpTable {
         }
     }
 
-    pub fn add(&mut self, cursor: Cursor) {
+    pub fn add(&mut self, mut cursor: Cursor) {
         if self.index < self.table.len() {
             self.table.truncate(self.index);
         }
+        cursor.ignore_offset = false;
         self.table.push(cursor);
         self.index += 1;
     }
 
-    pub fn add_named(&mut self, name: &str, cursor: Cursor) {
+    pub fn add_named(&mut self, name: &str, mut cursor: Cursor) {
+        cursor.ignore_offset = false;
         self.named.insert(name.to_owned(), cursor);
     }
 
@@ -62,20 +64,27 @@ impl JumpTable {
 
     pub fn jump(&mut self, index: usize, cursor: Cursor) -> Option<Cursor> {
         if index < self.table.len() {
+            let mut j_cursor = self.table[self.index];
+            j_cursor.prepare_jump(&cursor);
+
             self.index = index;
             self.table.truncate(self.index + 1);
             self.table.push(cursor);
-            Some(self.table[self.index])
+            Some(j_cursor)
         }
         else {
             None
         }
     }
 
-    pub fn named_jump(&mut self, name: &str, cursor: Cursor) -> Option<Cursor> {
+    pub fn named_jump(&mut self, name: &str, mut cursor: Cursor) -> Option<Cursor> {
+        cursor.ignore_offset = false;
         if let Some(index) = self.named.get(name).cloned() {
+            let mut j_cursor = index;
+            j_cursor.prepare_jump(&cursor);
+
             self.add(cursor);
-            Some(index)
+            Some(j_cursor)
         }
         else {
             None
@@ -85,7 +94,11 @@ impl JumpTable {
 
 
 
-
+pub enum Waiting {
+    JumpTarget,
+    JumpPosition,
+    None,
+}
 
 
 
@@ -100,6 +113,7 @@ pub struct TextPane {
     jump_table: JumpTable,
     sender: Sender<Message>,
     receiver: Option<Receiver<PaneMessage>>,
+    waiting: Waiting,
 }
 
 impl TextPane {
@@ -133,6 +147,7 @@ impl TextPane {
             jump_table: JumpTable::new(),
             sender,
             receiver: None,
+            waiting: Waiting::None,
         }
     }
 
@@ -178,6 +193,39 @@ impl TextPane {
         let byte_pos = line_pos + row_pos;
 
         byte_pos
+    }
+
+    fn check_messages(&mut self, container: &PaneContainer) {
+        match self.receiver.as_ref() {
+            None => {},
+            Some(receiver) => {
+                match receiver.try_recv() {
+                    Ok(message) => {
+                        match message {
+                            PaneMessage::String(string) => {
+
+                                match self.waiting {
+                                    Waiting::JumpTarget => {
+                                        self.waiting = Waiting::JumpPosition;
+                                        let command = format!("jump {}", string);
+                                        self.run_command(&command, container);
+                                    },
+                                    Waiting::JumpPosition => {
+                                        self.waiting = Waiting::None;
+                                        let command = format!("set_jump {}", string);
+                                        self.run_command(&command, container);
+                                    },
+                                    Waiting::None => {
+                                        //self.run_command(&string, container);
+                                    },
+                                }
+                            },
+                        }
+                    },
+                    Err(_) => {},
+                }
+            }
+        }
     }
 
 }
@@ -363,8 +411,9 @@ impl Pane for TextPane {
         }
     }
 
-    fn refresh(&mut self) {
+    fn refresh(&mut self, container: &mut PaneContainer) {
         self.mode.borrow_mut().refresh();
+        self.check_messages(container);
     }
 
 
@@ -488,6 +537,9 @@ impl Pane for TextPane {
                             }
                             else {
                                 if let Some(new_cursor) = self.jump_table.named_jump(other, *cursor) {
+                                    eprintln!("New Cursor: {:?}", new_cursor);
+                                    eprintln!("Old Cursor: {:?}", *cursor);
+                                    eprintln!("Jumping to named jump");
                                     *cursor = new_cursor;
                                 }
 
@@ -500,6 +552,7 @@ impl Pane for TextPane {
 
             },
             "set_jump" => {
+                eprintln!("Setting jump");
                 let cursor = self.cursor.borrow();
                 if let Some(jump) = command_args.next() {
                     self.jump_table.add_named(jump, *cursor);
@@ -547,20 +600,59 @@ impl Pane for TextPane {
 
                 let pane = Rc::new(RefCell::new(pane));
 
-                let (_, (x, y)) = container.get_corners();
+                let (_, (x2, y2)) = container.get_corners();
+                let (x, y) = container.get_size();
 
                 let (x, y) = (x / 2, y / 2);
 
-                let pos = (x - 7, y - 7);
+                let pos = (x2 - 14 - x, y2 - 6 - y);
+
 
                 let max_size = container.get_size();
                 
-                let mut container = PaneContainer::new(max_size, (14, 14), pane, self.settings.clone());
+                let mut container = PaneContainer::new(max_size, (14, 5), pane, self.settings.clone());
+
 
                 container.set_position(pos);
+                container.set_size((14, 5));
+
+
 
                 self.sender.send(Message::CreatePopup(container, true)).expect("Failed to send message");
+                self.waiting = Waiting::JumpTarget;
+            },
+            "prompt_set_jump" => {
+                let (send, recv) = std::sync::mpsc::channel();
 
+                self.receiver = Some(recv);
+
+                let txt_prompt = PromptType::Text(String::new(), None, false);
+                let prompt = vec!["Name the".to_string(), "Target".to_string()];
+
+                let pane = PopUpPane::new(self.settings.clone(), prompt, self.sender.clone(), send, vec![txt_prompt]);
+
+                let pane = Rc::new(RefCell::new(pane));
+
+                let (_, (x2, y2)) = container.get_corners();
+                let (x, y) = container.get_size();
+
+                let (x, y) = (x / 2, y / 2);
+
+                let pos = (x2 - 14 - x, y2 - 6 - y);
+
+
+                let max_size = container.get_size();
+                
+                let mut container = PaneContainer::new(max_size, (14, 5), pane, self.settings.clone());
+
+
+                container.set_position(pos);
+                container.set_size((14, 5));
+
+
+
+                self.sender.send(Message::CreatePopup(container, true)).expect("Failed to send message");
+                self.waiting = Waiting::JumpPosition;
             },
 
             _ => {}

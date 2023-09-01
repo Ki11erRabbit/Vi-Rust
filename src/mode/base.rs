@@ -550,12 +550,16 @@ impl Mode for Command {
         self.edit_pos = 0;
         pane.change_mode(name);
 
-        let cursor = self.cursor_location.take().unwrap();
+        let mut cursor = self.cursor_location.take().unwrap();
 
         execute!(io::stdout(), SetCursorStyle::BlinkingBlock).unwrap();
         let (x, y) = cursor.get_real_cursor();
 
-        *pane.get_cursor().borrow_mut() = cursor;
+        if !pane.get_cursor().borrow().jumped {
+            *pane.get_cursor().borrow_mut() = cursor;
+        }
+
+        pane.get_cursor().borrow_mut().ignore_offset = false;
 
         execute!(io::stdout(), MoveTo(x as u16,y as u16)).unwrap();
         

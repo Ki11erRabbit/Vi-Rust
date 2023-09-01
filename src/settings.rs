@@ -362,13 +362,27 @@ impl Default for Settings {
             key: KeyCode::Char('l'),
             modifier: KeyModifiers::NONE,
         }], "pane_right".to_string());
+
         normal_keybindings.insert(vec![Key {
             key: KeyCode::Char('\\'),
             modifier: KeyModifiers::NONE,
         }, Key {
             key: KeyCode::Char('j'),
             modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('t'),
+            modifier: KeyModifiers::NONE,
         }], "prompt_jump".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('\\'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('j'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('s'),
+            modifier: KeyModifiers::NONE,
+        }], "prompt_set_jump".to_string());
 
 
         
@@ -476,7 +490,7 @@ impl Default for Settings {
             modifier: KeyModifiers::NONE,
         }], "cancel".to_string());
         prompt_keybindings.insert(vec![Key {
-            key: KeyCode::Char('\n'),
+            key: KeyCode::Enter,
             modifier: KeyModifiers::NONE,
         }], "submit".to_string());
         prompt_keybindings.insert(vec![Key {
@@ -567,6 +581,7 @@ impl ColorScheme {
 pub struct EditorColors {
     pub pane: ColorScheme,
     pub ui: ColorScheme,
+    pub popup: ColorScheme,
     pub mode: HashMap<String, ColorScheme>,
 }
 
@@ -598,6 +613,12 @@ impl Default for EditorColors {
         Self {
             pane: ColorScheme::default(),
             ui: ColorScheme::default(),
+            popup: ColorScheme {
+                foreground_color: Color::White,
+                background_color: Color::DarkGrey,
+                underline_color: Color::Reset,
+                attributes: Rc::new(Vec::new()),
+            },
             mode,
         }
     }

@@ -47,7 +47,7 @@ impl Pane for PopUpPane {
 
     }
 
-    fn refresh(&mut self) {
+    fn refresh(&mut self, container: &mut PaneContainer) {
     }
 
     fn change_mode(&mut self, name: &str) {}
@@ -61,9 +61,8 @@ impl Pane for PopUpPane {
     fn draw_row(&self, index: usize, container: &PaneContainer, output: &mut Vec<Option<StyledChar>>){
 
         let (width, height) = container.get_size();
-        eprintln!("{} {}", width, height);
-
-        let color_settings = container.settings.borrow().colors.clone().ui;
+        
+        let color_settings = container.settings.borrow().colors.clone().popup.clone();
         
         if index == 0 {
             output.push(Some(StyledChar::new('┌', color_settings.clone())));
@@ -87,13 +86,13 @@ impl Pane for PopUpPane {
 
             if *self.drawn_prompt.borrow() < self.prompt.len() {
                 let prompt = *self.drawn_prompt.borrow();
-                let side_len = width - 2 - self.prompt[prompt].chars().count();
+                let side_len = width.saturating_sub(2 + self.prompt[prompt].chars().count());
                 let side_len = side_len / 2;
                 for _ in 0..side_len {
                     output.push(Some(StyledChar::new(' ', color_settings.clone())));
                 }
 
-                for c in self.prompt[0].chars() {
+                for c in self.prompt[prompt].chars() {
                     output.push(Some(StyledChar::new(c, color_settings.clone())));
                 }
 
@@ -107,11 +106,12 @@ impl Pane for PopUpPane {
                 for _ in 0..width - 2 {
                     output.push(Some(StyledChar::new(' ', color_settings.clone())));
                 }
+                *self.drawn_prompt.borrow_mut() += 1;
             }
             else {
                 let row_offset = *self.prompt_level.borrow();
                 let mode = self.mode.clone();
-                mode.borrow_mut().draw_prompt(index - index - row_offset, container, output);
+                mode.borrow_mut().draw_prompt(index - index + row_offset, container, output);
 
                 *self.prompt_level.borrow_mut() += 1;
             }

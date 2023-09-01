@@ -87,30 +87,25 @@ impl Window {
     }
 
     fn create_popup(&mut self, pane: PaneContainer, make_active: bool) {
-        if make_active {
-            eprintln!("Making new pane active");
-            self.active_layer = self.panes.len() - 1;
-
-        }
-        if self.panes.len() == 1 {
+        if self.panes.len() - 1 == self.active_layer {
             eprintln!("Creating new layer");
             self.panes.push(vec![pane]);
         }
         else {
             eprintln!("Adding to existing layer");
-            self.panes[self.active_layer].push(pane);
+            self.panes[self.active_layer + 1].push(pane);
         }
-        if self.buffers.len() == 1 {
+        if self.buffers.len() - 1 == self.active_layer {
             eprintln!("Creating new buffer");
             self.buffers.push(TextBuffer::new());
         }
-        if self.active_panes.len() == 1 {
+        if self.active_panes.len() - 1 == self.active_layer {
             eprintln!("Creating new active pane");
             self.active_panes.push(self.panes[self.active_layer].len() - 1);
         }
         else {
             eprintln!("Adding to existing active pane");
-            self.active_panes[self.active_layer] = self.panes[self.active_layer].len() - 1;
+            self.active_panes[self.active_layer + 1] = self.panes[self.active_layer].len() - 1;
         }
         if make_active {
             eprintln!("Making new pane active");
@@ -170,24 +165,26 @@ impl Window {
         let mut panes_to_remove = Vec::new();
         for (i, layer) in self.panes.iter().enumerate() {
             for (j, pane) in layer.iter().enumerate() {
-                //eprintln!("pane can close: {}, {}", i, j);
                 if pane.can_close() {
+                    eprintln!("pane can close: {}, {}", i, j);
                     panes_to_remove.push((i, j));
                 }
             }
         }
         
         for (i, j) in panes_to_remove.iter().rev() {
-            //eprintln!("removing pane: {}, {}", i, j);
+            eprintln!("removing pane: {}, {}", i, j);
             
             loop {
                 if *j + 1 < self.panes[*i].len() {
+                    eprintln!("combining with right pane");
                     let corners = self.panes[*i][*j].get_corners();
                     if self.panes[*i][*j + 1].combine(corners) {
                         break;
                     }
                 }
                 if *j != 0 {
+                    eprintln!("combining with left pane");
                     let corners = self.panes[*i][*j].get_corners();
                     if self.panes[*i][*j - 1].combine(corners) {
                         break;
@@ -197,7 +194,7 @@ impl Window {
             }
 
             
-            self.panes.remove(*j);
+            self.panes[*i].remove(*j);
         }
 
         for (i, layer) in self.panes.iter().enumerate() {
@@ -264,6 +261,7 @@ impl Window {
         else {
             (new_pane_size.0 + 1, new_pane_size.1)
         };
+        
         self.panes[self.active_layer][self.active_panes[self.active_layer]].set_size(old_pane_size);
 
 
@@ -275,9 +273,12 @@ impl Window {
 
         new_pane.set_position(new_pane_position);
         self.panes[self.active_layer].insert(new_pane_index, new_pane);
-        
 
+        eprintln!("old corners {:?}", self.panes[self.active_layer][self.active_panes[self.active_layer]].get_corners());
+        
         self.active_panes[self.active_layer] = new_pane_index;
+
+        eprintln!("new corners {:?}", self.panes[self.active_layer][self.active_panes[self.active_layer]].get_corners());
     }
 
 
@@ -415,8 +416,8 @@ impl Window {
                         self.switch_pane(path);
                     }
                     Message::ClosePane(go_down) => {
-                        eprintln!("Closing pane");
-                        self.panes[self.active_layer].remove(self.active_panes[self.active_layer]);
+                        //self.panes[self.active_layer].remove(self.active_panes[self.active_layer]);
+                        self.panes[self.active_layer][self.active_panes[self.active_layer]].close();
                         self.active_panes[self.active_layer] = self.active_panes[self.active_layer].saturating_sub(1);
 
                         if go_down {
@@ -425,7 +426,6 @@ impl Window {
                         
                     },
                     Message::CreatePopup(container, make_active) => {
-                        eprintln!("Creating popup");
                         self.create_popup(container, make_active);
                     },
                 }
@@ -447,11 +447,11 @@ impl Window {
         //self.refresh_screen()?;
         self.read_messages();
         self.remove_panes();
-        if self.panes.len() == 0 {
+        if self.panes[self.active_layer].len() == 0 {
             return Ok(false);
         }
-        self.refresh_screen()?;
 
+        self.refresh_screen()?;
         let ((x1, y1), (x2, y2)) = self.panes[self.active_layer][self.active_panes[self.active_layer]].get_corners();
 
         if x1 == x2 || y1 == y2 {
@@ -608,13 +608,6 @@ impl Window {
             return Ok(());
         }
 
-        eprintln!("Active layer: {}", self.active_layer);
-        eprintln!("Active pane: {}", self.active_panes[self.active_layer]);
-        eprintln!("Active pane len: {}", self.panes[self.active_layer].len());
-
-        for panes in self.panes.iter() {
-            eprintln!("{:?}", panes);
-        }
 
         self.panes[self.active_layer][self.active_panes[self.active_layer]].refresh();
 
