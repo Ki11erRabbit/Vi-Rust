@@ -4,6 +4,8 @@ use std::{collections::HashMap, rc::Rc};
 use crossterm::{event::{KeyCode, KeyModifiers, KeyEvent}, style::{Attribute, Color}};
 use serde::Deserialize;
 
+use crate::pane::treesitter;
+
 #[macro_export]
 macro_rules! apply_colors {
     ($input:expr, $settings:expr) => {
@@ -588,10 +590,17 @@ impl ColorScheme {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EditorColors {
+    /// The color scheme for all panes.
     pub pane: ColorScheme,
+    /// The color scheme for the ui.
+    /// This includes line numbers and the status bar.
     pub ui: ColorScheme,
+    /// The color scheme for popup panes.
     pub popup: ColorScheme,
+    /// The color scheme for the Currently selected mode.
     pub mode: HashMap<String, ColorScheme>,
+    /// The color scheme for treesitter nodes.
+    pub treesitter: Rc<HashMap<String, ColorScheme>>,
 }
 
 impl Default for EditorColors {
@@ -618,6 +627,73 @@ impl Default for EditorColors {
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
         });
+
+        let mut treesitter = HashMap::new();
+
+        treesitter.insert("comment".to_string(), ColorScheme {
+            foreground_color: Color::DarkGrey,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("block_comment".to_string(), ColorScheme {
+            foreground_color: Color::DarkGrey,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("directive".to_string(), ColorScheme {
+            foreground_color: Color::DarkGrey,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("boolean".to_string(), ColorScheme {
+            foreground_color: Color::Magenta,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("character".to_string(), ColorScheme {
+            foreground_color: Color::Magenta,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("string".to_string(), ColorScheme {
+            foreground_color: Color::Green,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("escape_sequence".to_string(), ColorScheme {
+            foreground_color: Color::Green,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("number".to_string(), ColorScheme {
+            foreground_color: Color::Magenta,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("symbol".to_string(), ColorScheme {
+            foreground_color: Color::Reset,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        treesitter.insert("keyword".to_string(), ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        
+
+
+        let treesitter = Rc::new(treesitter);
         
         Self {
             pane: ColorScheme::default(),
@@ -629,6 +705,7 @@ impl Default for EditorColors {
                 attributes: Rc::new(Vec::new()),
             },
             mode,
+            treesitter,
         }
     }
 }

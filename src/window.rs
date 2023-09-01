@@ -12,11 +12,12 @@ use crossterm::event::{KeyEvent, self, Event};
 use crossterm::style::{Stylize, StyledContent};
 use crossterm::{terminal::{self, ClearType}, execute, cursor, queue};
 
+use crate::pane::treesitter::TreesitterPane;
 use crate::settings::ColorScheme;
 use crate::{apply_colors, settings::Settings};
 use crate::pane::{Pane, PaneContainer};
 use crate::pane::text::TextPane;
-
+use crate::treesitter::tree_sitter_scheme;
 
 
 pub enum Message {
@@ -117,14 +118,21 @@ impl Window {
     fn open_file(&mut self, filename: PathBuf) -> usize {
         let file_type = filename.extension().and_then(|s| s.to_str()).unwrap_or("txt").to_string();
 
-        let pane = match file_type.as_str() {
+        eprintln!("Opening file: {:?}", file_type);
+
+        let pane: Rc<RefCell<dyn Pane>> = match file_type.as_str() {
+            "scm" => {
+                let language = unsafe { tree_sitter_scheme() };
+                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language);
+                pane.open_file(&filename).expect("Failed to open file");
+                Rc::new(RefCell::new(pane))
+            },
             "txt" | _ => {
                 let mut pane = TextPane::new(self.settings.clone(), self.channels.0.clone());
                 pane.open_file(&filename).expect("Failed to open file");
-                pane
+                Rc::new(RefCell::new(pane))
             }
         };
-        let pane = Rc::new(RefCell::new(pane));
         self.panes[self.active_layer].push(PaneContainer::new((0,0), (0, 0), pane.clone(), self.settings.clone()));
         self.panes.len() - 1
     }

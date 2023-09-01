@@ -1,6 +1,7 @@
 
 pub(crate) mod text;
 pub mod popup;
+pub mod treesitter;
 
 use std::{rc::Rc, cell::RefCell, path::PathBuf, io, cmp, fmt::Debug};
 
@@ -131,7 +132,7 @@ impl PaneContainer {
             }
 
             //Try combining from the right to left
-            else if other_start_x - 1 == end_x && start_y == other_start_y && end_y == other_end_y {
+            else if other_start_x.saturating_sub(1) == end_x && start_y == other_start_y && end_y == other_end_y {
                 let width = end_x - other_start_x;
                 let height = end_y - start_y;
                 //eprintln!("Width: {}, Height: {}", width, height);
