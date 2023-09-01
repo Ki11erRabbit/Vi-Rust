@@ -428,6 +428,7 @@ impl Pane for TextPane {
                 }
 
                 self.save_buffer().expect("Failed to save file");
+                self.contents.add_new_rope();
             },
             "w!" => {
                 if let Some(file_name) = command_args.next() {
@@ -435,6 +436,7 @@ impl Pane for TextPane {
                 }
 
                 self.save_buffer().expect("Failed to save file");
+                self.contents.add_new_rope();
             },
             "wq" => {
                 self.save_buffer().expect("Failed to save file");
@@ -474,6 +476,7 @@ impl Pane for TextPane {
             "mode" => {
                 let mode = command_args.next().unwrap_or("Normal");
                 self.change_mode(mode);
+                self.contents.add_new_rope();
             },
             "jump" => {
                 if let Some(jump) = command_args.next() {
@@ -526,29 +529,36 @@ impl Pane for TextPane {
             },
             "horizontal_split" => {
                 self.sender.send(Message::HorizontalSplit).expect("Failed to send message");
+                self.contents.add_new_rope();
             },
             "vertical_split" => {
                 self.sender.send(Message::VerticalSplit).expect("Failed to send message");
+                self.contents.add_new_rope();
             },
             "qa!" => {
                 self.sender.send(Message::ForceQuitAll).expect("Failed to send message");
             },
             "pane_up" => {
                 self.sender.send(Message::PaneUp).expect("Failed to send message");
+                self.contents.add_new_rope();
             },
             "pane_down" => {
                 self.sender.send(Message::PaneDown).expect("Failed to send message");
+                self.contents.add_new_rope();
             },
             "pane_left" => {
                 self.sender.send(Message::PaneLeft).expect("Failed to send message");
+                self.contents.add_new_rope();
             },
             "pane_right" => {
                 self.sender.send(Message::PaneRight).expect("Failed to send message");
+                self.contents.add_new_rope();
             },
             "e" => {
                 if let Some(file_name) = command_args.next() {
                     self.sender.send(Message::OpenFile(file_name.to_string())).expect("Failed to send message");
                 }
+                self.contents.add_new_rope();
             },
             "prompt_jump" => {
                 let (send, recv) = std::sync::mpsc::channel();
@@ -582,6 +592,8 @@ impl Pane for TextPane {
 
                 self.sender.send(Message::CreatePopup(container, true)).expect("Failed to send message");
                 self.waiting = Waiting::JumpTarget;
+
+                self.contents.add_new_rope();
             },
             "prompt_set_jump" => {
                 let (send, recv) = std::sync::mpsc::channel();
@@ -615,6 +627,21 @@ impl Pane for TextPane {
 
                 self.sender.send(Message::CreatePopup(container, true)).expect("Failed to send message");
                 self.waiting = Waiting::JumpPosition;
+
+                self.contents.add_new_rope();
+            },
+            "undo" => {
+                self.contents.undo();
+
+                self.cursor.borrow_mut().number_line_size = self.contents.get_line_count();
+
+                self.cursor.borrow_mut().set_cursor(CursorMove::Nothing, CursorMove::Amount(self.contents.get_line_count()), self, (0,0));
+                
+            },
+            "redo" => {
+                self.contents.redo();
+                self.cursor.borrow_mut().number_line_size = self.contents.get_line_count();
+
             },
 
             _ => {}
@@ -650,7 +677,7 @@ impl Pane for TextPane {
             Some(byte_pos) => byte_pos,
         };
         
-        self.contents.insert(byte_pos, c);
+        self.contents.insert_current(byte_pos, c);
     }
 
     fn insert_str(&mut self, s: &str) {

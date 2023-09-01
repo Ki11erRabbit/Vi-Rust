@@ -384,6 +384,15 @@ impl Default for Settings {
             modifier: KeyModifiers::NONE,
         }], "prompt_set_jump".to_string());
 
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('u'),
+            modifier: KeyModifiers::NONE,
+        }], "undo".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('r'),
+            modifier: KeyModifiers::CONTROL,
+        }], "redo".to_string());
+
 
         
         let mut insert_keybindings = HashMap::new();

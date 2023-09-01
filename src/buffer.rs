@@ -95,6 +95,32 @@ impl Buffer {
         &mut self.buffers[self.current]
     }
 
+    pub fn add_new_rope(&mut self) {
+        if self.current > 0 {
+            if self.buffers[self.current - 1] == self.buffers[self.current] {
+                return;
+            }
+        }
+        let buffer = self.buffers[self.current].clone();
+        if self.current < self.buffers.len() - 1 {
+            self.buffers.truncate(self.current + 1);
+        }
+        self.buffers.push(buffer);
+        self.current += 1;
+    }
+
+    pub fn insert_current<T>(&mut self, byte_offset: usize, text: T) where T: AsRef<str> {
+        self.buffers[self.current].insert(byte_offset, text.as_ref());
+    }
+
+    pub fn delete_current<R>(&mut self, range: R) where R: std::ops::RangeBounds<usize> {
+        self.buffers[self.current].delete(range);
+    }
+
+    pub fn replace_current<R, T>(&mut self, range: R, text: T) where R: std::ops::RangeBounds<usize>, T: AsRef<str> {
+        self.buffers[self.current].replace(range, text.as_ref());
+    }
+
     pub fn insert<T>(&mut self, byte_offset: usize, text: T) where T: AsRef<str> {
         let buffer = self.get_new_rope();
         buffer.insert(byte_offset, text.as_ref());
