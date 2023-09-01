@@ -62,7 +62,7 @@ impl Pane for PopUpPane {
 
         let (width, height) = container.get_size();
         
-        let color_settings = container.settings.borrow().colors.clone().ui;
+        let color_settings = container.settings.borrow().colors.clone().popup.clone();
         
         if index == 0 {
             output.push(Some(StyledChar::new('┌', color_settings.clone())));

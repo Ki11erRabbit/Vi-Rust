@@ -161,7 +161,7 @@ impl Promptable for Prompt {
         
         let prompt = &self.prompts.borrow()[self.current_prompt];
 
-        let color_settings = container.settings.borrow().colors.ui.clone();
+        let color_settings = container.settings.borrow().colors.popup.clone();
 
         match prompt {
             PromptType::Text(_,size,_) => {

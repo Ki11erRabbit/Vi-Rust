@@ -581,6 +581,7 @@ impl ColorScheme {
 pub struct EditorColors {
     pub pane: ColorScheme,
     pub ui: ColorScheme,
+    pub popup: ColorScheme,
     pub mode: HashMap<String, ColorScheme>,
 }
 
@@ -612,6 +613,12 @@ impl Default for EditorColors {
         Self {
             pane: ColorScheme::default(),
             ui: ColorScheme::default(),
+            popup: ColorScheme {
+                foreground_color: Color::White,
+                background_color: Color::DarkGrey,
+                underline_color: Color::Reset,
+                attributes: Rc::new(Vec::new()),
+            },
             mode,
         }
     }
