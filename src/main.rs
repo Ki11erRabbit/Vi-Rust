@@ -8,6 +8,7 @@ pub mod mode;
 pub mod cursor;
 pub mod settings;
 pub mod pane;
+pub mod buffer;
 
 
 struct CleanUp;

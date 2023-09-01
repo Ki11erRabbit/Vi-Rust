@@ -1,9 +1,9 @@
-use crate::{pane::Pane, window::{WindowContentsUtils, StyledChar}, cursor::CursorMove};
+use crate::{pane::Pane, window::StyledChar, cursor::CursorMove, buffer::Buffer};
 use std::{io::Write, sync::mpsc::Receiver};
 
-use std::{collections::HashMap, rc::Rc, cell::RefCell, path::PathBuf, sync::mpsc::Sender, cmp, io};
+use std::{collections::HashMap, rc::Rc, cell::RefCell, path::PathBuf, sync::mpsc::Sender, io};
 
-use crop::{Rope, RopeSlice};
+use crop::RopeSlice;
 use crossterm::event::KeyEvent;
 
 use crate::{cursor::{Cursor, Direction}, mode::{Mode, base::{Normal, Insert, Command}}, settings::Settings, window::Message};
@@ -105,7 +105,7 @@ pub enum Waiting {
 pub struct TextPane {
     cursor: Rc<RefCell<Cursor>>,
     file_name: Option<PathBuf>,
-    contents: Rope,
+    contents: Buffer,
     mode: Rc<RefCell<dyn Mode>>,
     modes: HashMap<String, Rc<RefCell<dyn Mode>>>,
     changed: bool,
@@ -139,7 +139,7 @@ impl TextPane {
         Self {
             cursor: Rc::new(RefCell::new(Cursor::new((0,0)))),
             file_name: None,
-            contents: Rope::new(),
+            contents: Buffer::new(),
             mode: normal,
             modes,
             changed: false,
@@ -158,22 +158,15 @@ impl TextPane {
 
 
     fn get_row(&self, row: usize, offset: usize, col: usize) -> Option<RopeSlice> {
-        if row >= self.contents.line_len() {
-            return None;
-        }
-        let line = self.contents.line(row);
-        let len = cmp::min(col + offset, line.line_len().saturating_sub(offset));
-        if len == 0 {
-            return None;
-        }
-        Some(line.line_slice(offset..len))
+
+        self.contents.get_row(row, offset, col)
     }
 
-    pub fn borrow_buffer(&self) -> &Rope {
+    pub fn borrow_buffer(&self) -> &Buffer {
         &self.contents
     }
 
-    pub fn borrow_buffer_mut(&mut self) -> &mut Rope {
+    pub fn borrow_buffer_mut(&mut self) -> &mut Buffer {
         &mut self.contents
     }
 
@@ -182,17 +175,10 @@ impl TextPane {
     }
 
 
-    fn get_byte_offset(&self) -> usize {
-        let (x, mut y) = self.cursor.borrow().get_cursor();
-        while y > self.contents.line_len() {
-            y = y.saturating_sub(1);
-        }
-        let line_pos = self.contents.byte_of_line(y);
-        let row_pos = x;
+    fn get_byte_offset(&self) -> Option<usize> {
+        let (x, y) = self.cursor.borrow().get_cursor();
 
-        let byte_pos = line_pos + row_pos;
-
-        byte_pos
+        self.contents.get_byte_offset(x, y)
     }
 
     fn check_messages(&mut self, container: &PaneContainer) {
@@ -216,7 +202,6 @@ impl TextPane {
                                         self.run_command(&command, container);
                                     },
                                     Waiting::None => {
-                                        //self.run_command(&string, container);
                                     },
                                 }
                             },
@@ -233,7 +218,7 @@ impl Pane for TextPane {
 
 
     fn draw_row(&self, mut index: usize, container: &PaneContainer, output: &mut Vec<Option<StyledChar>>) {
-        let rows = container.get_size().1;
+        //let rows = container.get_size().1;
         let mut cols = container.get_size().0;
 
         let ((x1, y1), _) = container.get_corners();
@@ -263,7 +248,6 @@ impl Pane for TextPane {
                     output.push(Some(StyledChar::new(c, color_settings.clone())));
                 }
                 
-                //output.push_str(apply_colors!("|", color_settings));
                 cols = cols.saturating_sub(1);
             }
         }
@@ -271,10 +255,7 @@ impl Pane for TextPane {
         let real_row = self.cursor.borrow().row_offset + index;
         let col_offset = self.cursor.borrow().col_offset;
 
-        let mut number_of_lines = self.borrow_buffer().line_len();
-        if let Some('\n') = self.borrow_buffer().chars().last() {
-            number_of_lines += 1;
-        }
+        let number_of_lines = self.contents.get_line_count();
 
         let mut num_width = 0;
 
@@ -298,8 +279,6 @@ impl Pane for TextPane {
                     for c in string.chars() {
                         output.push(Some(StyledChar::new(c, color_settings.clone())));
                     }
-                    
-                    //output.push_str(apply_colors!(string, color_settings));
                 }
 
             }
@@ -317,8 +296,6 @@ impl Pane for TextPane {
                     for c in string.chars() {
                         output.push(Some(StyledChar::new(c, color_settings.clone())));
                     }
-                    
-                    //output.push_str(apply_colors!(string, color_settings));
                 }
                 else if real_row + 1 <= number_of_lines {
                     let string = format!("{:width$}",
@@ -328,8 +305,6 @@ impl Pane for TextPane {
                     for c in string.chars() {
                         output.push(Some(StyledChar::new(c, color_settings.clone())));
                     }
-                    
-                    //output.push_str(apply_colors!(string, color_settings));
                 }
             }
 
@@ -355,8 +330,6 @@ impl Pane for TextPane {
                         for c in string.chars() {
                             output.push(Some(StyledChar::new(c, color_settings.clone())));
                         }
-                        
-                        //output.push_str(apply_colors!(string, color_settings));
                     },
                     '\n' => {
                         let string = " ".to_string();
@@ -364,8 +337,6 @@ impl Pane for TextPane {
                         for c in string.chars() {
                             output.push(Some(StyledChar::new(c, color_settings.clone())));
                         }
-
-                        //output.push_str(apply_colors!(" ", color_settings))
                     },
                     c => {
                         count += 1;
@@ -374,13 +345,10 @@ impl Pane for TextPane {
                         for c in string.chars() {
                             output.push(Some(StyledChar::new(c, color_settings.clone())));
                         }
-                        
-                        //output.push_str(apply_colors!(c.to_string(), color_settings));
                     },
                 }
             }
                                  else {
-                                     //output.push_str("");
             });
 
             let string = " ".repeat(cols.saturating_sub(count + num_width));
@@ -388,8 +356,6 @@ impl Pane for TextPane {
             for c in string.chars() {
                 output.push(Some(StyledChar::new(c, color_settings.clone())));
             }
-            
-            //output.push_str(apply_colors!(string, color_settings));
         }
         else if real_row >= number_of_lines {
             let string = " ".repeat(cols);
@@ -397,8 +363,6 @@ impl Pane for TextPane {
             for c in string.chars() {
                 output.push(Some(StyledChar::new(c, color_settings.clone())));
             }
-            
-            //output.push_str(apply_colors!(" ".repeat(cols), color_settings));
         }
         else {
             let string = " ".repeat(cols.saturating_sub(num_width));
@@ -406,8 +370,6 @@ impl Pane for TextPane {
             for c in string.chars() {
                 output.push(Some(StyledChar::new(c, color_settings.clone())));
             }
-            
-            //output.push_str(apply_colors!(" ".repeat(cols.saturating_sub(num_width)), color_settings));
         }
     }
 
@@ -427,7 +389,7 @@ impl Pane for TextPane {
 
     fn open_file(&mut self, filename: &PathBuf) -> io::Result<()> {
         let file = std::fs::read_to_string(filename)?;
-        self.contents = Rope::from(file);
+        self.contents = Buffer::from(file);
         self.file_name = Some(PathBuf::from(filename));
         Ok(())
     }
@@ -466,6 +428,7 @@ impl Pane for TextPane {
                 }
 
                 self.save_buffer().expect("Failed to save file");
+                self.contents.add_new_rope();
             },
             "w!" => {
                 if let Some(file_name) = command_args.next() {
@@ -473,6 +436,7 @@ impl Pane for TextPane {
                 }
 
                 self.save_buffer().expect("Failed to save file");
+                self.contents.add_new_rope();
             },
             "wq" => {
                 self.save_buffer().expect("Failed to save file");
@@ -512,6 +476,7 @@ impl Pane for TextPane {
             "mode" => {
                 let mode = command_args.next().unwrap_or("Normal");
                 self.change_mode(mode);
+                self.contents.add_new_rope();
             },
             "jump" => {
                 if let Some(jump) = command_args.next() {
@@ -564,29 +529,36 @@ impl Pane for TextPane {
             },
             "horizontal_split" => {
                 self.sender.send(Message::HorizontalSplit).expect("Failed to send message");
+                self.contents.add_new_rope();
             },
             "vertical_split" => {
                 self.sender.send(Message::VerticalSplit).expect("Failed to send message");
+                self.contents.add_new_rope();
             },
             "qa!" => {
                 self.sender.send(Message::ForceQuitAll).expect("Failed to send message");
             },
             "pane_up" => {
                 self.sender.send(Message::PaneUp).expect("Failed to send message");
+                self.contents.add_new_rope();
             },
             "pane_down" => {
                 self.sender.send(Message::PaneDown).expect("Failed to send message");
+                self.contents.add_new_rope();
             },
             "pane_left" => {
                 self.sender.send(Message::PaneLeft).expect("Failed to send message");
+                self.contents.add_new_rope();
             },
             "pane_right" => {
                 self.sender.send(Message::PaneRight).expect("Failed to send message");
+                self.contents.add_new_rope();
             },
             "e" => {
                 if let Some(file_name) = command_args.next() {
                     self.sender.send(Message::OpenFile(file_name.to_string())).expect("Failed to send message");
                 }
+                self.contents.add_new_rope();
             },
             "prompt_jump" => {
                 let (send, recv) = std::sync::mpsc::channel();
@@ -620,6 +592,8 @@ impl Pane for TextPane {
 
                 self.sender.send(Message::CreatePopup(container, true)).expect("Failed to send message");
                 self.waiting = Waiting::JumpTarget;
+
+                self.contents.add_new_rope();
             },
             "prompt_set_jump" => {
                 let (send, recv) = std::sync::mpsc::channel();
@@ -653,6 +627,21 @@ impl Pane for TextPane {
 
                 self.sender.send(Message::CreatePopup(container, true)).expect("Failed to send message");
                 self.waiting = Waiting::JumpPosition;
+
+                self.contents.add_new_rope();
+            },
+            "undo" => {
+                self.contents.undo();
+
+                self.cursor.borrow_mut().number_line_size = self.contents.get_line_count();
+
+                self.cursor.borrow_mut().set_cursor(CursorMove::Nothing, CursorMove::Amount(self.contents.get_line_count()), self, (0,0));
+                
+            },
+            "redo" => {
+                self.contents.redo();
+                self.cursor.borrow_mut().number_line_size = self.contents.get_line_count();
+
             },
 
             _ => {}
@@ -679,29 +668,28 @@ impl Pane for TextPane {
         self.set_changed(true);
         let byte_pos = self.get_byte_offset();
         let c = c.to_string();
-        if self.contents.chars().count() == 0 {
+        if self.contents.get_char_count() == 0 {
             self.contents.insert(0, c);
             return;
         }
-        let byte_pos = if byte_pos >= self.contents.byte_len() {
-            self.contents.byte_len()
-        } else {
-            byte_pos
+        let byte_pos = match byte_pos {
+            None => self.contents.get_byte_count(),
+            Some(byte_pos) => byte_pos,
         };
-        self.contents.insert(byte_pos, c);
+        
+        self.contents.insert_current(byte_pos, c);
     }
 
     fn insert_str(&mut self, s: &str) {
         self.set_changed(true);
         let byte_pos = self.get_byte_offset();
-        if self.contents.chars().count() == 0 {
+        if self.contents.get_char_count() == 0 {
             self.contents.insert(0, s);
             return;
         }
-        let byte_pos = if byte_pos >= self.contents.byte_len() {
-            self.contents.byte_len()
-        } else {
-            byte_pos
+        let byte_pos = match byte_pos {
+            None => self.contents.get_byte_count(),
+            Some(byte_pos) => byte_pos,
         };
         self.contents.insert(byte_pos, s);
     }
@@ -711,9 +699,10 @@ impl Pane for TextPane {
         self.set_changed(true);
         let byte_pos = self.get_byte_offset();
 
-        if byte_pos >= self.contents.byte_len() {
-            return;
-        }
+        let byte_pos = match byte_pos {
+            None => return,
+            Some(byte_pos) => byte_pos,
+        };
 
         self.contents.delete(byte_pos..byte_pos.saturating_add(1));
     }
@@ -724,7 +713,12 @@ impl Pane for TextPane {
         let byte_pos = self.get_byte_offset();
         let mut go_up = false;
 
-        if self.borrow_buffer().bytes().nth(byte_pos.saturating_sub(1)) == Some(b'\n') {
+        let byte_pos = match byte_pos {
+            None => return,
+            Some(byte_pos) => byte_pos,
+        };
+
+        if self.borrow_buffer().get_nth_byte(byte_pos.saturating_sub(1)) == Some(b'\n') {
             go_up = true;
         }
 
@@ -751,12 +745,8 @@ impl Pane for TextPane {
     }
 
     fn get_line_count(&self) -> usize {
-        let mut number_of_lines = self.contents.line_len();
 
-        if let Some('\n') = self.contents.chars().last() {
-            number_of_lines += 1;
-        }
-        number_of_lines
+        self.contents.get_line_count()
     }
 
     fn buffer_to_string(&self) -> String {
@@ -764,12 +754,7 @@ impl Pane for TextPane {
     }
 
     fn get_row_len(&self, row: usize) -> Option<usize> {
-        if let Some(line) = self.contents.lines().nth(row) {
-            Some(line.chars().count())
-        }
-        else {
-            None
-        }
+        self.contents.line_len(row)
     }
 
 
