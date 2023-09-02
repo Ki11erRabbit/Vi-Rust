@@ -237,7 +237,8 @@ impl Pane for TreesitterPane {
 
         let color_settings = &self.settings.borrow().colors.pane;
         let syntax_highlighting = self.settings.borrow().colors.treesitter.clone();
-        let syntax_highlighting = syntax_highlighting.get(&self.lang).expect("Language not found");
+        let default = HashMap::new();
+        let syntax_highlighting = syntax_highlighting.get(&self.lang).unwrap_or(&default);
 
 
         if let Some(row) = self.get_row(real_row, col_offset, cols) {
@@ -247,7 +248,7 @@ impl Pane for TreesitterPane {
                 let point1 = Point::new(real_row, count);
                 let point2 = Point::new(real_row, count + 1);
                 let node = self.tree.root_node().descendant_for_point_range(point1, point2).unwrap();
-                let parent_node = node.parent().unwrap();
+                let mut parent_node = node.parent();
                 
                 match c {
                     '\t' => {
@@ -277,43 +278,53 @@ impl Pane for TreesitterPane {
 
                                 settings.as_ref().unwrap_or(color_settings)
                             }
-                            else if let Some(settings) = syntax_highlighting.get(&node.parent().unwrap().kind().to_string()) {
-                                match settings {
-                                    Ok(_) => {
-                                        settings.as_ref().unwrap_or(color_settings)
-                                    },
-                                    Err(highlight) => {
-                                        let SyntaxHighlight { color } = highlight;
+                            else if let Some(_) = parent_node {
+                                let mut colors = color_settings;
+                                while let Some(parent) = parent_node {
+                                    if let Some(settings) = syntax_highlighting.get(&parent.kind().to_string()) {
+                                        match settings {
+                                            Ok(_) => {
+                                                colors = settings.as_ref().unwrap_or(color_settings);
+                                            },
+                                            Err(highlight) => {
+                                                let SyntaxHighlight { color } = highlight;
 
-                                        let mut cursor = parent_node.walk();
-                                        
-                                        let mut index = 0;
-                                        for child_node in parent_node.children(&mut cursor) {
-                                            if child_node.id() == node.id() {
-                                                break;
-                                            }
-                                            index += 1;
-                                        }
+                                                let mut cursor = parent.walk();
 
-                                        if let Some(field) = parent_node.field_name_for_child(index) {
-                                            if let Some(color) = color.get(&field.to_string()) {
-                                                color
-                                            }
-                                            else {
-                                                color_settings
-                                            }
+                                                let mut index = 0;
+                                                for child_node in parent.children(&mut cursor) {
+                                                    if child_node.id() == node.id() {
+                                                        break;
+                                                    }
+                                                    index += 1;
+                                                }
+
+                                                if let Some(field) = parent.field_name_for_child(index) {
+                                                    if let Some(color) = color.get(&field.to_string()) {
+                                                        colors = color;
+                                                    }
+                                                    else {
+                                                        colors = color_settings
+                                                    }
+                                                }
+                                                else {
+                                                    colors = color_settings;
+                                                }
+                                            },
                                         }
-                                        else {
-                                            color_settings
-                                        }
-                                    },
+                                        break;
+                                    }
+                                    else {
+                                        parent_node = parent.parent();
+                                    }
                                 }
+                                colors
                             }
                             else {
                                 color_settings
                             };
                             match c {
-                                '(' | ')' | '{' | '}' | '[' | ']' => {
+                                '(' | ')' | '{' | '}' | '[' | ']' | '<' | '>' => {
                                     if self.settings.borrow().editor_settings.rainbow_delimiters {
                                         let colors = &self.settings.borrow().colors.rainbow_delimiters;
                                         match c {
@@ -343,6 +354,75 @@ impl Pane for TreesitterPane {
                                             ']' => {
                                                 let (_, color) = self.rainbow_delimiters.borrow_mut().pop().unwrap_or((c, color_settings.clone()));
                                                 output.push(Some(StyledChar::new(c, color)));
+                                            },
+                                            '<' => {
+                                                if let Some(parent) = parent_node {
+
+                                                    match parent.kind() {
+                                                        "type_arguments" | "system_lib_string" => {
+                                                            let index = self.rainbow_delimiters.borrow().len() % colors.len();
+                                                            self.rainbow_delimiters.borrow_mut().push((c, colors[index].clone()));
+                                                            output.push(Some(StyledChar::new(c, colors[index].clone())));
+                                                        },
+                                                        _ => {
+                                                            match node.kind() {
+                                                                "system_lib_string" => {
+                                                                    let index = self.rainbow_delimiters.borrow().len() % colors.len();
+                                                                    self.rainbow_delimiters.borrow_mut().push((c, colors[index].clone()));
+                                                                    output.push(Some(StyledChar::new(c, colors[index].clone())));
+                                                                },
+                                                                _ => {
+                                                                    output.push(Some(StyledChar::new(c, color_settings.clone())));
+                                                                },
+                                                            }
+                                                        },
+                                                    }
+                                                }
+                                                else {
+                                                    match node.kind() {
+                                                        "system_lib_string" => {
+                                                            let index = self.rainbow_delimiters.borrow().len() % colors.len();
+                                                            self.rainbow_delimiters.borrow_mut().push((c, colors[index].clone()));
+                                                            output.push(Some(StyledChar::new(c, colors[index].clone())));
+                                                        },
+                                                        _ => {
+                                                            output.push(Some(StyledChar::new(c, color_settings.clone())));
+                                                        },
+                                                    }
+                                                }
+                                            },
+                                            '>' => {
+                                                if let Some(parent) = parent_node {
+
+                                                    match parent.kind() {
+                                                        "type_arguments" | "system_lib_string" => {
+                                                            let (_, color) = self.rainbow_delimiters.borrow_mut().pop().unwrap_or((c, color_settings.clone()));
+                                                            output.push(Some(StyledChar::new(c, color)));
+                                                        },
+                                                        _ => {
+                                                            match node.kind() {
+                                                                "system_lib_string" => {
+                                                                    let (_, color) = self.rainbow_delimiters.borrow_mut().pop().unwrap_or((c, color_settings.clone()));
+                                                                    output.push(Some(StyledChar::new(c, color)));
+                                                                },
+                                                                _ => {
+                                                                    output.push(Some(StyledChar::new(c, color_settings.clone())));
+                                                                },
+                                                            }
+                                                        },
+                                                    }
+                                                }
+                                                else {
+                                                    match node.kind() {
+                                                        "system_lib_string" => {
+                                                            let (_, color) = self.rainbow_delimiters.borrow_mut().pop().unwrap_or((c, color_settings.clone()));
+                                                            output.push(Some(StyledChar::new(c, color)));
+                                                        },
+                                                        _ => {
+                                                            output.push(Some(StyledChar::new(c, color_settings.clone())));
+                                                        },
+                                                    }
+                                                }
                                             },
                                             _ => {
                                             },
@@ -850,7 +930,7 @@ impl Pane for TreesitterPane {
             old_end_byte,
             new_end_byte,
             start_position: Point::new(y, x),
-            old_end_position: Point::new(y, x - 1),
+            old_end_position: Point::new(y, x.saturating_sub(1)),
             new_end_position: Point::new(y, x),
         };
 

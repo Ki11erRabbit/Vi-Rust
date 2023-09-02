@@ -15,6 +15,7 @@ toml = "0.7.6"
 serde = { version = "1.0.185", features = ["derive"] }
 tree-sitter = "0.20.10"
 tree-sitter-rust = "0.20.4"
+tree-sitter-c = "0.20.6"
 
 [build-dependencies]
 cc = "*"

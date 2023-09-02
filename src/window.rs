@@ -135,6 +135,13 @@ impl Window {
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
+            "c" | "h" => {
+                let language = tree_sitter_c::language();
+                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"c");
+                pane.open_file(&filename).expect("Failed to open file");
+                pane.backup_buffer();
+                Rc::new(RefCell::new(pane))
+            }
             "txt" | _ => {
                 let mut pane = TextPane::new(self.settings.clone(), self.channels.0.clone());
                 pane.open_file(&filename).expect("Failed to open file");

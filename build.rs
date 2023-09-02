@@ -1,5 +1,6 @@
 
-fn main() {
+
+fn build_scheme() {
     let language = "scheme";
     let package = format!("tree-sitter-{}", language);
     let source_directory = format!("{}/src", package);
@@ -11,4 +12,9 @@ fn main() {
         .include(&source_directory)
         .file(source_file)
         .compile(&package);
+}
+
+
+fn main() {
+    build_scheme();
 }
