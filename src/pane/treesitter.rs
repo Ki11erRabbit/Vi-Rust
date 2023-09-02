@@ -268,6 +268,14 @@ impl Pane for TreesitterPane {
                             output.push(Some(StyledChar::new(c, color_settings.clone())));
                         }
                     },
+                    ' ' => {
+                        count += 1;
+                        let string = " ".to_string();
+
+                        for c in string.chars() {
+                            output.push(Some(StyledChar::new(c, color_settings.clone())));
+                        }
+                    },
                     c => {
                         count += 1;
                         let string = c.to_string();
@@ -275,23 +283,79 @@ impl Pane for TreesitterPane {
                         for c in string.chars() {
 
                             let color_settings = if let Some(settings) = syntax_highlighting.get(&node.kind().to_string()) {
-
-                                settings.as_ref().unwrap_or(color_settings)
+                                match settings {
+                                    SyntaxHighlight::Child(settings) => {
+                                        settings
+                                    }
+                                    SyntaxHighlight::ChildExclude(settings, exclude) => {
+                                        if exclude.contains(&c) {
+                                            color_settings
+                                        }
+                                        else {
+                                            settings
+                                        }
+                                    }
+                                    _ => {
+                                        color_settings
+                                    }
+                                }
                             }
-                            else if let Some(_) = parent_node {
+                            else if let Some(mut parent) = parent_node {
                                 let mut colors = color_settings;
-                                while let Some(parent) = parent_node {
-                                    if let Some(settings) = syntax_highlighting.get(&parent.kind().to_string()) {
-                                        match settings {
-                                            Ok(_) => {
-                                                colors = settings.as_ref().unwrap_or(color_settings);
-                                            },
-                                            Err(highlight) => {
-                                                let SyntaxHighlight { color } = highlight;
 
+                                if let Some(settings) = syntax_highlighting.get(&parent.kind().to_string()) {
+                                    match settings {
+                                        SyntaxHighlight::Child(settings) => {
+                                            colors = settings;
+                                        }
+                                        SyntaxHighlight::ChildExclude(settings, exclude) => {
+                                            if exclude.contains(&c) {
+                                                colors = color_settings;
+                                            }
+                                            else {
+                                                colors = settings;
+                                            }
+                                        }
+                                        SyntaxHighlight::Parent(color_map) => {
+                                            let mut cursor = parent.walk();
+
+                                            let mut index = 0;
+
+                                            for child_node in parent.children(&mut cursor) {
+                                                if child_node.id() == node.id() {
+                                                    break;
+                                                }
+                                                index += 1;
+                                            }
+
+                                            if let Some(field) = parent.field_name_for_child(index) {
+                                                if let Some(highlight) = color_map.get(field) {
+                                                    colors = match highlight {
+                                                        SyntaxHighlight::Child(settings) => settings,
+                                                        SyntaxHighlight::ChildExclude(settings, exclude) => {
+                                                            if exclude.contains(&c) {
+                                                                color_settings
+                                                            }
+                                                            else {
+                                                                settings
+                                                            }
+                                                        }
+                                                        _ => {
+                                                            color_settings
+                                                        }
+                                                    };
+                                                }
+                                            }
+                                        },
+                                        SyntaxHighlight::ParentExclude(color_map, exclude) => {
+                                            if exclude.contains(&c) {
+                                                colors = color_settings;
+                                            }
+                                            else {
                                                 let mut cursor = parent.walk();
 
                                                 let mut index = 0;
+
                                                 for child_node in parent.children(&mut cursor) {
                                                     if child_node.id() == node.id() {
                                                         break;
@@ -300,24 +364,216 @@ impl Pane for TreesitterPane {
                                                 }
 
                                                 if let Some(field) = parent.field_name_for_child(index) {
-                                                    if let Some(color) = color.get(&field.to_string()) {
-                                                        colors = color;
-                                                    }
-                                                    else {
-                                                        colors = color_settings
+                                                    if let Some(highlight) = color_map.get(field) {
+                                                        colors = match highlight {
+                                                            SyntaxHighlight::Child(settings) => settings,
+                                                            SyntaxHighlight::ChildExclude(settings, exclude) => {
+                                                                if exclude.contains(&c) {
+                                                                    color_settings
+                                                                }
+                                                                else {
+                                                                    settings
+                                                                }
+                                                            }
+                                                            _ => {
+                                                                color_settings
+                                                            }
+                                                        };
                                                     }
                                                 }
-                                                else {
-                                                    colors = color_settings;
+                                            }
+                                        },
+                                        SyntaxHighlight::GrandParent(grandparents) => {
+                                            if let Some(highlight) = grandparents.get(&parent.kind().to_string()) {
+                                                match highlight {
+                                                    SyntaxHighlight::Child(ref settings) => {
+                                                        colors = settings;
+                                                    }
+                                                    SyntaxHighlight::ChildExclude(ref settings, exclude) => {
+                                                        if exclude.contains(&c) {
+                                                            colors = color_settings;
+                                                        }
+                                                        else {
+                                                            colors = settings;
+                                                        }
+                                                    }
+                                                    SyntaxHighlight::Parent(color_map) => {
+                                                        let mut cursor = parent.walk();
+
+                                                        let mut index = 0;
+
+                                                        for child_node in parent.children(&mut cursor) {
+                                                            if child_node.id() == node.id() {
+                                                                break;
+                                                            }
+                                                            index += 1;
+                                                        }
+
+                                                        if let Some(field) = parent.field_name_for_child(index) {
+                                                            if let Some(highlight) = color_map.get(field) {
+                                                                colors = match highlight {
+                                                                    SyntaxHighlight::Child(settings) => settings,
+                                                                    SyntaxHighlight::ChildExclude(settings, exclude) => {
+                                                                        if exclude.contains(&c) {
+                                                                            color_settings
+                                                                        }
+                                                                        else {
+                                                                            settings
+                                                                        }
+                                                                    }
+                                                                    _ => {
+                                                                        color_settings
+                                                                    }
+                                                                };
+                                                            }
+                                                        }
+                                                    },
+                                                    SyntaxHighlight::ParentExclude(color_map, exclude) => {
+                                                        if exclude.contains(&c) {
+                                                            colors = color_settings;
+                                                        }
+                                                        else {
+                                                            let mut cursor = parent.walk();
+
+                                                            let mut index = 0;
+
+                                                            for child_node in parent.children(&mut cursor) {
+                                                                if child_node.id() == node.id() {
+                                                                    break;
+                                                                }
+                                                                index += 1;
+                                                            }
+
+                                                            if let Some(field) = parent.field_name_for_child(index) {
+                                                                if let Some(highlight) = color_map.get(field) {
+                                                                    colors = match highlight {
+                                                                        SyntaxHighlight::Child(settings) => settings,
+                                                                        SyntaxHighlight::ChildExclude(settings, exclude) => {
+                                                                            if exclude.contains(&c) {
+                                                                                color_settings
+                                                                            }
+                                                                            else {
+                                                                                settings
+                                                                            }
+                                                                        }
+                                                                        _ => {
+                                                                            color_settings
+                                                                        }
+                                                                    };
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    _ => {
+                                                        colors = color_settings;
+                                                    }
                                                 }
-                                            },
+                                            }
+                                            else {
+                                                let old_parent = parent;
+                                                while let Some(new_parent) = parent.parent() {
+                                                    parent = new_parent;
+                                                    if let Some(highlight) = grandparents.get(&parent.kind().to_string()) {
+
+                                                        match highlight {
+                                                            SyntaxHighlight::Child(ref settings) => {
+                                                                colors = settings;
+                                                            }
+                                                            SyntaxHighlight::ChildExclude(ref settings, exclude) => {
+                                                                if exclude.contains(&c) {
+                                                                    colors = color_settings;
+                                                                }
+                                                                else {
+                                                                    colors = settings;
+                                                                }
+                                                            }
+                                                            SyntaxHighlight::Parent(color_map) => {
+                                                                let mut cursor = old_parent.walk();
+
+                                                                let mut index = 0;
+
+                                                                for child_node in old_parent.children(&mut cursor) {
+                                                                    if child_node.id() == node.id() {
+                                                                        break;
+                                                                    }
+                                                                    index += 1;
+                                                                }
+
+                                                                if let Some(field) = old_parent.field_name_for_child(index) {
+                                                                    if let Some(highlight) = color_map.get(field) {
+                                                                        colors = match highlight {
+                                                                            SyntaxHighlight::Child(settings) => settings,
+                                                                            SyntaxHighlight::ChildExclude(settings, exclude) => {
+                                                                                if exclude.contains(&c) {
+                                                                                    color_settings
+                                                                                }
+                                                                                else {
+                                                                                    settings
+                                                                                }
+                                                                            }
+                                                                            _ => {
+                                                                                color_settings
+                                                                            }
+                                                                        };
+                                                                    }
+                                                                }
+                                                            },
+                                                            SyntaxHighlight::ParentExclude(color_map, exclude) => {
+                                                                if exclude.contains(&c) {
+                                                                    colors = color_settings;
+                                                                }
+                                                                else {
+                                                                    let mut cursor = parent.walk();
+
+                                                                    let mut index = 0;
+
+                                                                    for child_node in old_parent.children(&mut cursor) {
+                                                                        if child_node.id() == node.id() {
+                                                                            break;
+                                                                        }
+                                                                        index += 1;
+                                                                    }
+
+                                                                    if let Some(field) = old_parent.field_name_for_child(index) {
+                                                                        if let Some(highlight) = color_map.get(field) {
+                                                                            colors = match highlight {
+                                                                                SyntaxHighlight::Child(settings) => settings,
+                                                                                SyntaxHighlight::ChildExclude(settings, exclude) => {
+                                                                                    if exclude.contains(&c) {
+                                                                                        color_settings
+                                                                                    }
+                                                                                    else {
+                                                                                        settings
+                                                                                    }
+                                                                                }
+                                                                                _ => {
+                                                                                    color_settings
+                                                                                }
+                                                                            };
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            _ => {
+                                                                colors = color_settings;
+                                                            }
+                                                        }
+                                                        break;
+                                                    }
+
+                                                }
+
+                                            }
+
                                         }
-                                        break;
+
                                     }
-                                    else {
-                                        parent_node = parent.parent();
-                                    }
+
+
                                 }
+
+
+                                
                                 colors
                             }
                             else {
