@@ -562,6 +562,7 @@ pub struct EditorSettings {
     pub border: bool,
     pub minimum_width: usize,
     pub minimum_height: usize,
+    pub rainbow_delimiters: bool,
 }
 
 impl Default for EditorSettings {
@@ -575,6 +576,7 @@ impl Default for EditorSettings {
             border: true,
             minimum_width: 24,
             minimum_height: 1,
+            rainbow_delimiters: true,
         }
     }
 }
@@ -623,7 +625,8 @@ pub struct EditorColors {
     /// The color scheme for the Currently selected mode.
     pub mode: HashMap<String, ColorScheme>,
     /// The color scheme for treesitter nodes.
-    pub treesitter: Rc<HashMap<String, SyntaxHighlight>>,
+    pub treesitter: Rc<HashMap<String,HashMap<String, Result<ColorScheme, SyntaxHighlight>>>>,
+    pub rainbow_delimiters: Vec<ColorScheme>,
 }
 
 
@@ -661,6 +664,46 @@ impl Default for EditorColors {
 
 
         let treesitter = Rc::new(treesitter);
+
+
+        let mut rainbow_delimiters = Vec::new();
+
+        rainbow_delimiters.push(ColorScheme {
+            foreground_color: Color::Magenta,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        rainbow_delimiters.push(ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        rainbow_delimiters.push(ColorScheme {
+            foreground_color: Color::Cyan,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        rainbow_delimiters.push(ColorScheme {
+            foreground_color: Color::Green,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        rainbow_delimiters.push(ColorScheme {
+            foreground_color: Color::Yellow,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
+        rainbow_delimiters.push(ColorScheme {
+            foreground_color: Color::Red,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        });
         
         Self {
             pane: ColorScheme::default(),
@@ -673,597 +716,523 @@ impl Default for EditorColors {
             },
             mode,
             treesitter,
+            rainbow_delimiters,
         }
     }
 }
 
 impl EditorColors {
-    fn generate_rust_colors(treesitter: &mut HashMap<String, SyntaxHighlight>) {
-        treesitter.insert("array_expression".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+    fn generate_rust_colors(treesitter: &mut HashMap<String, HashMap<String,Result<ColorScheme, SyntaxHighlight>>>) {
+
+        let mut rust = HashMap::new();
+        
+        rust.insert("array_expression".to_string(), Ok(ColorScheme {
             foreground_color: Color::Magenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("async_block".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("async_block".to_string(), Ok(ColorScheme {
             foreground_color: Color::Magenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("await_expression".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("await_expression".to_string(), Ok(ColorScheme {
             foreground_color: Color::Magenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("block".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("block".to_string(), Ok(ColorScheme {
             foreground_color: Color::Magenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("char_literal".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("char_literal".to_string(), Ok(ColorScheme {
             foreground_color: Color::Green,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("crate".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("crate".to_string(), Ok(ColorScheme {
             foreground_color: Color::Blue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("escape_sequence".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("escape_sequence".to_string(), Ok(ColorScheme {
             foreground_color: Color::Green,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("line_comment".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("line_comment".to_string(), Ok(ColorScheme {
             foreground_color: Color::DarkGrey,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("block_comment".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("block_comment".to_string(), Ok(ColorScheme {
             foreground_color: Color::DarkGrey,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("metavariable".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("metavariable".to_string(), Ok(ColorScheme {
             foreground_color: Color::Blue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("mutable_specifier".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("mutable_specifier".to_string(), Ok(ColorScheme {
             foreground_color: Color::Blue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("primitive_type".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("primitive_type".to_string(), Ok(ColorScheme {
             foreground_color: Color::Yellow,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("raw_string_literal".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("raw_string_literal".to_string(), Ok(ColorScheme {
             foreground_color: Color::Green,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("self".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("string_literal".to_string(), Ok(ColorScheme {
+            foreground_color: Color::Green,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        }));
+        rust.insert("self".to_string(), Ok(ColorScheme {
             foreground_color: Color::Yellow,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("super".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("super".to_string(), Ok(ColorScheme {
             foreground_color: Color::Blue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("type_identifier".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("type_identifier".to_string(), Ok(ColorScheme {
             foreground_color: Color::Yellow,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("as".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("as".to_string(), Ok(ColorScheme {
             foreground_color: Color::Blue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("async".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("async".to_string(), Ok(ColorScheme {
             foreground_color: Color::Blue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("await".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("await".to_string(), Ok(ColorScheme {
             foreground_color: Color::Blue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("break".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("break".to_string(), Ok(ColorScheme {
             foreground_color: Color::Blue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("continue".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("continue".to_string(), Ok(ColorScheme {
             foreground_color: Color::Blue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("const".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("const".to_string(), Ok(ColorScheme {
             foreground_color: Color::Blue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("default".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("default".to_string(), Ok(ColorScheme {
+            foreground_color: Color::Yellow,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        }));
+        rust.insert("dyn".to_string(), Ok(ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        }));
+        rust.insert("else".to_string(), Ok(ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        }));
+        rust.insert("extern".to_string(), Ok(ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        }));
+        rust.insert("false".to_string(), Ok(ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        }));
+        rust.insert("true".to_string(), Ok(ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        }));
+        rust.insert("fn".to_string(), Ok(ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        }));
+        rust.insert("for".to_string(), Ok(ColorScheme {
+            foreground_color: Color::Blue,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        }));
+        rust.insert("ident".to_string(), Ok(ColorScheme {
             foreground_color: Color::Magenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("dyn".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("if".to_string(), Ok(ColorScheme {
             foreground_color: Color::Blue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("else".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("impl".to_string(), Ok(ColorScheme {
             foreground_color: Color::Blue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("extern".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
-            foreground_color: Color::Magenta,
-            background_color: Color::Reset,
-            underline_color: Color::Reset,
-            attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("false".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
-            foreground_color: Color::Red,
-            background_color: Color::Reset,
-            underline_color: Color::Reset,
-            attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("true".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
-            foreground_color: Color::Red,
-            background_color: Color::Reset,
-            underline_color: Color::Reset,
-            attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("fn".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("in".to_string(), Ok(ColorScheme {
             foreground_color: Color::Blue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("for".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("let".to_string(), Ok(ColorScheme {
             foreground_color: Color::Blue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("ident".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
-            foreground_color: Color::Magenta,
-            background_color: Color::Reset,
-            underline_color: Color::Reset,
-            attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("if".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
-            foreground_color: Color::Blue,
-            background_color: Color::Reset,
-            underline_color: Color::Reset,
-            attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("impl".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
-            foreground_color: Color::Blue,
-            background_color: Color::Reset,
-            underline_color: Color::Reset,
-            attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("in".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
-            foreground_color: Color::Blue,
-            background_color: Color::Reset,
-            underline_color: Color::Reset,
-            attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("let".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
-            foreground_color: Color::Blue,
-            background_color: Color::Reset,
-            underline_color: Color::Reset,
-            attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("item".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("item".to_string(), Ok(ColorScheme {
             foreground_color: Color::Reset,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("lifetime".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("lifetime".to_string(),Ok(ColorScheme {
             foreground_color: Color::Red,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("loop".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("loop".to_string(), Ok(ColorScheme {
             foreground_color: Color::Blue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("macro_rules!".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("macro_rules!".to_string(), Ok(ColorScheme {
             foreground_color: Color::Cyan,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
-        })});
-        treesitter.insert("match".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("match".to_string(), Ok(ColorScheme {
             foreground_color: Color::Blue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
-        })});
-        treesitter.insert("move".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("move".to_string(), Ok(ColorScheme {
             foreground_color: Color::Blue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
-        })});
-        treesitter.insert("pub".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("pub".to_string(), Ok(ColorScheme {
             foreground_color: Color::Blue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
-        })});
-        treesitter.insert("return".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("return".to_string(), Ok(ColorScheme {
             foreground_color: Color::Blue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
-        })});
-        treesitter.insert("struct".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("struct".to_string(), Ok(ColorScheme {
             foreground_color: Color::Blue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
-        })});
-        treesitter.insert("enum".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("enum".to_string(), Ok(ColorScheme {
             foreground_color: Color::Blue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
-        })});
-        treesitter.insert("trait".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("trait".to_string(), Ok(ColorScheme {
             foreground_color: Color::Blue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
-        })});
-        treesitter.insert("type".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("type".to_string(), Ok(ColorScheme {
             foreground_color: Color::Blue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
-        })});
-        treesitter.insert("union".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("union".to_string(), Ok(ColorScheme {
             foreground_color: Color::Blue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
-        })});
-        treesitter.insert("unsafe".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("unsafe".to_string(), Ok(ColorScheme {
             foreground_color: Color::Red,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
-        })});
-        treesitter.insert("use".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("use".to_string(), Ok(ColorScheme {
             foreground_color: Color::Cyan,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
-        })});
-        treesitter.insert("where".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("where".to_string(), Ok(ColorScheme {
             foreground_color: Color::Cyan,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
-        })});
-        treesitter.insert("vis".to_string(), SyntaxHighlight {
-             
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("vis".to_string(), Ok(ColorScheme {
             foreground_color: Color::Cyan,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
-        })});
-        treesitter.insert("while".to_string(), SyntaxHighlight {
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("while".to_string(), Ok(ColorScheme {
             foreground_color: Color::Blue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
-        })});
-        treesitter.insert("mod".to_string(), SyntaxHighlight {
-            color: Ok(ColorScheme {
+        }));
+        rust.insert("mod".to_string(), Ok(ColorScheme {
             foreground_color: Color::Cyan,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
-            })});
-        let mut identifier_colors = HashMap::new();
+        }));
 
-        identifier_colors.insert("function_item".to_string(), ColorScheme {
+        let mut function_item = HashMap::new();
+
+        function_item.insert("name".to_string(), ColorScheme {
             foreground_color: Color::Magenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         });
 
-        identifier_colors.insert("macro_invocation".to_string(), ColorScheme {
+        rust.insert("function_item".to_string(), Err(SyntaxHighlight {
+            color: function_item,
+        }));
+
+        let mut macro_invocation = HashMap::new();
+
+        macro_invocation.insert("macro".to_string(), ColorScheme {
             foreground_color: Color::Cyan,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
         });
 
-        /*identifier_colors.insert("scoped_identifier".to_string(), ColorScheme {
-            foreground_color: Color::DarkMagenta,
+        rust.insert("macro_invocation".to_string(), Err(SyntaxHighlight {
+            color: macro_invocation,
+        }));
+
+        let mut scoped_identifier = HashMap::new();
+
+        scoped_identifier.insert("path".to_string(), ColorScheme {
+            foreground_color: Color::Yellow,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        });*/
+        });
         
-        treesitter.insert("identifier".to_string(), SyntaxHighlight {
-            color: Err(identifier_colors),
+        rust.insert("scoped_identifier".to_string(), Err(SyntaxHighlight {
+            color: scoped_identifier,
+        }));
+
+        let mut tuple_struct_pattern = HashMap::new();
+
+        tuple_struct_pattern.insert("type".to_string(), ColorScheme {
+            foreground_color: Color::Yellow,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
         });
 
-        treesitter.insert("macro_invocation".to_string(), SyntaxHighlight {
-            color: Ok(ColorScheme {
+        rust.insert("tuple_struct_pattern".to_string(), Err(SyntaxHighlight {
+            color: tuple_struct_pattern,
+        }));
+        
+        
+        rust.insert("macro_invocation".to_string(), Ok(ColorScheme {
             foreground_color: Color::Cyan,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
-            })});
+            }));
 
-        treesitter.insert("try_expression".to_string(), SyntaxHighlight {
-            color: Ok(ColorScheme {
+        rust.insert("try_expression".to_string(), Ok(ColorScheme {
             foreground_color: Color::Magenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-            })});
+            }));
 
-        treesitter.insert("scoped_identifier".to_string(), SyntaxHighlight {
+        /*rust.insert("scoped_identifier".to_string(), SyntaxHighlight {
             color: Ok(ColorScheme {
             foreground_color: Color::DarkMagenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-            })});
+    })});*/
 
-        let mut field_identifier_colors = HashMap::new();
+        let mut field_declaration = HashMap::new();
 
-        field_identifier_colors.insert("field_declaration".to_string(), ColorScheme {
+        field_declaration.insert("name".to_string(), ColorScheme {
             foreground_color: Color::Magenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         });
+
+        rust.insert("field_declaration".to_string(), Err(SyntaxHighlight {
+            color: field_declaration,
+        }));
+
         
-        treesitter.insert("field_identifier".to_string(), SyntaxHighlight {
-            color: Err(field_identifier_colors),
-        });
-        
-        
+        treesitter.insert("rust".to_string(), rust);
         
         
     }
     
-    fn generate_scheme_colors(treesitter: &mut HashMap<String, SyntaxHighlight>) {
-        treesitter.insert("comment".to_string(), SyntaxHighlight {
-            color: Ok(ColorScheme {
+    fn generate_scheme_colors(treesitter: &mut HashMap<String, HashMap<String, Result<ColorScheme,SyntaxHighlight>>>) {
+
+        let mut scheme = HashMap::new();
+        
+        scheme.insert("comment".to_string(), Ok(ColorScheme {
             foreground_color: Color::DarkGrey,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-            })});
-        treesitter.insert("block_comment".to_string(), SyntaxHighlight {
-            color: Ok(ColorScheme {
+            }));
+        scheme.insert("block_comment".to_string(), Ok(ColorScheme {
             foreground_color: Color::DarkGrey,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("directive".to_string(), SyntaxHighlight {
-            color: Ok(ColorScheme {
+            }));
+        scheme.insert("directive".to_string(), Ok(ColorScheme {
             foreground_color: Color::DarkGrey,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("symbol".to_string(), SyntaxHighlight {
-            color: Ok(ColorScheme {
+            }));
+        scheme.insert("symbol".to_string(), Ok(ColorScheme {
             foreground_color: Color::Reset,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("keyword".to_string(), SyntaxHighlight {
-            color: Ok(ColorScheme {
+            }));
+        scheme.insert("keyword".to_string(), Ok(ColorScheme {
             foreground_color: Color::Blue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("list".to_string(), SyntaxHighlight {
-            color: Ok(ColorScheme {
+            }));
+        scheme.insert("list".to_string(), Ok(ColorScheme {
             foreground_color: Color::Blue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("boolean".to_string(), SyntaxHighlight {
-            color: Ok(ColorScheme {
+            }));
+        scheme.insert("boolean".to_string(), Ok(ColorScheme {
             foreground_color: Color::Magenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("character".to_string(), SyntaxHighlight {
-            color: Ok(ColorScheme {
+            }));
+        scheme.insert("character".to_string(), Ok(ColorScheme {
             foreground_color: Color::Magenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("string".to_string(), SyntaxHighlight {
-            color: Ok(ColorScheme {
+            }));
+        scheme.insert("string".to_string(), Ok(ColorScheme {
             foreground_color: Color::Green,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
-        treesitter.insert("escape_sequence".to_string(), SyntaxHighlight {
-            color: Ok(ColorScheme {
+            }));
+        scheme.insert("escape_sequence".to_string(), Ok(ColorScheme {
             foreground_color: Color::Green,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-            })});
+            }));
         
-        treesitter.insert("number".to_string(), SyntaxHighlight {
-            color: Ok(ColorScheme {
+        scheme.insert("number".to_string(), Ok(ColorScheme {
             foreground_color: Color::Magenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
-        })});
+        }));
+
+        treesitter.insert("scheme".to_string(), scheme);
     }
 
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SyntaxHighlight {
-    pub color: Result<ColorScheme, HashMap<String, ColorScheme>>,
+    /// The color to apply on a given field
+    pub color: HashMap<String, ColorScheme>,
+    //pub color: Result<ColorScheme, HashMap<String, ColorScheme>>,
 }
 
 fn parse_key(value: &toml::Value) -> Keys {

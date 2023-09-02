@@ -123,14 +123,14 @@ impl Window {
         let pane: Rc<RefCell<dyn Pane>> = match file_type.as_str() {
             "scm" => {
                 let language = unsafe { tree_sitter_scheme() };
-                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language);
+                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language, "scheme");
                 pane.open_file(&filename).expect("Failed to open file");
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             },
             "rs" => {
                 let language = tree_sitter_rust::language();
-                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language);
+                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"rust");
                 pane.open_file(&filename).expect("Failed to open file");
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
