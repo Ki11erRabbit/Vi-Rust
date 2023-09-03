@@ -1197,7 +1197,13 @@ impl EditorColors {
         rust.insert("let_declaration".to_string(), SyntaxHighlight::Parent(
             let_declaration,
         ));
-        
+
+        rust.insert("ERROR".to_string(), SyntaxHighlight::Child(ColorScheme {
+            foreground_color: Color::Red,
+            background_color: Color::Reset,
+            underline_color: Color::Red,
+            attributes: Rc::new(vec![Attribute::Undercurled]),
+        }));
 
         treesitter.insert("rust".to_string(), rust);
         
@@ -1804,6 +1810,12 @@ impl EditorColors {
         ));
          
 
+        c.insert("ERROR".to_string(), SyntaxHighlight::Child(ColorScheme {
+            foreground_color: Color::Red,
+            background_color: Color::Reset,
+            underline_color: Color::Red,
+            attributes: Rc::new(vec![Attribute::Undercurled]),
+        }));
 
         //field_identifier
         //identifer
@@ -1886,6 +1898,14 @@ impl EditorColors {
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
+
+        scheme.insert("ERROR".to_string(), SyntaxHighlight::Child(ColorScheme {
+            foreground_color: Color::Red,
+            background_color: Color::Reset,
+            underline_color: Color::Red,
+            attributes: Rc::new(vec![Attribute::Undercurled]),
+        }));
+
 
         treesitter.insert("scheme".to_string(), scheme);
     }
