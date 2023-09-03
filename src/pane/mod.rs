@@ -3,11 +3,11 @@ pub(crate) mod text;
 pub mod popup;
 pub mod treesitter;
 
-use std::{rc::Rc, cell::RefCell, path::PathBuf, io, cmp, fmt::Debug};
+use std::{rc::Rc, cell::RefCell, path::PathBuf, io, cmp, fmt::Debug, sync::mpsc::Sender};
 
 use crossterm::event::KeyEvent;
 
-use crate::{settings::Settings, window::{WindowContents, StyledChar}, cursor::Cursor, buffer::Buffer};
+use crate::{settings::Settings, window::{StyledChar, Message}, cursor::Cursor, buffer::Buffer};
 
 
 pub enum PaneMessage {
@@ -79,6 +79,10 @@ impl PaneContainer {
             (_, (_, end_y)) = self.get_corners();
         }
 
+    }
+
+    pub fn set_sender(&mut self, sender: Sender<Message>) {
+        self.pane.borrow_mut().set_sender(sender);
     }
 
     pub fn get_pane(&self) -> Rc<RefCell<dyn Pane>> {
@@ -333,5 +337,7 @@ pub trait Pane {
 
     fn borrow_buffer(&self) -> &Buffer;
     fn borrow_mut_buffer(&mut self) -> &mut Buffer;
+
+    fn set_sender(&mut self, sender: Sender<Message>);
 
 }

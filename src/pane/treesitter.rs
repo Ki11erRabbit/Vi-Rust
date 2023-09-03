@@ -1265,4 +1265,8 @@ impl Pane for TreesitterPane {
     fn borrow_mut_buffer(&mut self) -> &mut Buffer {
         &mut self.contents
     }
+
+    fn set_sender(&mut self, sender: Sender<Message>) {
+        self.sender = sender;
+    }
 }

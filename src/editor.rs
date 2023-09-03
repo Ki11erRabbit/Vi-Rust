@@ -64,17 +64,20 @@ impl Editor {
                         self.active_window = self.windows.len() - 1;
                         if let Some(pane) = pane {
                             self.windows[self.active_window].replace_pane(0, pane);
+                            eprintln!("New window with pane");
                         }
                         self.windows[self.active_window].force_refresh_screen()?;
                         eprintln!("New window");
                         Ok(())
                     },
                     EditorMessage::CloseWindow => {
+                        eprintln!("Close window");
                         self.windows.remove(self.active_window);
                         self.active_window = self.active_window.saturating_sub(1);
                         Ok(())
                    },
                     EditorMessage::Quit => {
+                        eprintln!("Quit");
                         self.windows.clear();
                         Ok(())
                     },
@@ -95,6 +98,7 @@ impl Editor {
         self.check_messages()?;
 
         if self.windows.is_empty() {
+            eprintln!("No windows left, quitting");
             return Ok(false);
         }
         

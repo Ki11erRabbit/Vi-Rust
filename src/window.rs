@@ -98,6 +98,10 @@ impl Window {
         }
     }
 
+    fn get_sender(&self) -> Sender<Message> {
+        self.channels.0.clone()
+    }
+
     fn create_popup(&mut self, pane: PaneContainer, make_active: bool) {
         if self.panes.len() - 1 == self.active_layer {
             eprintln!("Creating new layer");
@@ -260,6 +264,10 @@ impl Window {
 
     pub fn replace_pane(&mut self, index: usize, pane: Rc<RefCell<dyn Pane>>) {
         let cursor = self.panes[self.active_layer][index].get_cursor();
+        {
+            let mut pane = pane.borrow_mut();
+            pane.set_sender(self.channels.0.clone());
+        }
         self.panes[self.active_layer][index].change_pane(pane);
         let new_cursor = self.panes[self.active_layer][index].get_cursor();
         let mut new_cursor = new_cursor.borrow_mut();
@@ -549,6 +557,8 @@ impl Window {
                         let pane = self.panes[self.active_layer][self.active_panes[self.active_layer]].get_pane();
                         self.panes[self.active_layer][self.active_panes[self.active_layer]].close();
 
+                        self.active_panes[self.active_layer] = self.active_panes[self.active_layer].saturating_sub(1);
+
                         self.editor_sender.send(EditorMessage::NewWindow(Some(pane))).unwrap();
                         self.skip = true;
                         Ok(())
@@ -590,6 +600,7 @@ impl Window {
         self.read_messages()?;
         self.remove_panes();
         if self.panes[self.active_layer].len() == 0 {
+            eprintln!("No panes left");
             self.editor_sender.send(EditorMessage::CloseWindow).unwrap();
             return Ok(false);
         }
@@ -598,6 +609,8 @@ impl Window {
         let ((x1, y1), (x2, y2)) = self.panes[self.active_layer][self.active_panes[self.active_layer]].get_corners();
 
         if x1 == x2 || y1 == y2 {
+            eprintln!("Pane is too small");
+            eprintln!("x1: {}, x2: {}, y1: {}, y2: {}", x1, x2, y1, y2);
             self.editor_sender.send(EditorMessage::CloseWindow).unwrap();
             return Ok(false);
         }
