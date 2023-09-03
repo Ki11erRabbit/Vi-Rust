@@ -70,6 +70,7 @@ impl Editor {
                         Ok(())
                     },
                     EditorMessage::CloseWindow => {
+                        self.windows.remove(self.active_window);
                         self.active_window = self.active_window.saturating_sub(1);
                         Ok(())
                    },

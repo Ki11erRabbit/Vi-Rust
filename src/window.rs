@@ -53,6 +53,7 @@ pub struct Window{
     duration: Duration,
     channels: (Sender<Message>, Receiver<Message>),
     editor_sender: Sender<EditorMessage>,
+    skip: bool,
     
 }
 
@@ -93,6 +94,7 @@ impl Window {
             settings,
             channels,
             editor_sender,
+            skip: false,
         }
     }
 
@@ -540,6 +542,7 @@ impl Window {
                     },
                     Message::OpenNewTab => {
                         self.editor_sender.send(EditorMessage::NewWindow(None)).unwrap();
+                        self.skip = true;
                         Ok(())
                     },
                     Message::OpenNewTabWithPane => {
@@ -547,18 +550,22 @@ impl Window {
                         self.panes[self.active_layer][self.active_panes[self.active_layer]].close();
 
                         self.editor_sender.send(EditorMessage::NewWindow(Some(pane))).unwrap();
+                        self.skip = true;
                         Ok(())
                     },
                     Message::NextTab => {
                         self.editor_sender.send(EditorMessage::NextWindow).unwrap();
+                        self.skip = true;
                         Ok(())
                     },
                     Message::PreviousTab => {
                         self.editor_sender.send(EditorMessage::PrevWindow).unwrap();
+                        self.skip = true;
                         Ok(())
                     },
                     Message::NthTab(n) => {
                         self.editor_sender.send(EditorMessage::NthWindow(n)).unwrap();
+                        self.skip = true;
                         Ok(())
                     },
                     
@@ -594,6 +601,12 @@ impl Window {
             self.editor_sender.send(EditorMessage::CloseWindow).unwrap();
             return Ok(false);
         }
+
+        if self.skip {
+            self.skip = false;
+            return Ok(true);
+        }
+        
         
         let event = self.process_event()?;
         match event {
@@ -748,7 +761,6 @@ impl Window {
         
 
         if !self.contents.will_change() {
-            eprintln!("no change");
             return Ok(());
         }
 
