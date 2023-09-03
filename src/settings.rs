@@ -620,6 +620,8 @@ pub struct EditorColors {
     /// The color scheme for the ui.
     /// This includes line numbers and the status bar.
     pub ui: ColorScheme,
+    /// The color scheme for the status bar.
+    pub bar: ColorScheme,
     /// The color scheme for popup panes.
     pub popup: ColorScheme,
     /// The color scheme for the Currently selected mode.
@@ -705,10 +707,18 @@ impl Default for EditorColors {
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         });
+
+        let ui = ColorScheme {
+            foreground_color: Color::DarkGrey,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        };
         
         Self {
             pane: ColorScheme::default(),
-            ui: ColorScheme::default(),
+            ui,
+            bar: ColorScheme::default(),
             popup: ColorScheme {
                 foreground_color: Color::White,
                 background_color: Color::DarkGrey,
@@ -1098,6 +1108,18 @@ impl EditorColors {
         scoped_identifier2.insert("call_expression".to_string(), SyntaxHighlight::Parent(
             scoped_identifier
         ));
+
+        let mut scoped_identifier = HashMap::new();
+        scoped_identifier.insert("path".to_string(), SyntaxHighlight::Child(ColorScheme {
+            foreground_color: Color::Magenta,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        }));
+
+        scoped_identifier2.insert("use_declaration".to_string(), SyntaxHighlight::Parent(
+            scoped_identifier
+        ));
         
         rust.insert("scoped_identifier".to_string(), SyntaxHighlight::GrandParent(
             scoped_identifier2
@@ -1163,9 +1185,21 @@ impl EditorColors {
         },exclude));
                                                   
 
+        let mut let_declaration = HashMap::new();
+
+        let_declaration.insert("pattern".to_string(), SyntaxHighlight::Child(ColorScheme {
+            foreground_color: Color::Magenta,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        }));
+
+        rust.insert("let_declaration".to_string(), SyntaxHighlight::Parent(
+            let_declaration,
+        ));
+        
 
         treesitter.insert("rust".to_string(), rust);
-        
         
     }
 
@@ -1860,10 +1894,15 @@ impl EditorColors {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SyntaxHighlight {
+    /// A single color scheme
     Child(ColorScheme),
+    /// A single color scheme with a set of characters to exclude
     ChildExclude(ColorScheme,HashSet<char>),
+    /// A color scheme to be applied on a child via the parent's type
     Parent(HashMap<String, SyntaxHighlight>),
+    /// A color scheme to be applied on a child via the parent's type with a set of characters to exclude
     ParentExclude(HashMap<String, SyntaxHighlight>,HashSet<char>),
+    /// A Syntax Highlight to be applied on a node based on the first matching ancestor
     GrandParent(HashMap<String, SyntaxHighlight>),
         
 }
