@@ -389,6 +389,38 @@ impl Settings {
             modifier: KeyModifiers::CONTROL,
         }], "redo".to_string());
 
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('w'),
+            modifier: KeyModifiers::ALT,
+        }, Key {
+            key: KeyCode::Char('h'),
+            modifier: KeyModifiers::NONE,
+        }], "change_tab prev".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('w'),
+            modifier: KeyModifiers::ALT,
+        }, Key {
+            key: KeyCode::Char('l'),
+            modifier: KeyModifiers::NONE,
+        }], "change_tab next".to_string());
+
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('w'),
+            modifier: KeyModifiers::ALT,
+        }, Key {
+            key: KeyCode::Char('t'),
+            modifier: KeyModifiers::NONE,
+        }], "open_tab".to_string());
+
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('w'),
+            modifier: KeyModifiers::ALT,
+        }, Key {
+            key: KeyCode::Char('T'),
+            modifier: KeyModifiers::NONE,
+        }], "open_tab_with_pane".to_string());
+                                       
+
     }
 
     fn generate_insert_keybindings(insert_keybindings: &mut HashMap<Keys, Command>) {
@@ -459,6 +491,39 @@ impl Settings {
             key: KeyCode::Char('v'),
             modifier: KeyModifiers::NONE,
         }], "vertical_split".to_string());
+
+
+        insert_keybindings.insert(vec![Key {
+            key: KeyCode::Char('w'),
+            modifier: KeyModifiers::ALT,
+        }, Key {
+            key: KeyCode::Char('h'),
+            modifier: KeyModifiers::NONE,
+        }], "change_tab prev".to_string());
+        insert_keybindings.insert(vec![Key {
+            key: KeyCode::Char('w'),
+            modifier: KeyModifiers::ALT,
+        }, Key {
+            key: KeyCode::Char('l'),
+            modifier: KeyModifiers::NONE,
+        }], "change_tab next".to_string());
+
+        insert_keybindings.insert(vec![Key {
+            key: KeyCode::Char('w'),
+            modifier: KeyModifiers::ALT,
+        }, Key {
+            key: KeyCode::Char('t'),
+            modifier: KeyModifiers::NONE,
+        }], "open_tab".to_string());
+
+        insert_keybindings.insert(vec![Key {
+            key: KeyCode::Char('w'),
+            modifier: KeyModifiers::ALT,
+        }, Key {
+            key: KeyCode::Char('T'),
+            modifier: KeyModifiers::NONE,
+        }], "open_tab_with_pane".to_string());
+
 
     }
 

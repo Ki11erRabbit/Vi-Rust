@@ -1,6 +1,5 @@
 use std::io;
 
-use crossterm::{terminal, execute, cursor::SetCursorStyle, cursor::MoveTo};
 
 use crate::editor::Editor;
 
@@ -14,40 +13,6 @@ pub mod treesitter;
 pub mod editor;
 
 
-struct CleanUp;
-
-impl Drop for CleanUp {
-    fn drop(&mut self) {
-        terminal::disable_raw_mode().expect("Could not turn off Raw mode");
-        execute!(std::io::stdout(), terminal::Clear(terminal::ClearType::All)).expect("Could not clear terminal");
-        execute!(std::io::stdout(), MoveTo(0, 0)).expect("Could not move cursor to (0, 0)");
-        execute!(io::stdout(), SetCursorStyle::DefaultUserShape).expect("Could not reset cursor style");
-    }
-}
-
-
-/*struct Editor {
-    window: Window,
-}
-
-impl Editor {
-    fn new() -> Self {
-        execute!(io::stdout(),SetCursorStyle::BlinkingBlock).unwrap();
-        let window = Window::new();
-        Self {
-            window,
-        }
-    }
-
-    pub fn open_file(&mut self, filename: &str) -> io::Result<()> {
-        self.window.open_file_start(filename)
-    }
-
-    pub fn run(&mut self) -> io::Result<bool> {
-        self.window.run()
-    }
-
-}*/
 
 
 fn main() -> io::Result<()> {

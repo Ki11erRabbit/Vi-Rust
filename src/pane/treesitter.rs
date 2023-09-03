@@ -1000,6 +1000,30 @@ impl Pane for TreesitterPane {
 
                 self.tree = self.parser.parse(&self.contents.to_string(),None).unwrap();//TODO: replace this with an incremental parse
             },
+            "change_tab" => {
+                if let Some(tab) = command_args.next() {
+                    if let Ok(tab) = tab.parse::<usize>() {
+                        self.sender.send(Message::NthTab(tab)).expect("Failed to send message");
+                    }
+                    else {
+                        match tab {
+                            "prev" => {
+                                self.sender.send(Message::PreviousTab).expect("Failed to send message");
+                            },
+                            "next" => {
+                                self.sender.send(Message::NextTab).expect("Failed to send message");
+                            },
+                            _ => {}
+                        }
+                    }
+                }
+            },
+            "open_tab" => {
+                self.sender.send(Message::OpenNewTab).expect("Failed to send message");
+            },
+            "open_tab_with_pane" => {
+                self.sender.send(Message::OpenNewTabWithPane).expect("Failed to send message");
+            },
 
             _ => {}
         }

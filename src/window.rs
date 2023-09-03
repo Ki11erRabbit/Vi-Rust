@@ -12,6 +12,7 @@ use crossterm::event::{KeyEvent, self, Event};
 use crossterm::style::{Stylize, StyledContent};
 use crossterm::{terminal::{self, ClearType}, execute, cursor, queue};
 
+use crate::editor::EditorMessage;
 use crate::pane::treesitter::TreesitterPane;
 use crate::settings::ColorScheme;
 use crate::{apply_colors, settings::Settings};
@@ -31,6 +32,12 @@ pub enum Message {
     OpenFile(String),
     ClosePane(bool),
     CreatePopup(PaneContainer, bool),
+    OpenNewTab,
+    OpenNewTabWithPane,
+    NextTab,
+    PreviousTab,
+    NthTab(usize),
+        
 }
 
 pub struct Window{
@@ -45,11 +52,12 @@ pub struct Window{
     settings: Rc<RefCell<Settings>>,
     duration: Duration,
     channels: (Sender<Message>, Receiver<Message>),
+    editor_sender: Sender<EditorMessage>,
     
 }
 
 impl Window {
-    pub fn new() -> Self {
+    pub fn new(editor_sender: Sender<EditorMessage>) -> Self {
         let settings = Settings::default();
         let duration = Duration::from_millis(settings.editor_settings.key_timeout);
 
@@ -84,44 +92,7 @@ impl Window {
             duration,
             settings,
             channels,
-        }
-    }
-
-    pub fn new_file(filename: PathBuf) -> Self {
-        let settings = Settings::default();
-        let duration = Duration::from_millis(settings.editor_settings.key_timeout);
-
-        let settings = Rc::new(RefCell::new(settings));
-        
-
-        let channels = mpsc::channel();
-        
-        let win_size = terminal::size()
-            .map(|(w, h)| (w as usize, h as usize - 1))// -1 for trailing newline and -1 for command bar
-            .unwrap();
-        let pane: Rc<RefCell<dyn Pane>> = Rc::new(RefCell::new(TextPane::new(settings.clone(), channels.0.clone())));
-
-        pane.borrow_mut().set_cursor_size(win_size);
-        
-        let panes = vec![vec![PaneContainer::new(win_size, win_size, pane.clone(), settings.clone())]];
-
-
-        let mut known_file_types = HashSet::new();
-        known_file_types.insert("txt".to_string());
-        let buffers = vec![TextBuffer::new(); 1];
-        
-        Self {
-            size: win_size,
-            contents: WindowContents::new(),
-            active_panes: vec![0],
-            active_layer: 0,
-            panes,
-            buffers,
-            final_buffer: FinalTextBuffer::new(),
-            known_file_types,
-            duration,
-            settings,
-            channels,
+            editor_sender,
         }
     }
 
@@ -153,7 +124,7 @@ impl Window {
         }
     }
 
-    fn open_file(&mut self, filename: PathBuf) -> io::Result<usize> {
+    fn file_opener(&mut self, filename: PathBuf) -> io::Result<Rc<RefCell<dyn Pane>>> {
         let file_type = filename.extension().and_then(|s| s.to_str()).unwrap_or("txt").to_string();
 
         let pane: Rc<RefCell<dyn Pane>> = match file_type.as_str() {
@@ -241,6 +212,12 @@ impl Window {
                 Rc::new(RefCell::new(pane))
             }
         };
+        Ok(pane)
+    }
+
+    fn open_file(&mut self, filename: PathBuf) -> io::Result<usize> {
+
+        let pane: Rc<RefCell<dyn Pane>> = self.file_opener(filename)?;
         self.panes[self.active_layer].push(PaneContainer::new((0,0), (0, 0), pane.clone(), self.settings.clone()));
         Ok(self.panes[self.active_layer].len() - 1)
     }
@@ -274,9 +251,18 @@ impl Window {
         Ok(())
     }
 
-    fn insert_pane(&mut self, index: usize, pane: PaneContainer) {
+    pub fn insert_pane(&mut self, index: usize, pane: PaneContainer) {
         let parent_pane = index - 1;
         self.panes[self.active_layer].insert(index, pane);
+    }
+
+    pub fn replace_pane(&mut self, index: usize, pane: Rc<RefCell<dyn Pane>>) {
+        let cursor = self.panes[self.active_layer][index].get_cursor();
+        self.panes[self.active_layer][index].change_pane(pane);
+        let new_cursor = self.panes[self.active_layer][index].get_cursor();
+        let mut new_cursor = new_cursor.borrow_mut();
+        new_cursor.prepare_jump(&*cursor.borrow());
+        new_cursor.jumped = false;
     }
 
     fn remove_panes(&mut self) {
@@ -388,11 +374,11 @@ impl Window {
         new_pane.set_position(new_pane_position);
         self.panes[self.active_layer].insert(new_pane_index, new_pane);
 
-        eprintln!("old corners {:?}", self.panes[self.active_layer][self.active_panes[self.active_layer]].get_corners());
+        //eprintln!("old corners {:?}", self.panes[self.active_layer][self.active_panes[self.active_layer]].get_corners());
         
         self.active_panes[self.active_layer] = new_pane_index;
 
-        eprintln!("new corners {:?}", self.panes[self.active_layer][self.active_panes[self.active_layer]].get_corners());
+        //eprintln!("new corners {:?}", self.panes[self.active_layer][self.active_panes[self.active_layer]].get_corners());
     }
 
 
@@ -515,6 +501,7 @@ impl Window {
                                 pane.close();
                             }
                         }
+                        self.editor_sender.send(EditorMessage::Quit).unwrap();
                         Ok(())
                     }
                     Message::PaneUp => {
@@ -551,6 +538,30 @@ impl Window {
                         self.create_popup(container, make_active);
                         Ok(())
                     },
+                    Message::OpenNewTab => {
+                        self.editor_sender.send(EditorMessage::NewWindow(None)).unwrap();
+                        Ok(())
+                    },
+                    Message::OpenNewTabWithPane => {
+                        let pane = self.panes[self.active_layer][self.active_panes[self.active_layer]].get_pane();
+                        self.panes[self.active_layer][self.active_panes[self.active_layer]].close();
+
+                        self.editor_sender.send(EditorMessage::NewWindow(Some(pane))).unwrap();
+                        Ok(())
+                    },
+                    Message::NextTab => {
+                        self.editor_sender.send(EditorMessage::NextWindow).unwrap();
+                        Ok(())
+                    },
+                    Message::PreviousTab => {
+                        self.editor_sender.send(EditorMessage::PrevWindow).unwrap();
+                        Ok(())
+                    },
+                    Message::NthTab(n) => {
+                        self.editor_sender.send(EditorMessage::NthWindow(n)).unwrap();
+                        Ok(())
+                    },
+                    
                 }
             },
             Err(_) => Ok(()),
@@ -572,6 +583,7 @@ impl Window {
         self.read_messages()?;
         self.remove_panes();
         if self.panes[self.active_layer].len() == 0 {
+            self.editor_sender.send(EditorMessage::CloseWindow).unwrap();
             return Ok(false);
         }
 
@@ -579,6 +591,7 @@ impl Window {
         let ((x1, y1), (x2, y2)) = self.panes[self.active_layer][self.active_panes[self.active_layer]].get_corners();
 
         if x1 == x2 || y1 == y2 {
+            self.editor_sender.send(EditorMessage::CloseWindow).unwrap();
             return Ok(false);
         }
         
@@ -594,7 +607,7 @@ impl Window {
                 Ok(true)
             }
             _ => {
-                self.contents.set_change(false);
+                self.contents.set_change(true);
                 Ok(true)},
         }
     }
@@ -725,10 +738,17 @@ impl Window {
         self.contents.push_str(apply_colors!(second, color_settings));
     }
 
-    pub fn refresh_screen(&mut self) -> io::Result<()> {
+    pub fn force_refresh_screen(&mut self) -> io::Result<()> {
+        //Self::clear_screen()?;
+        self.contents.set_change(true);
+        self.refresh_screen()
+    }
 
+    pub fn refresh_screen(&mut self) -> io::Result<()> {
+        
 
         if !self.contents.will_change() {
+            eprintln!("no change");
             return Ok(());
         }
 
@@ -775,10 +795,7 @@ impl Window {
     }
 
     pub fn open_file_start(&mut self, filename: &str) -> io::Result<()> {
-        let _ = self.open_file(filename.try_into().unwrap());
-        let container = self.panes[0].pop().unwrap();
-
-        let pane = container.get_pane();
+        let pane = self.file_opener(filename.into())?;
 
         self.panes[0][self.active_panes[0]].change_pane(pane);
 
