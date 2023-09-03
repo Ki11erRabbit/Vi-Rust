@@ -9,6 +9,7 @@ pub mod cursor;
 pub mod settings;
 pub mod pane;
 pub mod buffer;
+pub mod treesitter;
 
 
 struct CleanUp;

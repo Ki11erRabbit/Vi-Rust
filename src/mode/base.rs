@@ -223,13 +223,13 @@ impl Mode for Normal {
         }
     }
 
-    fn change_mode(&mut self, name: &str, pane: &mut dyn Pane, container: &mut PaneContainer) {
+    fn change_mode(&mut self, name: &str, pane: &mut dyn Pane, _container: &mut PaneContainer) {
 
         pane.change_mode(name);
 
     }
 
-    fn update_status(&mut self, pane: &dyn Pane, container: &PaneContainer) -> (String, String, String){
+    fn update_status(&mut self, pane: &dyn Pane, _container: &PaneContainer) -> (String, String, String){
         let (row, col) = pane.get_cursor().borrow().get_cursor();
 
 
@@ -278,7 +278,7 @@ impl Insert {
         }
     }
 
-    fn move_cursor(&self, direction: KeyCode, pane: &mut dyn Pane) -> io::Result<bool> {
+    /*fn move_cursor(&self, direction: KeyCode, pane: &mut dyn Pane) -> io::Result<bool> {
         let cursor = pane.get_cursor();
         let mut cursor = cursor.borrow_mut();
         let direction = match direction {
@@ -291,7 +291,7 @@ impl Insert {
 
         cursor.move_cursor(direction, 1, &mut *pane);
         Ok(true)
-    }
+    }*/
 
     fn insert_newline(&self, pane: &mut dyn Pane) -> io::Result<bool> {
         pane.insert_newline();
@@ -306,9 +306,20 @@ impl Insert {
         Ok(true)
     }
     fn insert_char(&self, pane: &mut dyn Pane, c: char) -> io::Result<bool> {
-        pane.insert_char(c);
+        if pane.get_settings().borrow().editor_settings.use_spaces && c == '\t' {
+            pane.insert_str(&" ".repeat(pane.get_settings().borrow().editor_settings.tab_size));
+        } else {
+            pane.insert_char(c);
+        };
+        
         let cursor = pane.get_cursor();
         let mut cursor = cursor.borrow_mut();
+        if c == '\t' {
+            let tab_size = pane.get_settings().borrow().editor_settings.tab_size;
+            cursor.move_cursor(Direction::Right, tab_size, &mut *pane);
+        } else {
+            cursor.move_cursor(Direction::Right, 1, &mut *pane);
+        }
         cursor.move_cursor(Direction::Right, 1, &mut *pane);
         Ok(true)
     }

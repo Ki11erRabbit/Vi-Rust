@@ -1,7 +1,7 @@
 use std::{rc::Rc, cell::RefCell, sync::mpsc::Sender, path::PathBuf, io};
 
 
-use crate::{mode::{Mode, prompt::{PromptType, Promptable}}, cursor::Cursor, window::{StyledChar, Message}, settings::Settings};
+use crate::{mode::{Mode, prompt::{PromptType, Promptable}}, cursor::Cursor, window::{StyledChar, Message}, settings::Settings, buffer::Buffer};
 use super::{PaneMessage, PaneContainer, Pane};
 
 
@@ -216,6 +216,19 @@ impl Pane for PopUpPane {
     fn set_cursor_size(&mut self, size: (usize, usize)) {}
         
 
+    fn backup_buffer(&mut self) {
+    }
     
+    fn get_settings(&self) -> Rc<RefCell<Settings>> {
+        self.settings.clone()
+    }
+
+
+    fn borrow_buffer(&self) -> &Buffer {
+        unimplemented!()
+    }
+    fn borrow_mut_buffer(&mut self) -> &mut Buffer {
+        unimplemented!()
+    }
 
 }

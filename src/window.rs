@@ -12,11 +12,12 @@ use crossterm::event::{KeyEvent, self, Event};
 use crossterm::style::{Stylize, StyledContent};
 use crossterm::{terminal::{self, ClearType}, execute, cursor, queue};
 
+use crate::pane::treesitter::TreesitterPane;
 use crate::settings::ColorScheme;
 use crate::{apply_colors, settings::Settings};
 use crate::pane::{Pane, PaneContainer};
 use crate::pane::text::TextPane;
-
+use crate::treesitter::tree_sitter_scheme;
 
 
 pub enum Message {
@@ -117,24 +118,103 @@ impl Window {
     fn open_file(&mut self, filename: PathBuf) -> usize {
         let file_type = filename.extension().and_then(|s| s.to_str()).unwrap_or("txt").to_string();
 
-        let pane = match file_type.as_str() {
+        eprintln!("Opening file: {:?}", file_type);
+
+        let pane: Rc<RefCell<dyn Pane>> = match file_type.as_str() {
+            "scm" => {
+                let language = unsafe { tree_sitter_scheme() };
+                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language, "scheme");
+                pane.open_file(&filename).expect("Failed to open file");
+                pane.backup_buffer();
+                Rc::new(RefCell::new(pane))
+            },
+            "rs" => {
+                let language = tree_sitter_rust::language();
+                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"rust");
+                pane.open_file(&filename).expect("Failed to open file");
+                pane.backup_buffer();
+                Rc::new(RefCell::new(pane))
+            }
+            "c" => {
+                let language = tree_sitter_c::language();
+                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"c");
+                pane.open_file(&filename).expect("Failed to open file");
+                pane.backup_buffer();
+                Rc::new(RefCell::new(pane))
+            }
+            "cpp" | "hpp" | "h" => {
+                let language = tree_sitter_cpp::language();
+                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"cpp");
+                pane.open_file(&filename).expect("Failed to open file");
+                pane.backup_buffer();
+                Rc::new(RefCell::new(pane))
+            }
+            "py" => {
+                let language = tree_sitter_python::language();
+                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"python");
+                pane.open_file(&filename).expect("Failed to open file");
+                pane.backup_buffer();
+                Rc::new(RefCell::new(pane))
+            }
+            "lsp" => {
+                let language = tree_sitter_commonlisp::language();
+                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"commonlisp");
+                pane.open_file(&filename).expect("Failed to open file");
+                pane.backup_buffer();
+                Rc::new(RefCell::new(pane))
+            }
+            "swift" => {
+                let language = tree_sitter_swift::language();
+                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"swift");
+                pane.open_file(&filename).expect("Failed to open file");
+                pane.backup_buffer();
+                Rc::new(RefCell::new(pane))
+            }
+            "go" => {
+                let language = tree_sitter_go::language();
+                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"go");
+                pane.open_file(&filename).expect("Failed to open file");
+                pane.backup_buffer();
+                Rc::new(RefCell::new(pane))
+            }
+            "sh" => {
+                let language = tree_sitter_bash::language();
+                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"bash");
+                pane.open_file(&filename).expect("Failed to open file");
+                pane.backup_buffer();
+                Rc::new(RefCell::new(pane))
+            }
+            "js" => {
+                let language = tree_sitter_javascript::language();
+                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"javascript");
+                pane.open_file(&filename).expect("Failed to open file");
+                pane.backup_buffer();
+                Rc::new(RefCell::new(pane))
+            }
+            "cs" => {
+                let language = tree_sitter_c_sharp::language();
+                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"csharp");
+                pane.open_file(&filename).expect("Failed to open file");
+                pane.backup_buffer();
+                Rc::new(RefCell::new(pane))
+            }
             "txt" | _ => {
                 let mut pane = TextPane::new(self.settings.clone(), self.channels.0.clone());
                 pane.open_file(&filename).expect("Failed to open file");
-                pane
+                pane.backup_buffer();
+                Rc::new(RefCell::new(pane))
             }
         };
-        let pane = Rc::new(RefCell::new(pane));
         self.panes[self.active_layer].push(PaneContainer::new((0,0), (0, 0), pane.clone(), self.settings.clone()));
-        self.panes.len() - 1
+        self.panes[self.active_layer].len() - 1
     }
 
     fn switch_pane(&mut self, filename: String) {
         let filename = PathBuf::from(filename);
         //eprintln!("switching to pane: {:?}", filename);
         let mut pane_index = None;
-        for (i, pane) in self.panes.iter().enumerate() {
-            if pane[self.active_layer].get_pane().borrow().get_filename() == &Some(filename.clone()) {//todo: remove the clone
+        for (i, pane) in self.panes[self.active_layer].iter().enumerate() {
+            if pane.get_pane().borrow().get_filename() == &Some(filename.clone()) {//todo: remove the clone
                 pane_index = Some(i);
                 break;
             }
@@ -166,25 +246,21 @@ impl Window {
         for (i, layer) in self.panes.iter().enumerate() {
             for (j, pane) in layer.iter().enumerate() {
                 if pane.can_close() {
-                    eprintln!("pane can close: {}, {}", i, j);
                     panes_to_remove.push((i, j));
                 }
             }
         }
         
         for (i, j) in panes_to_remove.iter().rev() {
-            eprintln!("removing pane: {}, {}", i, j);
             
             loop {
                 if *j + 1 < self.panes[*i].len() {
-                    eprintln!("combining with right pane");
                     let corners = self.panes[*i][*j].get_corners();
                     if self.panes[*i][*j + 1].combine(corners) {
                         break;
                     }
                 }
                 if *j != 0 {
-                    eprintln!("combining with left pane");
                     let corners = self.panes[*i][*j].get_corners();
                     if self.panes[*i][*j - 1].combine(corners) {
                         break;
@@ -579,7 +655,7 @@ impl Window {
 
         let settings = self.settings.borrow();
         
-        let color_settings = &settings.colors.ui;
+        let color_settings = &settings.colors.bar;
 
         let (name, first, second) = self.panes[0][self.active_panes[0]].get_status();
         let total = name.len() + 1 + first.len() + second.len();// plus one for the space
@@ -651,7 +727,15 @@ impl Window {
     }
 
     pub fn open_file_start(&mut self, filename: &str) -> io::Result<()> {
-        self.panes[self.active_layer][self.active_panes[self.active_layer]].open_file(&PathBuf::from(filename.to_owned()))
+        let _ = self.open_file(filename.try_into().unwrap());
+        let container = self.panes[0].pop().unwrap();
+
+        let pane = container.get_pane();
+
+        self.panes[0][self.active_panes[0]].change_pane(pane);
+
+        Ok(())
+        //self.panes[self.active_layer][self.active_panes[self.active_layer]].open_file(&PathBuf::from(filename.to_owned()))
     }
 
     pub fn process_keypress(&mut self, key: KeyEvent) -> io::Result<bool> {
