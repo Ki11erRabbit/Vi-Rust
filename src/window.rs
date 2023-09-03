@@ -87,6 +87,44 @@ impl Window {
         }
     }
 
+    pub fn new_file(filename: PathBuf) -> Self {
+        let settings = Settings::default();
+        let duration = Duration::from_millis(settings.editor_settings.key_timeout);
+
+        let settings = Rc::new(RefCell::new(settings));
+        
+
+        let channels = mpsc::channel();
+        
+        let win_size = terminal::size()
+            .map(|(w, h)| (w as usize, h as usize - 1))// -1 for trailing newline and -1 for command bar
+            .unwrap();
+        let pane: Rc<RefCell<dyn Pane>> = Rc::new(RefCell::new(TextPane::new(settings.clone(), channels.0.clone())));
+
+        pane.borrow_mut().set_cursor_size(win_size);
+        
+        let panes = vec![vec![PaneContainer::new(win_size, win_size, pane.clone(), settings.clone())]];
+
+
+        let mut known_file_types = HashSet::new();
+        known_file_types.insert("txt".to_string());
+        let buffers = vec![TextBuffer::new(); 1];
+        
+        Self {
+            size: win_size,
+            contents: WindowContents::new(),
+            active_panes: vec![0],
+            active_layer: 0,
+            panes,
+            buffers,
+            final_buffer: FinalTextBuffer::new(),
+            known_file_types,
+            duration,
+            settings,
+            channels,
+        }
+    }
+
     fn create_popup(&mut self, pane: PaneContainer, make_active: bool) {
         if self.panes.len() - 1 == self.active_layer {
             eprintln!("Creating new layer");
@@ -115,101 +153,99 @@ impl Window {
         }
     }
 
-    fn open_file(&mut self, filename: PathBuf) -> usize {
+    fn open_file(&mut self, filename: PathBuf) -> io::Result<usize> {
         let file_type = filename.extension().and_then(|s| s.to_str()).unwrap_or("txt").to_string();
-
-        eprintln!("Opening file: {:?}", file_type);
 
         let pane: Rc<RefCell<dyn Pane>> = match file_type.as_str() {
             "scm" => {
                 let language = unsafe { tree_sitter_scheme() };
                 let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language, "scheme");
-                pane.open_file(&filename).expect("Failed to open file");
+                pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             },
             "rs" => {
                 let language = tree_sitter_rust::language();
                 let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"rust");
-                pane.open_file(&filename).expect("Failed to open file");
+                pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
             "c" => {
                 let language = tree_sitter_c::language();
                 let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"c");
-                pane.open_file(&filename).expect("Failed to open file");
+                pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
             "cpp" | "hpp" | "h" => {
                 let language = tree_sitter_cpp::language();
                 let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"cpp");
-                pane.open_file(&filename).expect("Failed to open file");
+                pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
             "py" => {
                 let language = tree_sitter_python::language();
                 let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"python");
-                pane.open_file(&filename).expect("Failed to open file");
+                pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
             "lsp" => {
                 let language = tree_sitter_commonlisp::language();
                 let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"commonlisp");
-                pane.open_file(&filename).expect("Failed to open file");
+                pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
             "swift" => {
                 let language = tree_sitter_swift::language();
                 let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"swift");
-                pane.open_file(&filename).expect("Failed to open file");
+                pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
             "go" => {
                 let language = tree_sitter_go::language();
                 let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"go");
-                pane.open_file(&filename).expect("Failed to open file");
+                pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
             "sh" => {
                 let language = tree_sitter_bash::language();
                 let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"bash");
-                pane.open_file(&filename).expect("Failed to open file");
+                pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
             "js" => {
                 let language = tree_sitter_javascript::language();
                 let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"javascript");
-                pane.open_file(&filename).expect("Failed to open file");
+                pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
             "cs" => {
                 let language = tree_sitter_c_sharp::language();
                 let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"csharp");
-                pane.open_file(&filename).expect("Failed to open file");
+                pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
             "txt" | _ => {
                 let mut pane = TextPane::new(self.settings.clone(), self.channels.0.clone());
-                pane.open_file(&filename).expect("Failed to open file");
+                pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
         };
         self.panes[self.active_layer].push(PaneContainer::new((0,0), (0, 0), pane.clone(), self.settings.clone()));
-        self.panes[self.active_layer].len() - 1
+        Ok(self.panes[self.active_layer].len() - 1)
     }
 
-    fn switch_pane(&mut self, filename: String) {
+    fn switch_pane(&mut self, filename: String) -> io::Result<()> {
         let filename = PathBuf::from(filename);
         //eprintln!("switching to pane: {:?}", filename);
         let mut pane_index = None;
@@ -224,7 +260,7 @@ impl Window {
             pane_index
         }
         else {
-            self.open_file(filename)
+            self.open_file(filename)?
         };
 
         let active_pane = self.panes[self.active_layer][self.active_panes[self.active_layer]].get_pane().clone();
@@ -234,6 +270,8 @@ impl Window {
         self.panes[self.active_layer][new_active_pane_index].change_pane(active_pane);
 
         self.panes[self.active_layer][self.active_panes[self.active_layer]].get_pane().borrow_mut().set_cursor_size(self.panes[self.active_layer][self.active_panes[self.active_layer]].get_size());
+
+        Ok(())
     }
 
     fn insert_pane(&mut self, index: usize, pane: PaneContainer) {
@@ -459,15 +497,17 @@ impl Window {
         }
     }
 
-    fn read_messages(&mut self) {
+    fn read_messages(&mut self) -> io::Result<()> {
         match self.channels.1.try_recv() {
             Ok(message) => {
                 match message {
                     Message::HorizontalSplit => {
                         self.horizontal_split();
+                        Ok(())
                     }
                     Message::VerticalSplit => {
                         self.vertical_split();
+                        Ok(())
                     }
                     Message::ForceQuitAll => {
                         for layers in self.panes.iter_mut() {
@@ -475,21 +515,26 @@ impl Window {
                                 pane.close();
                             }
                         }
+                        Ok(())
                     }
                     Message::PaneUp => {
                         self.pane_up();
+                        Ok(())
                     },
                     Message::PaneDown => {
                         self.pane_down();
+                        Ok(())
                     },
                     Message::PaneLeft => {
                         self.pane_left();
+                        Ok(())
                     },
                     Message::PaneRight => {
                         self.pane_right();
+                        Ok(())
                     },
                     Message::OpenFile(path) => {
-                        self.switch_pane(path);
+                        self.switch_pane(path)
                     }
                     Message::ClosePane(go_down) => {
                         //self.panes[self.active_layer].remove(self.active_panes[self.active_layer]);
@@ -500,14 +545,17 @@ impl Window {
                             self.active_layer = self.active_layer.saturating_sub(1);
                         }
                         
+                        Ok(())
                     },
                     Message::CreatePopup(container, make_active) => {
                         self.create_popup(container, make_active);
+                        Ok(())
                     },
                 }
             },
-            Err(_) => {}
+            Err(_) => Ok(()),
         }
+        
     }
 
     fn process_event(&mut self) -> io::Result<Event> {
@@ -521,7 +569,7 @@ impl Window {
 
     pub fn run(&mut self) -> io::Result<bool> {
         //self.refresh_screen()?;
-        self.read_messages();
+        self.read_messages()?;
         self.remove_panes();
         if self.panes[self.active_layer].len() == 0 {
             return Ok(false);

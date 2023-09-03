@@ -1,7 +1,8 @@
 use std::io;
 
 use crossterm::{terminal, execute, cursor::SetCursorStyle, cursor::MoveTo};
-use window::Window;
+
+use crate::editor::Editor;
 
 pub mod window;
 pub mod mode;
@@ -10,6 +11,7 @@ pub mod settings;
 pub mod pane;
 pub mod buffer;
 pub mod treesitter;
+pub mod editor;
 
 
 struct CleanUp;
@@ -24,7 +26,7 @@ impl Drop for CleanUp {
 }
 
 
-struct Editor {
+/*struct Editor {
     window: Window,
 }
 
@@ -45,12 +47,12 @@ impl Editor {
         self.window.run()
     }
 
-}
+}*/
 
 
 fn main() -> io::Result<()> {
-    let _cleanup = CleanUp;
-    terminal::enable_raw_mode()?;
+    //let _cleanup = CleanUp;
+    //terminal::enable_raw_mode()?;
 
     let mut editor = Editor::new();
 
