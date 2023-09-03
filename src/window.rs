@@ -12,6 +12,7 @@ use crossterm::event::{KeyEvent, self, Event};
 use crossterm::style::{Stylize, StyledContent};
 use crossterm::{terminal::{self, ClearType}, execute, cursor, queue};
 
+use crate::editor::EditorMessage;
 use crate::pane::treesitter::TreesitterPane;
 use crate::settings::ColorScheme;
 use crate::{apply_colors, settings::Settings};
@@ -31,6 +32,12 @@ pub enum Message {
     OpenFile(String),
     ClosePane(bool),
     CreatePopup(PaneContainer, bool),
+    OpenNewTab,
+    OpenNewTabWithPane,
+    NextTab,
+    PreviousTab,
+    NthTab(usize),
+        
 }
 
 pub struct Window{
@@ -45,11 +52,13 @@ pub struct Window{
     settings: Rc<RefCell<Settings>>,
     duration: Duration,
     channels: (Sender<Message>, Receiver<Message>),
+    editor_sender: Sender<EditorMessage>,
+    skip: bool,
     
 }
 
 impl Window {
-    pub fn new() -> Self {
+    pub fn new(editor_sender: Sender<EditorMessage>) -> Self {
         let settings = Settings::default();
         let duration = Duration::from_millis(settings.editor_settings.key_timeout);
 
@@ -84,7 +93,13 @@ impl Window {
             duration,
             settings,
             channels,
+            editor_sender,
+            skip: false,
         }
+    }
+
+    fn get_sender(&self) -> Sender<Message> {
+        self.channels.0.clone()
     }
 
     fn create_popup(&mut self, pane: PaneContainer, make_active: bool) {
@@ -115,101 +130,105 @@ impl Window {
         }
     }
 
-    fn open_file(&mut self, filename: PathBuf) -> usize {
+    fn file_opener(&mut self, filename: PathBuf) -> io::Result<Rc<RefCell<dyn Pane>>> {
         let file_type = filename.extension().and_then(|s| s.to_str()).unwrap_or("txt").to_string();
-
-        eprintln!("Opening file: {:?}", file_type);
 
         let pane: Rc<RefCell<dyn Pane>> = match file_type.as_str() {
             "scm" => {
                 let language = unsafe { tree_sitter_scheme() };
                 let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language, "scheme");
-                pane.open_file(&filename).expect("Failed to open file");
+                pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             },
             "rs" => {
                 let language = tree_sitter_rust::language();
                 let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"rust");
-                pane.open_file(&filename).expect("Failed to open file");
+                pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
             "c" => {
                 let language = tree_sitter_c::language();
                 let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"c");
-                pane.open_file(&filename).expect("Failed to open file");
+                pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
             "cpp" | "hpp" | "h" => {
                 let language = tree_sitter_cpp::language();
                 let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"cpp");
-                pane.open_file(&filename).expect("Failed to open file");
+                pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
             "py" => {
                 let language = tree_sitter_python::language();
                 let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"python");
-                pane.open_file(&filename).expect("Failed to open file");
+                pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
             "lsp" => {
                 let language = tree_sitter_commonlisp::language();
                 let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"commonlisp");
-                pane.open_file(&filename).expect("Failed to open file");
+                pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
             "swift" => {
                 let language = tree_sitter_swift::language();
                 let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"swift");
-                pane.open_file(&filename).expect("Failed to open file");
+                pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
             "go" => {
                 let language = tree_sitter_go::language();
                 let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"go");
-                pane.open_file(&filename).expect("Failed to open file");
+                pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
             "sh" => {
                 let language = tree_sitter_bash::language();
                 let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"bash");
-                pane.open_file(&filename).expect("Failed to open file");
+                pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
             "js" => {
                 let language = tree_sitter_javascript::language();
                 let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"javascript");
-                pane.open_file(&filename).expect("Failed to open file");
+                pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
             "cs" => {
                 let language = tree_sitter_c_sharp::language();
                 let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"csharp");
-                pane.open_file(&filename).expect("Failed to open file");
+                pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
             "txt" | _ => {
                 let mut pane = TextPane::new(self.settings.clone(), self.channels.0.clone());
-                pane.open_file(&filename).expect("Failed to open file");
+                pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
         };
-        self.panes[self.active_layer].push(PaneContainer::new((0,0), (0, 0), pane.clone(), self.settings.clone()));
-        self.panes[self.active_layer].len() - 1
+        Ok(pane)
     }
 
-    fn switch_pane(&mut self, filename: String) {
+    fn open_file(&mut self, filename: PathBuf) -> io::Result<usize> {
+
+        let pane: Rc<RefCell<dyn Pane>> = self.file_opener(filename)?;
+        self.panes[self.active_layer].push(PaneContainer::new((0,0), (0, 0), pane.clone(), self.settings.clone()));
+        Ok(self.panes[self.active_layer].len() - 1)
+    }
+
+    fn switch_pane(&mut self, filename: String) -> io::Result<()> {
         let filename = PathBuf::from(filename);
         //eprintln!("switching to pane: {:?}", filename);
         let mut pane_index = None;
@@ -224,7 +243,7 @@ impl Window {
             pane_index
         }
         else {
-            self.open_file(filename)
+            self.open_file(filename)?
         };
 
         let active_pane = self.panes[self.active_layer][self.active_panes[self.active_layer]].get_pane().clone();
@@ -234,11 +253,26 @@ impl Window {
         self.panes[self.active_layer][new_active_pane_index].change_pane(active_pane);
 
         self.panes[self.active_layer][self.active_panes[self.active_layer]].get_pane().borrow_mut().set_cursor_size(self.panes[self.active_layer][self.active_panes[self.active_layer]].get_size());
+
+        Ok(())
     }
 
-    fn insert_pane(&mut self, index: usize, pane: PaneContainer) {
+    pub fn insert_pane(&mut self, index: usize, pane: PaneContainer) {
         let parent_pane = index - 1;
         self.panes[self.active_layer].insert(index, pane);
+    }
+
+    pub fn replace_pane(&mut self, index: usize, pane: Rc<RefCell<dyn Pane>>) {
+        let cursor = self.panes[self.active_layer][index].get_cursor();
+        {
+            let mut pane = pane.borrow_mut();
+            pane.set_sender(self.channels.0.clone());
+        }
+        self.panes[self.active_layer][index].change_pane(pane);
+        let new_cursor = self.panes[self.active_layer][index].get_cursor();
+        let mut new_cursor = new_cursor.borrow_mut();
+        new_cursor.prepare_jump(&*cursor.borrow());
+        new_cursor.jumped = false;
     }
 
     fn remove_panes(&mut self) {
@@ -350,11 +384,11 @@ impl Window {
         new_pane.set_position(new_pane_position);
         self.panes[self.active_layer].insert(new_pane_index, new_pane);
 
-        eprintln!("old corners {:?}", self.panes[self.active_layer][self.active_panes[self.active_layer]].get_corners());
+        //eprintln!("old corners {:?}", self.panes[self.active_layer][self.active_panes[self.active_layer]].get_corners());
         
         self.active_panes[self.active_layer] = new_pane_index;
 
-        eprintln!("new corners {:?}", self.panes[self.active_layer][self.active_panes[self.active_layer]].get_corners());
+        //eprintln!("new corners {:?}", self.panes[self.active_layer][self.active_panes[self.active_layer]].get_corners());
     }
 
 
@@ -459,15 +493,17 @@ impl Window {
         }
     }
 
-    fn read_messages(&mut self) {
+    fn read_messages(&mut self) -> io::Result<()> {
         match self.channels.1.try_recv() {
             Ok(message) => {
                 match message {
                     Message::HorizontalSplit => {
                         self.horizontal_split();
+                        Ok(())
                     }
                     Message::VerticalSplit => {
                         self.vertical_split();
+                        Ok(())
                     }
                     Message::ForceQuitAll => {
                         for layers in self.panes.iter_mut() {
@@ -475,21 +511,27 @@ impl Window {
                                 pane.close();
                             }
                         }
+                        self.editor_sender.send(EditorMessage::Quit).unwrap();
+                        Ok(())
                     }
                     Message::PaneUp => {
                         self.pane_up();
+                        Ok(())
                     },
                     Message::PaneDown => {
                         self.pane_down();
+                        Ok(())
                     },
                     Message::PaneLeft => {
                         self.pane_left();
+                        Ok(())
                     },
                     Message::PaneRight => {
                         self.pane_right();
+                        Ok(())
                     },
                     Message::OpenFile(path) => {
-                        self.switch_pane(path);
+                        self.switch_pane(path)
                     }
                     Message::ClosePane(go_down) => {
                         //self.panes[self.active_layer].remove(self.active_panes[self.active_layer]);
@@ -500,14 +542,48 @@ impl Window {
                             self.active_layer = self.active_layer.saturating_sub(1);
                         }
                         
+                        Ok(())
                     },
                     Message::CreatePopup(container, make_active) => {
                         self.create_popup(container, make_active);
+                        Ok(())
                     },
+                    Message::OpenNewTab => {
+                        self.editor_sender.send(EditorMessage::NewWindow(None)).unwrap();
+                        self.skip = true;
+                        Ok(())
+                    },
+                    Message::OpenNewTabWithPane => {
+                        let pane = self.panes[self.active_layer][self.active_panes[self.active_layer]].get_pane();
+                        self.panes[self.active_layer][self.active_panes[self.active_layer]].close();
+
+                        self.active_panes[self.active_layer] = self.active_panes[self.active_layer].saturating_sub(1);
+
+                        self.editor_sender.send(EditorMessage::NewWindow(Some(pane))).unwrap();
+                        self.skip = true;
+                        Ok(())
+                    },
+                    Message::NextTab => {
+                        self.editor_sender.send(EditorMessage::NextWindow).unwrap();
+                        self.skip = true;
+                        Ok(())
+                    },
+                    Message::PreviousTab => {
+                        self.editor_sender.send(EditorMessage::PrevWindow).unwrap();
+                        self.skip = true;
+                        Ok(())
+                    },
+                    Message::NthTab(n) => {
+                        self.editor_sender.send(EditorMessage::NthWindow(n)).unwrap();
+                        self.skip = true;
+                        Ok(())
+                    },
+                    
                 }
             },
-            Err(_) => {}
+            Err(_) => Ok(()),
         }
+        
     }
 
     fn process_event(&mut self) -> io::Result<Event> {
@@ -521,9 +597,11 @@ impl Window {
 
     pub fn run(&mut self) -> io::Result<bool> {
         //self.refresh_screen()?;
-        self.read_messages();
+        self.read_messages()?;
         self.remove_panes();
         if self.panes[self.active_layer].len() == 0 {
+            eprintln!("No panes left");
+            self.editor_sender.send(EditorMessage::CloseWindow).unwrap();
             return Ok(false);
         }
 
@@ -531,8 +609,17 @@ impl Window {
         let ((x1, y1), (x2, y2)) = self.panes[self.active_layer][self.active_panes[self.active_layer]].get_corners();
 
         if x1 == x2 || y1 == y2 {
+            eprintln!("Pane is too small");
+            eprintln!("x1: {}, x2: {}, y1: {}, y2: {}", x1, x2, y1, y2);
+            self.editor_sender.send(EditorMessage::CloseWindow).unwrap();
             return Ok(false);
         }
+
+        if self.skip {
+            self.skip = false;
+            return Ok(true);
+        }
+        
         
         let event = self.process_event()?;
         match event {
@@ -546,7 +633,7 @@ impl Window {
                 Ok(true)
             }
             _ => {
-                self.contents.set_change(false);
+                self.contents.set_change(true);
                 Ok(true)},
         }
     }
@@ -677,8 +764,14 @@ impl Window {
         self.contents.push_str(apply_colors!(second, color_settings));
     }
 
-    pub fn refresh_screen(&mut self) -> io::Result<()> {
+    pub fn force_refresh_screen(&mut self) -> io::Result<()> {
+        //Self::clear_screen()?;
+        self.contents.set_change(true);
+        self.refresh_screen()
+    }
 
+    pub fn refresh_screen(&mut self) -> io::Result<()> {
+        
 
         if !self.contents.will_change() {
             return Ok(());
@@ -727,10 +820,7 @@ impl Window {
     }
 
     pub fn open_file_start(&mut self, filename: &str) -> io::Result<()> {
-        let _ = self.open_file(filename.try_into().unwrap());
-        let container = self.panes[0].pop().unwrap();
-
-        let pane = container.get_pane();
+        let pane = self.file_opener(filename.into())?;
 
         self.panes[0][self.active_panes[0]].change_pane(pane);
 

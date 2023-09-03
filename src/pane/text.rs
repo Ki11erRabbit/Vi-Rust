@@ -502,9 +502,6 @@ impl Pane for TextPane {
                             }
                             else {
                                 if let Some(new_cursor) = self.jump_table.named_jump(other, *cursor) {
-                                    eprintln!("New Cursor: {:?}", new_cursor);
-                                    eprintln!("Old Cursor: {:?}", *cursor);
-                                    eprintln!("Jumping to named jump");
                                     *cursor = new_cursor;
                                 }
 
@@ -517,7 +514,7 @@ impl Pane for TextPane {
 
             },
             "set_jump" => {
-                eprintln!("Setting jump");
+                //eprintln!("Setting jump");
                 let cursor = self.cursor.borrow();
                 if let Some(jump) = command_args.next() {
                     self.jump_table.add_named(jump, *cursor);
@@ -642,6 +639,30 @@ impl Pane for TextPane {
                 self.contents.redo();
                 self.cursor.borrow_mut().number_line_size = self.contents.get_line_count();
 
+            },
+            "change_tab" => {
+                if let Some(tab) = command_args.next() {
+                    if let Ok(tab) = tab.parse::<usize>() {
+                        self.sender.send(Message::NthTab(tab)).expect("Failed to send message");
+                    }
+                    else {
+                        match tab {
+                            "prev" => {
+                                self.sender.send(Message::PreviousTab).expect("Failed to send message");
+                            },
+                            "next" => {
+                                self.sender.send(Message::NextTab).expect("Failed to send message");
+                            },
+                            _ => {}
+                        }
+                    }
+                }
+            },
+            "open_tab" => {
+                self.sender.send(Message::OpenNewTab).expect("Failed to send message");
+            },
+            "open_tab_with_pane" => {
+                self.sender.send(Message::OpenNewTabWithPane).expect("Failed to send message");
             },
 
             _ => {}
@@ -787,5 +808,10 @@ impl Pane for TextPane {
     }
     fn borrow_mut_buffer(&mut self) -> &mut Buffer {
         &mut self.contents
+    }
+
+
+    fn set_sender(&mut self, sender: Sender<Message>) {
+        self.sender = sender;
     }
 }

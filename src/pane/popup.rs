@@ -231,4 +231,9 @@ impl Pane for PopUpPane {
         unimplemented!()
     }
 
+
+    fn set_sender(&mut self, sender: Sender<Message>) {
+        unimplemented!()
+    }
+
 }
