@@ -726,6 +726,7 @@ impl Pane for TextPane {
                 if let Some(password) = command_args.next() {
 
                     let user = std::env::var("USER").expect("Failed to get user");
+                    eprintln!("{}", user);
 
                     let mut context = Context::new("sudo", None,Conversation::with_credentials(user, password))
                         .expect("Failed to create context");
@@ -743,6 +744,7 @@ impl Pane for TextPane {
                         .env_clear()
                         .envs(session.envlist().iter_tuples())
                         .uid(0)
+                        .gid(0)
                         .spawn();
                         ;
 

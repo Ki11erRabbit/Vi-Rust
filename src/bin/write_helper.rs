@@ -25,7 +25,7 @@ fn main() {
     while let Ok(_) = reader.read_line(&mut line) {
         file.write_all(line.as_bytes()).expect("Could not write to file");
     }
-    reader.flush().expect("Could not flush reader");
+    //reader.flush().expect("Could not flush reader");
 
     println!("Successful write to file");
 }
