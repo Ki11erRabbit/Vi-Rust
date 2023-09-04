@@ -7,6 +7,7 @@ use std::{collections::HashMap, rc::Rc, cell::RefCell, path::PathBuf, sync::mpsc
 
 use crop::RopeSlice;
 use crossterm::event::KeyEvent;
+use pam_client::Context;
 
 use crate::{cursor::{Cursor, Direction}, mode::{Mode, base::{Normal, Insert, Command}}, settings::Settings, window::Message};
 
@@ -722,80 +723,32 @@ impl Pane for TextPane {
             "super_save" => {
                 if let Some(password) = command_args.next() {
 
-                    let child = if cfg!(target_os = "openbsd") {
-                        std::process::Command::new("doas")
-                            .arg(HELPER_PATH)
-                            .arg(self.file_name.clone().unwrap())
-                            .stdin(Stdio::piped())
-                            .stdout(Stdio::piped())
-                            .stderr(Stdio::piped())
-                            .spawn()
+                    let user = std::env::var("USER").expect("Failed to get user");
 
-                    }
-                    else {
-                        std::process::Command::new("sudo")
-                            .arg("--stdin")
-                            .arg(HELPER_PATH)
-                            .arg(self.file_name.clone().unwrap())
-                            .stdin(Stdio::piped())
-                            .stdout(Stdio::piped())
-                            .stderr(Stdio::piped())
-                            .spawn()
-                    };
+                    let mut context = Context::new("sudo", None,Conversation::with_credentials(user, password));
 
-                    if let Ok(mut child) = child {
-                        let child_stdin = child.stdin.as_mut().unwrap();
+                    context.authenticate().expect("Failed to authenticate");
 
-                        let mut output = String::new();
-                        child.stderr.as_mut().unwrap().read_to_string(&mut output).expect("Failed to read from stdout");
+                    context.acct_mgmt().expect("Failed to authenticate");
 
-                        if cfg!(target_os = "openbsd") {
-                            if !output.contains("password:") {
-                                child.kill().expect("Failed to kill child");
-                                return;
-                            }
-                        }
-                        else {
-                            if !output.contains("Password:") {
-                                child.kill().expect("Failed to kill child");
-                                eprintln!("Failed to get password prompt");
-                                eprintln!("{}", output);
-                                return;
-                            }
-                        }
-                        
-                        output.clear();
-                        
-                        child_stdin.write_all(password.as_bytes()).expect("Failed to write to stdin");
-                        child_stdin.write_all(b"\n").expect("Failed to write to stdin");
-                        child_stdin.flush().expect("Failed to flush stdin");
-                        eprintln!("Wrote password");
-                        
-                        child.stderr.as_mut().unwrap().read_to_string(&mut output).expect("Failed to read from stdout");
-                        if !output.is_empty() {
-                            child.kill().expect("Failed to kill child");
-                            eprintln!("Failed to write password");
-                            eprintln!("{}", output);
-                            return;
-                        }
+                    let mut session = context.open_session(pam_client::Flag::NONE).expect("Failed to open session");
 
-                        let file_text = self.contents.to_string();
+                    let command = std::process::Command::new(HELPER_PATH)
+                        .arg(self.file_name.clone().unwrap())
+                        .arg(password)
+                        .stdin(Stdio::piped())
+                        .stdout(Stdio::piped())
+                        .env_clear()
+                        .envs(session.envlist().iter_tuples())
+                        .status();
+                        ;
 
-                        child_stdin.write_all(file_text.as_bytes()).expect("Failed to write to stdin");
-                        child_stdin.flush().expect("Failed to flush stdin");
-
-
-                        child.stdout.as_mut().unwrap().read_to_string(&mut output).expect("Failed to read from stdout");
-
-                        if output.contains("Successful write to file") {
-                            self.set_changed(false);
-                            child.wait().expect("Failed to wait for child");
-                            eprintln!("Successful write to file");
-                        }
-                        else {
-                            self.set_changed(true);
-                            child.kill().expect("Failed to kill child");
-                            eprintln!("Failed to write to file");
+                    match command {
+                        Ok(status) => {
+                            eprintln!("Status: {}", status);
+                        },
+                        Err(_) => {
+                            eprintln!("Failed to run command");
                         }
                     }
                     
