@@ -703,21 +703,21 @@ impl Default for EditorColors {
 
         mode.insert("Normal".to_string(), ColorScheme {
             foreground_color: Color::Black,
-            background_color: Color::Cyan,
+            background_color: Color::DarkCyan,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
         });
 
         mode.insert("Insert".to_string(), ColorScheme {
             foreground_color: Color::Black,
-            background_color: Color::Green,
+            background_color: Color::DarkGreen,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
         });
 
         mode.insert("Command".to_string(), ColorScheme {
             foreground_color: Color::Black,
-            background_color: Color::Magenta,
+            background_color: Color::DarkMagenta,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
         });
@@ -737,37 +737,37 @@ impl Default for EditorColors {
         let mut rainbow_delimiters = Vec::new();
 
         rainbow_delimiters.push(ColorScheme {
-            foreground_color: Color::Magenta,
+            foreground_color: Color::DarkMagenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         });
         rainbow_delimiters.push(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         });
         rainbow_delimiters.push(ColorScheme {
-            foreground_color: Color::Cyan,
+            foreground_color: Color::DarkCyan,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         });
         rainbow_delimiters.push(ColorScheme {
-            foreground_color: Color::Green,
+            foreground_color: Color::DarkGreen,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         });
         rainbow_delimiters.push(ColorScheme {
-            foreground_color: Color::Yellow,
+            foreground_color: Color::DarkYellow,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         });
         rainbow_delimiters.push(ColorScheme {
-            foreground_color: Color::Red,
+            foreground_color: Color::DarkRed,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
@@ -803,43 +803,43 @@ impl EditorColors {
         let mut rust = HashMap::new();
         
         rust.insert("array_expression".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Magenta,
+            foreground_color: Color::DarkMagenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("async_block".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Magenta,
+            foreground_color: Color::DarkMagenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("await_expression".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Magenta,
+            foreground_color: Color::DarkMagenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("block".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Magenta,
+            foreground_color: Color::DarkMagenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("char_literal".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Green,
+            foreground_color: Color::DarkGreen,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("crate".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("escape_sequence".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Green,
+            foreground_color: Color::DarkGreen,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
@@ -857,163 +857,163 @@ impl EditorColors {
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("metavariable".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("mutable_specifier".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("primitive_type".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Yellow,
+            foreground_color: Color::DarkYellow,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("raw_string_literal".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Green,
+            foreground_color: Color::DarkGreen,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("string_literal".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Green,
+            foreground_color: Color::DarkGreen,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("self".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Yellow,
+            foreground_color: Color::DarkYellow,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("super".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("type_identifier".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Yellow,
+            foreground_color: Color::DarkYellow,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("as".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("async".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("await".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("break".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("continue".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("const".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("default".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Yellow,
+            foreground_color: Color::DarkYellow,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("dyn".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("else".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("extern".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("false".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("true".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("fn".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("for".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("ident".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Magenta,
+            foreground_color: Color::DarkMagenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("if".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("impl".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("in".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("let".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
@@ -1025,109 +1025,109 @@ impl EditorColors {
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("lifetime".to_string(),SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Red,
+            foreground_color: Color::DarkRed,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("loop".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("macro_rules!".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Cyan,
+            foreground_color: Color::DarkCyan,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
         }));
         rust.insert("match".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("move".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
         }));
         rust.insert("pub".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("return".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("struct".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("enum".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("trait".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("type".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("union".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("unsafe".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Red,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
         }));
         rust.insert("use".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Cyan,
+            foreground_color: Color::DarkCyan,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("where".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Cyan,
+            foreground_color: Color::DarkCyan,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
         }));
         rust.insert("vis".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Cyan,
+            foreground_color: Color::DarkCyan,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("while".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         rust.insert("mod".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Cyan,
+            foreground_color: Color::DarkCyan,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
@@ -1136,7 +1136,7 @@ impl EditorColors {
         let mut function_item = HashMap::new();
 
         function_item.insert("name".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Magenta,
+            foreground_color: Color::DarkMagenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
@@ -1149,7 +1149,7 @@ impl EditorColors {
         let mut macro_invocation = HashMap::new();
 
         macro_invocation.insert("macro".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Cyan,
+            foreground_color: Color::DarkCyan,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
@@ -1162,7 +1162,7 @@ impl EditorColors {
         let mut scoped_identifier = HashMap::new();
 
         scoped_identifier.insert("path".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Yellow,
+            foreground_color: Color::DarkYellow,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
@@ -1193,7 +1193,7 @@ impl EditorColors {
         let mut tuple_struct_pattern = HashMap::new();
 
         tuple_struct_pattern.insert("type".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Yellow,
+            foreground_color: Color::DarkYellow,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
@@ -1205,14 +1205,14 @@ impl EditorColors {
         
         
         rust.insert("macro_invocation".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Cyan,
+            foreground_color: Color::DarkCyan,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
             }));
 
         rust.insert("try_expression".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Magenta,
+            foreground_color: Color::DarkMagenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
@@ -1243,7 +1243,7 @@ impl EditorColors {
         exclude.insert(',');
         
         rust.insert("use_list".to_string(), SyntaxHighlight::ChildExclude(ColorScheme {
-            foreground_color: Color::Yellow,
+            foreground_color: Color::DarkYellow,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
@@ -1264,7 +1264,7 @@ impl EditorColors {
         ));
 
         rust.insert("ERROR".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Red,
+            foreground_color: Color::DarkRed,
             background_color: Color::Reset,
             underline_color: Color::Red,
             attributes: Rc::new(vec![Attribute::Undercurled]),
@@ -1279,235 +1279,235 @@ impl EditorColors {
         let mut c = HashMap::new();
 
         c.insert("#define".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Cyan,
+            foreground_color: Color::DarkCyan,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
         }));
         c.insert("#include".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Cyan,
+            foreground_color: Color::DarkCyan,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
         }));
         c.insert("#elif".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Cyan,
+            foreground_color: Color::DarkCyan,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
         }));
         c.insert("#else".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Cyan,
+            foreground_color: Color::DarkCyan,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
         }));
         c.insert("#endif".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Cyan,
+            foreground_color: Color::DarkCyan,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
         }));
         c.insert("#if".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Cyan,
+            foreground_color: Color::DarkCyan,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
         }));
         c.insert("#ifdef".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Cyan,
+            foreground_color: Color::DarkCyan,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
         }));
         c.insert("#ifndef".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Cyan,
+            foreground_color: Color::DarkCyan,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
         }));
         c.insert("#elifdef".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Cyan,
+            foreground_color: Color::DarkCyan,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
         }));
         c.insert("#elifndef".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Cyan,
+            foreground_color: Color::DarkCyan,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
         }));
         c.insert("#pragma".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Cyan,
+            foreground_color: Color::DarkCyan,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
         }));
         c.insert("_Alignof".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Green,
+            foreground_color: Color::DarkGreen,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("_Atomic".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Green,
+            foreground_color: Color::DarkGreen,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("_Generic".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Green,
+            foreground_color: Color::DarkGreen,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("_Noreturn".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Green,
+            foreground_color: Color::DarkGreen,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("_alignof".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Green,
+            foreground_color: Color::DarkGreen,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("__alignof__".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Green,
+            foreground_color: Color::DarkGreen,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("__asm__".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Green,
+            foreground_color: Color::DarkGreen,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("__attribute__".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Green,
+            foreground_color: Color::DarkGreen,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("__based".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Magenta,
+            foreground_color: Color::DarkMagenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("__cdecl".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Magenta,
+            foreground_color: Color::DarkMagenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("__clrcall".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Magenta,
+            foreground_color: Color::DarkMagenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("__declspec".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Magenta,
+            foreground_color: Color::DarkMagenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("__fastcall".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Magenta,
+            foreground_color: Color::DarkMagenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("__forceinline".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Magenta,
+            foreground_color: Color::DarkMagenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("__extension__".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Magenta,
+            foreground_color: Color::DarkMagenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
         }));
         c.insert("__inline".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Magenta,
+            foreground_color: Color::DarkMagenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("__inline__".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Magenta,
+            foreground_color: Color::DarkMagenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("__restrict__".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Magenta,
+            foreground_color: Color::DarkMagenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
         }));
         c.insert("__stdcall".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Magenta,
+            foreground_color: Color::DarkMagenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("__thiscall".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Magenta,
+            foreground_color: Color::DarkMagenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("__thread".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Magenta,
+            foreground_color: Color::DarkMagenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("__unaligned".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Magenta,
+            foreground_color: Color::DarkMagenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
         }));
         c.insert("__vectorcall".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Magenta,
+            foreground_color: Color::DarkMagenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
         }));
         c.insert("_alignof".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Green,
+            foreground_color: Color::DarkGreen,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("_unaligned".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Green,
+            foreground_color: Color::DarkGreen,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("defined".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Green,
+            foreground_color: Color::DarkGreen,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
         }));
         c.insert("preproc_arg".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Green,
+            foreground_color: Color::DarkGreen,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("preproc_directive".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(vec![Attribute::Bold]),
@@ -1516,237 +1516,233 @@ impl EditorColors {
 
 
         c.insert("alignof".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("asm".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("offsetof".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("inline".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("auto".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Yellow,
+            foreground_color: Color::DarkYellow,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("break".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("continue".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("case".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("default".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("const".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("constexpr".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("do".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("else".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("enum".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("extern".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("for".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("goto".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("if".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("long".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Yellow,
+            foreground_color: Color::DarkYellow,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("noreturn".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("primitive_type".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Yellow,
+            foreground_color: Color::DarkYellow,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("register".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("restrict".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("return".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("short".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Yellow,
+            foreground_color: Color::DarkYellow,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("signed".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Yellow,
+            foreground_color: Color::DarkYellow,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("sizeof".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("static".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("struct".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("switch".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("thread_local".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("typedef".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Cyan,
+            foreground_color: Color::DarkCyan,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("union".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("unsigned".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Yellow,
+            foreground_color: Color::DarkYellow,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("volatile".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("while".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         
         
-        
-
-
-
 
         
         c.insert("statement_identifier".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Red,
+            foreground_color: Color::DarkRed,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("system_lib_string".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Green,
+            foreground_color: Color::DarkGreen,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
@@ -1755,25 +1751,25 @@ impl EditorColors {
         
         
         c.insert("char_literal".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Green,
+            foreground_color: Color::DarkGreen,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("string_literal".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Green,
+            foreground_color: Color::DarkGreen,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("string_content".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Green,
+            foreground_color: Color::DarkGreen,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("character".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Green,
+            foreground_color: Color::DarkGreen,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
@@ -1785,25 +1781,25 @@ impl EditorColors {
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("escape_sequence".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Green,
+            foreground_color: Color::DarkGreen,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("false".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("true".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("nullptr".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Blue,
+            foreground_color: Color::DarkBlue,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
@@ -1816,19 +1812,19 @@ impl EditorColors {
         }));
 
         c.insert("ms_restrict_modifier".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Yellow,
+            foreground_color: Color::DarkYellow,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("ms_signed_ptr_modifier".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Yellow,
+            foreground_color: Color::DarkYellow,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
         }));
         c.insert("ms_unsigned_ptr_modifier".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Yellow,
+            foreground_color: Color::DarkYellow,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
@@ -1850,7 +1846,7 @@ impl EditorColors {
         let mut function_declarator = HashMap::new();
 
         function_declarator.insert("declarator".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Magenta,
+            foreground_color: Color::DarkMagenta,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
@@ -1864,7 +1860,7 @@ impl EditorColors {
         let mut struct_specifier = HashMap::new();
 
         struct_specifier.insert("name".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Yellow,
+            foreground_color: Color::DarkYellow,
             background_color: Color::Reset,
             underline_color: Color::Reset,
             attributes: Rc::new(Vec::new()),
@@ -1876,7 +1872,7 @@ impl EditorColors {
          
 
         c.insert("ERROR".to_string(), SyntaxHighlight::Child(ColorScheme {
-            foreground_color: Color::Red,
+            foreground_color: Color::DarkRed,
             background_color: Color::Reset,
             underline_color: Color::Red,
             attributes: Rc::new(vec![Attribute::Undercurled]),
