@@ -1,5 +1,5 @@
 use std::io;
-
+use std::env;
 
 use crate::editor::Editor;
 
@@ -11,11 +11,21 @@ pub mod pane;
 pub mod buffer;
 pub mod treesitter;
 pub mod editor;
+pub mod utils;
 
+fn update_path() {
+    let path = env::var("PATH").unwrap();
+    let mut paths = env::split_paths(&path).collect::<Vec<_>>();
+    paths.push("/home/ki11errabbit/Documents/Programing-Projects/Rust/Vi-Rust/target/debug".into());
+    paths.push("/home/ki11errabbit/Documents/Programing-Projects/Rust/Vi-Rust/target/release".into());
+    let new_path = env::join_paths(paths).unwrap();
+    env::set_var("PATH", &new_path);
 
+}
 
 
 fn main() -> io::Result<()> {
+    update_path();
     //let _cleanup = CleanUp;
     //terminal::enable_raw_mode()?;
 

@@ -597,6 +597,7 @@ impl Window {
 
     pub fn run(&mut self) -> io::Result<bool> {
         //self.refresh_screen()?;
+        //eprintln!("Running");
         self.read_messages()?;
         self.remove_panes();
         if self.panes[self.active_layer].len() == 0 {

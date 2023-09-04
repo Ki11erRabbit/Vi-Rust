@@ -123,6 +123,8 @@ impl TreesitterPane {
                                         let command = format!("set_jump {}", string);
                                         self.run_command(&command, container);
                                     },
+                                    Waiting::Password => {
+                                    },
                                     Waiting::None => {
                                     },
                                 }

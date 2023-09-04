@@ -403,7 +403,7 @@ impl Mode for Prompt {
                     },
                 }
 
-                eprintln!("{}", command);
+                //eprintln!("{}", command);
 
                 pane.run_command(&command, container);
             },

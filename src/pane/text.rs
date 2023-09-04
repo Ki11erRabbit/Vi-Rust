@@ -1,4 +1,6 @@
 use crate::{pane::Pane, window::StyledChar, cursor::CursorMove, buffer::Buffer};
+use std::io::Read;
+use std::process::Stdio;
 use std::{io::Write, sync::mpsc::Receiver};
 
 use std::{collections::HashMap, rc::Rc, cell::RefCell, path::PathBuf, sync::mpsc::Sender, io};
@@ -11,6 +13,7 @@ use crate::{cursor::{Cursor, Direction}, mode::{Mode, base::{Normal, Insert, Com
 use super::{PaneContainer, PaneMessage, popup::PopUpPane};
 use crate::mode::prompt::PromptType;
 
+const HELPER_PATH: &str = "write_helper";
 
 #[derive(Debug, Clone)]
 pub struct JumpTable {
@@ -97,6 +100,7 @@ impl JumpTable {
 pub enum Waiting {
     JumpTarget,
     JumpPosition,
+    Password,
     None,
 }
 
@@ -200,6 +204,15 @@ impl TextPane {
                                         self.waiting = Waiting::None;
                                         let command = format!("set_jump {}", string);
                                         self.run_command(&command, container);
+                                    },
+                                    Waiting::Password => {
+                                        self.waiting = Waiting::None;
+                                        let mut command = format!("super_save {}", string);
+                                        self.run_command(&command, container);
+                                        //Here we clear the command just in case since we are storing a password
+                                        let len = command.len();
+                                        command.drain(..);
+                                        command.push_str("s".repeat(len).as_str());
                                     },
                                     Waiting::None => {
                                     },
@@ -664,8 +677,138 @@ impl Pane for TextPane {
             "open_tab_with_pane" => {
                 self.sender.send(Message::OpenNewTabWithPane).expect("Failed to send message");
             },
+            "ws" => {
+                #[cfg(target_family = "unix")]
+                {
+                    let (send, recv) = std::sync::mpsc::channel();
 
-            _ => {}
+                    self.receiver = Some(recv);
+
+                    let txt_prompt = PromptType::Text(String::new(), None, true);
+                    let prompt = vec!["Enter Password".to_string()];
+
+                    let pane = PopUpPane::new(self.settings.clone(), prompt, self.sender.clone(), send, vec![txt_prompt]);
+
+                    let pane = Rc::new(RefCell::new(pane));
+
+                    let (_, (x2, y2)) = container.get_corners();
+                    let (x, y) = container.get_size();
+
+                    let (x, y) = (x / 2, y / 2);
+
+                    let pos = (x2 - 16 - x, y2 - 4 - y);
+
+
+                    let max_size = container.get_size();
+
+                    let mut container = PaneContainer::new(max_size, (16, 4), pane, self.settings.clone());
+
+
+                    container.set_position(pos);
+                    container.set_size((16, 4));
+
+
+
+                    self.sender.send(Message::CreatePopup(container, true)).expect("Failed to send message");
+                    self.waiting = Waiting::Password;
+
+                    self.contents.add_new_rope();
+                }
+                #[cfg(target_family = "windows")]
+                {
+                    crate::utils::windows_utils::admin_save();
+                }
+            },
+            "super_save" => {
+                if let Some(password) = command_args.next() {
+
+                    let child = if cfg!(target_os = "openbsd") {
+                        std::process::Command::new("doas")
+                            .arg(HELPER_PATH)
+                            .arg(self.file_name.clone().unwrap())
+                            .stdin(Stdio::piped())
+                            .stdout(Stdio::piped())
+                            .stderr(Stdio::piped())
+                            .spawn()
+
+                    }
+                    else {
+                        std::process::Command::new("sudo")
+                            .arg("--stdin")
+                            .arg(HELPER_PATH)
+                            .arg(self.file_name.clone().unwrap())
+                            .stdin(Stdio::piped())
+                            .stdout(Stdio::piped())
+                            .stderr(Stdio::piped())
+                            .spawn()
+                    };
+
+                    if let Ok(mut child) = child {
+                        let child_stdin = child.stdin.as_mut().unwrap();
+
+                        let mut output = String::new();
+                        child.stderr.as_mut().unwrap().read_to_string(&mut output).expect("Failed to read from stdout");
+
+                        if cfg!(target_os = "openbsd") {
+                            if !output.contains("password:") {
+                                child.kill().expect("Failed to kill child");
+                                return;
+                            }
+                        }
+                        else {
+                            if !output.contains("Password:") {
+                                child.kill().expect("Failed to kill child");
+                                eprintln!("Failed to get password prompt");
+                                eprintln!("{}", output);
+                                return;
+                            }
+                        }
+                        
+                        output.clear();
+                        
+                        child_stdin.write_all(password.as_bytes()).expect("Failed to write to stdin");
+                        child_stdin.write_all(b"\n").expect("Failed to write to stdin");
+                        child_stdin.flush().expect("Failed to flush stdin");
+                        eprintln!("Wrote password");
+                        
+                        child.stderr.as_mut().unwrap().read_to_string(&mut output).expect("Failed to read from stdout");
+                        if !output.is_empty() {
+                            child.kill().expect("Failed to kill child");
+                            eprintln!("Failed to write password");
+                            eprintln!("{}", output);
+                            return;
+                        }
+
+                        let file_text = self.contents.to_string();
+
+                        child_stdin.write_all(file_text.as_bytes()).expect("Failed to write to stdin");
+                        child_stdin.flush().expect("Failed to flush stdin");
+
+
+                        child.stdout.as_mut().unwrap().read_to_string(&mut output).expect("Failed to read from stdout");
+
+                        if output.contains("Successful write to file") {
+                            self.set_changed(false);
+                            child.wait().expect("Failed to wait for child");
+                            eprintln!("Successful write to file");
+                        }
+                        else {
+                            self.set_changed(true);
+                            child.kill().expect("Failed to kill child");
+                            eprintln!("Failed to write to file");
+                        }
+                    }
+                    
+                }
+            },
+            "ws!" => {
+            },
+            "wsq" => {
+            },
+
+            x => {
+                eprintln!("Unknown command: {}", x);
+            }
         }
 
     }
