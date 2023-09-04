@@ -7,14 +7,16 @@ use std::{collections::HashMap, rc::Rc, cell::RefCell, path::PathBuf, sync::mpsc
 
 use crop::RopeSlice;
 use crossterm::event::KeyEvent;
-use pam_client::Context;
+use pam_client::{Context, Flag};
+use pam_client::conv_mock::Conversation;
+use std::os::unix::process::CommandExt;
 
 use crate::{cursor::{Cursor, Direction}, mode::{Mode, base::{Normal, Insert, Command}}, settings::Settings, window::Message};
 
 use super::{PaneContainer, PaneMessage, popup::PopUpPane};
 use crate::mode::prompt::PromptType;
 
-const HELPER_PATH: &str = "write_helper";
+const HELPER_PATH: &str = "/home/ki11errabbit/Documents/Programing-Projects/Rust/Vi-Rust/target/debug/write_helper";
 
 #[derive(Debug, Clone)]
 pub struct JumpTable {
@@ -725,32 +727,35 @@ impl Pane for TextPane {
 
                     let user = std::env::var("USER").expect("Failed to get user");
 
-                    let mut context = Context::new("sudo", None,Conversation::with_credentials(user, password));
+                    let mut context = Context::new("sudo", None,Conversation::with_credentials(user, password))
+                        .expect("Failed to create context");
 
-                    context.authenticate().expect("Failed to authenticate");
+                    context.authenticate(Flag::NONE).expect("Failed to authenticate");
 
-                    context.acct_mgmt().expect("Failed to authenticate");
+                    context.acct_mgmt(Flag::NONE).expect("Failed to authenticate");
 
                     let mut session = context.open_session(pam_client::Flag::NONE).expect("Failed to open session");
 
-                    let command = std::process::Command::new(HELPER_PATH)
+                    let process = std::process::Command::new(HELPER_PATH)
                         .arg(self.file_name.clone().unwrap())
-                        .arg(password)
                         .stdin(Stdio::piped())
                         .stdout(Stdio::piped())
                         .env_clear()
                         .envs(session.envlist().iter_tuples())
-                        .status();
+                        .uid(0)
+                        .spawn();
                         ;
 
-                    match command {
-                        Ok(status) => {
-                            eprintln!("Status: {}", status);
-                        },
-                        Err(_) => {
-                            eprintln!("Failed to run command");
-                        }
+                    if let Ok(mut process) = process {
+                        
+                        process.stdin.as_mut().unwrap().write_all(self.contents.to_string().as_bytes()).expect("Failed to write to stdin");
+                        let output = process.wait_with_output().expect("Failed to wait for output");
+                        eprintln!("Output: {}", String::from_utf8_lossy(&output.stdout));
                     }
+                    else {
+                        eprintln!("Failed to run helper: {:?}", process);
+                    }
+                    
                     
                 }
             },
