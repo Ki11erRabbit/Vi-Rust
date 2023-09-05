@@ -4,13 +4,13 @@ use std::io::{BufReader, BufWriter, self, BufRead, Read, Write};
 
 
 
-pub struct LspClient<R: Read, W: Write> {
+pub struct LspClient<W: Write,R: Read> {
     input: BufWriter<W>,
     output: BufReader<R>,
     json_data: serde_json::Value,
 }
 
-impl<R: Read, W: Write> LspClient<R, W> {
+impl<R: Read, W: Write> LspClient<W, R> {
     pub fn new(input: W, output: R) -> Self {
         let input = BufWriter::new(input);
         let output = BufReader::new(output);
@@ -60,7 +60,7 @@ impl<R: Read, W: Write> LspClient<R, W> {
 
         self.json_data = json_data;
 
-        eprintln!("Received message: {:?}", self.json_data);
+        eprintln!("Received message: {:#?}", self.json_data);
         
         Ok(())
     }
@@ -89,3 +89,5 @@ impl<R: Read, W: Write> LspClient<R, W> {
         Ok(())
     }
 }
+
+

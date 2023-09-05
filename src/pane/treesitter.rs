@@ -1,19 +1,20 @@
-use std::{sync::mpsc::{Sender, Receiver}, cell::RefCell, rc::Rc, path::PathBuf, collections::HashMap, io::{self, Write}};
+use std::{sync::mpsc::{Sender, Receiver}, cell::RefCell, rc::Rc, path::PathBuf, collections::HashMap, io::{self, Write, Read}};
 
 use crop::RopeSlice;
 use crossterm::event::KeyEvent;
 use tree_sitter::{Parser, Tree, Point, Language, InputEdit};
 
-use crate::{window::{Message, StyledChar}, cursor::{Cursor, Direction, CursorMove}, mode::{Mode, base::{Normal, Insert, Command}, prompt::PromptType}, buffer::Buffer, settings::{Settings, SyntaxHighlight, ColorScheme}};
+use crate::{window::{Message, StyledChar}, cursor::{Cursor, Direction, CursorMove}, mode::{Mode, base::{Normal, Insert, Command}, prompt::PromptType}, buffer::Buffer, settings::{Settings, SyntaxHighlight, ColorScheme}, lsp_client::LspClient};
 
 use super::{text::{JumpTable, Waiting}, PaneMessage, Pane, PaneContainer, popup::PopUpPane};
 
 
 
-pub struct TreesitterPane {
+pub struct TreesitterPane<W: Write, R: io::Read> {
     parser: Parser,
     tree: Tree,
     lang: String,
+    lsp_client: Option<LspClient<W, R>>,
 
     cursor: Rc<RefCell<Cursor>>,
     file_name: Option<PathBuf>,
@@ -29,8 +30,8 @@ pub struct TreesitterPane {
     rainbow_delimiters: RefCell<Vec<(char, ColorScheme)>>,
 }
 
-impl TreesitterPane {
-    pub fn new(settings: Rc<RefCell<Settings>>, sender: Sender<Message>, lang: Language, lang_string: &str) -> Self {
+impl<W: Write, R: Read> TreesitterPane<W, R> {
+    pub fn new(settings: Rc<RefCell<Settings>>, sender: Sender<Message>, lang: Language, lang_string: &str, lsp: Option<LspClient<W, R>>) -> Self {
         let mut modes: HashMap<String, Rc<RefCell<dyn Mode>>> = HashMap::new();
         let normal = Rc::new(RefCell::new(Normal::new()));
         normal.borrow_mut().add_keybindings(settings.borrow().mode_keybindings.get("Normal").unwrap().clone());
@@ -57,6 +58,7 @@ impl TreesitterPane {
         Self {
             parser,
             tree,
+            lsp_client: lsp,
             lang: lang_string.to_string(),
             cursor: Rc::new(RefCell::new(Cursor::new((0,0)))),
             file_name: None,
