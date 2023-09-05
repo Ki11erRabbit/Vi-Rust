@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::cmp;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::process::{Command, Stdio, ChildStdin, ChildStdout};
 use std::rc::Rc;
 use std::io;
 use std::io::Write;
@@ -13,6 +14,7 @@ use crossterm::style::{Stylize, StyledContent};
 use crossterm::{terminal::{self, ClearType}, execute, cursor, queue};
 
 use crate::editor::EditorMessage;
+use crate::lsp_client;
 use crate::pane::treesitter::TreesitterPane;
 use crate::settings::ColorScheme;
 use crate::{apply_colors, settings::Settings};
@@ -136,77 +138,143 @@ impl Window {
         let pane: Rc<RefCell<dyn Pane>> = match file_type.as_str() {
             "scm" => {
                 let language = unsafe { tree_sitter_scheme() };
-                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language, "scheme");
+                let mut pane: TreesitterPane<ChildStdin, ChildStdout> = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language, "scheme", None);
                 pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             },
             "rs" => {
+                let rust_analyzer = Command::new("rust-analyzer")
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .spawn()
+                    .expect("Failed to start rust-analyzer");
+
+                let mut lsp_client = lsp_client::LspClient::new(rust_analyzer.stdin.unwrap(), rust_analyzer.stdout.unwrap());
+
+                lsp_client.initialize()?;
+
+                
                 let language = tree_sitter_rust::language();
-                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"rust");
+                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"rust", Some(lsp_client));
                 pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
             "c" => {
+                let clangd = Command::new("clangd")
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .spawn()
+                    .expect("Failed to start clangd");
+
+                let mut lsp_client = lsp_client::LspClient::new(clangd.stdin.unwrap(), clangd.stdout.unwrap());
+
+                lsp_client.initialize()?;
+                
                 let language = tree_sitter_c::language();
-                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"c");
+                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"c", Some(lsp_client));
                 pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
             "cpp" | "hpp" | "h" => {
+                let clangd = Command::new("clangd")
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .spawn()
+                    .expect("Failed to start clangd");
+
+                let mut lsp_client = lsp_client::LspClient::new(clangd.stdin.unwrap(), clangd.stdout.unwrap());
+
+                lsp_client.initialize()?;
                 let language = tree_sitter_cpp::language();
-                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"cpp");
+                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"cpp", Some(lsp_client));
                 pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
             "py" => {
+                let python_lsp = Command::new("python-lsp-server")
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .spawn()
+                    .expect("Failed to start python-lsp-server");
+
+                let mut lsp_client = lsp_client::LspClient::new(python_lsp.stdin.unwrap(), python_lsp.stdout.unwrap());
+
+                lsp_client.initialize()?;
                 let language = tree_sitter_python::language();
-                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"python");
+                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"python", Some(lsp_client));
                 pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
             "lsp" => {
                 let language = tree_sitter_commonlisp::language();
-                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"commonlisp");
+                let mut pane: TreesitterPane<ChildStdin, ChildStdout> = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"commonlisp", None);
                 pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
             "swift" => {
+                let apple_swift = Command::new("sourcekit-lsp")
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .spawn()
+                    .expect("Failed to start sourcekit-lsp");
+
+                let mut lsp_client = lsp_client::LspClient::new(apple_swift.stdin.unwrap(), apple_swift.stdout.unwrap());
+
+                lsp_client.initialize()?;
                 let language = tree_sitter_swift::language();
-                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"swift");
+                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"swift", Some(lsp_client));
                 pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
             "go" => {
+                let gopls = Command::new("gopls")
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .spawn()
+                    .expect("Failed to start gopls");
+
+                let mut lsp_client = lsp_client::LspClient::new(gopls.stdin.unwrap(), gopls.stdout.unwrap());
+
+                lsp_client.initialize()?;
                 let language = tree_sitter_go::language();
-                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"go");
+                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"go", Some(lsp_client));
                 pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
             "sh" => {
+                let bash_lsp = Command::new("bash-language-server")
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .spawn()
+                    .expect("Failed to start bash-language-server");
+
+                let mut lsp_client = lsp_client::LspClient::new(bash_lsp.stdin.unwrap(), bash_lsp.stdout.unwrap());
+
+                lsp_client.initialize()?;
                 let language = tree_sitter_bash::language();
-                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"bash");
+                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"bash", Some(lsp_client));
                 pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
             "js" => {
                 let language = tree_sitter_javascript::language();
-                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"javascript");
+                let mut pane: TreesitterPane<ChildStdin, ChildStdout> = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"javascript", None);
                 pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
             "cs" => {
                 let language = tree_sitter_c_sharp::language();
-                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"csharp");
+                let mut pane: TreesitterPane<ChildStdin, ChildStdout> = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"csharp", None);
                 pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
@@ -600,7 +668,7 @@ impl Window {
         self.read_messages()?;
         self.remove_panes();
         if self.panes[self.active_layer].len() == 0 {
-            eprintln!("No panes left");
+            //eprintln!("No panes left");
             self.editor_sender.send(EditorMessage::CloseWindow).unwrap();
             return Ok(false);
         }
@@ -609,8 +677,8 @@ impl Window {
         let ((x1, y1), (x2, y2)) = self.panes[self.active_layer][self.active_panes[self.active_layer]].get_corners();
 
         if x1 == x2 || y1 == y2 {
-            eprintln!("Pane is too small");
-            eprintln!("x1: {}, x2: {}, y1: {}, y2: {}", x1, x2, y1, y2);
+            //eprintln!("Pane is too small");
+            //eprintln!("x1: {}, x2: {}, y1: {}, y2: {}", x1, x2, y1, y2);
             self.editor_sender.send(EditorMessage::CloseWindow).unwrap();
             return Ok(false);
         }

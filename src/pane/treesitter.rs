@@ -140,7 +140,7 @@ impl<W: Write, R: Read> TreesitterPane<W, R> {
 }
 
 
-impl Pane for TreesitterPane {
+impl<W: Write, R: Read> Pane for TreesitterPane<W, R> {
     fn draw_row(&self, mut index: usize, container: &super::PaneContainer, output: &mut Vec<Option<crate::window::StyledChar>>) {
 
         let mut cols = container.get_size().0;
