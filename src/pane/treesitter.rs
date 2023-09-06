@@ -766,10 +766,12 @@ impl<W: Write, R: Read> Pane for TreesitterPane<W, R> {
 
         eprintln!("{}", self.tree.root_node().to_sexp());
 
+        let uri = self.generate_uri();
+
         match self.lsp_client {
             None => {},
             Some(ref mut client) => {
-                client.send_did_open(&self.lang, &filename.as_path().to_str().unwrap(), &self.contents.to_string())?;
+                client.send_did_open(&self.lang, &uri, &self.contents.to_string())?;
             },
         }
 

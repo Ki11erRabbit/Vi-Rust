@@ -93,6 +93,7 @@ impl<R: Read, W: Write> LspClient<W, R> {
         self.process_messages()
     }
 
+
     pub fn send_did_open(&mut self, language_id: &str, uri: &str, text: &str) -> io::Result<()> {
         let message = serde_json::json!({
             "jsonrpc": "2.0",
@@ -151,7 +152,7 @@ impl<R: Read, W: Write> LspClient<W, R> {
     pub fn will_save_text(&mut self, uri: &str, reason: usize) -> io::Result<()> {
         let message = serde_json::json!({
             "jsonrpc": "2.0",
-            "id": 4,
+            "id": 5,
             "method": "textDocument/willSave",
             "params": {
                 "textDocument": {
@@ -167,7 +168,7 @@ impl<R: Read, W: Write> LspClient<W, R> {
     pub fn did_close(&mut self, uri: &str) -> io::Result<()> {
         let message = serde_json::json!({
             "jsonrpc": "2.0",
-            "id": 5,
+            "id": 6,
             "method": "textDocument/didClose",
             "params": {
                 "textDocument": {
@@ -182,7 +183,7 @@ impl<R: Read, W: Write> LspClient<W, R> {
     pub fn send_shutdown(&mut self) -> io::Result<()> {
         let message = serde_json::json!({
             "jsonrpc": "2.0",
-            "id": 2,
+            "id": 1,
             "method": "shutdown",
         });
         self.send_message(message)?;
@@ -192,7 +193,7 @@ impl<R: Read, W: Write> LspClient<W, R> {
     pub fn send_exit(&mut self) -> io::Result<()> {
         let message = serde_json::json!({
             "jsonrpc": "2.0",
-            "id": 3,
+            "id": 6,
             "method": "exit",
         });
         self.send_message(message)?;
