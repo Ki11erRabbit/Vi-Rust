@@ -4,7 +4,7 @@ use crop::RopeSlice;
 use crossterm::event::KeyEvent;
 use tree_sitter::{Parser, Tree, Point, Language, InputEdit};
 
-use crate::{window::{Message, StyledChar}, cursor::{Cursor, Direction, CursorMove}, mode::{Mode, base::{Normal, Insert, Command}, prompt::PromptType}, buffer::Buffer, settings::{Settings, SyntaxHighlight, ColorScheme}, lsp_client::LspClient};
+use crate::{window::{Message, StyledChar}, cursor::{Cursor, Direction, CursorMove}, mode::{Mode, base::{Normal, Insert, Command}, prompt::PromptType}, buffer::Buffer, settings::{Settings, SyntaxHighlight, ColorScheme}, lsp_client::LspClient, EDITOR_NAME};
 
 use super::{text::{JumpTable, Waiting}, PaneMessage, Pane, PaneContainer, popup::PopUpPane};
 
@@ -31,7 +31,7 @@ pub struct TreesitterPane<W: Write, R: io::Read> {
 }
 
 impl<W: Write, R: Read> TreesitterPane<W, R> {
-    pub fn new(settings: Rc<RefCell<Settings>>, sender: Sender<Message>, lang: Language, lang_string: &str, lsp: Option<LspClient<W, R>>) -> Self {
+    pub fn new(settings: Rc<RefCell<Settings>>, sender: Sender<Message>, lang: Language, lang_string: &str, mut lsp: Option<LspClient<W, R>>) -> Self {
         let mut modes: HashMap<String, Rc<RefCell<dyn Mode>>> = HashMap::new();
         let normal = Rc::new(RefCell::new(Normal::new()));
         normal.borrow_mut().add_keybindings(settings.borrow().mode_keybindings.get("Normal").unwrap().clone());
@@ -54,6 +54,13 @@ impl<W: Write, R: Read> TreesitterPane<W, R> {
         parser.set_language(lang).unwrap();
 
         let tree = parser.parse("".as_bytes(), None).unwrap();
+
+        match &mut lsp {
+            None => {},
+            Some(lsp) => {
+                lsp.figure_out_capabilities().unwrap();
+            },
+        }
         
         Self {
             parser,
@@ -134,6 +141,17 @@ impl<W: Write, R: Read> TreesitterPane<W, R> {
                     Err(_) => {},
                 }
             }
+        }
+    }
+
+    fn generate_uri(& self) -> String {
+        match &self.file_name {
+            None => format!("untitled://{}", EDITOR_NAME),
+            Some(file_name) => {
+                let uri = format!("file://{}/{}", EDITOR_NAME, file_name.display());
+
+                uri
+            },
         }
     }
 
@@ -747,6 +765,16 @@ impl<W: Write, R: Read> Pane for TreesitterPane<W, R> {
         eprintln!("{}", self.contents.to_string());
 
         eprintln!("{}", self.tree.root_node().to_sexp());
+
+        match self.lsp_client {
+            None => {},
+            Some(ref mut client) => {
+                client.send_did_open(&self.lang, &filename.as_path().to_str().unwrap(), &self.contents.to_string())?;
+            },
+        }
+
+
+        
         Ok(())
     }
 
@@ -777,29 +805,143 @@ impl<W: Write, R: Read> Pane for TreesitterPane<W, R> {
                 } else {
                     self.sender.send(Message::ClosePane(false)).unwrap();
                 }
+
+                let uri = self.generate_uri();
+                match self.lsp_client {
+                    None => {},
+                    Some(ref mut client) => {
+
+                        client.did_close(&uri).expect("Failed to send did close");
+                    },
+                }
+               
+                
             },
             "w" => {
+
+                let uri = self.generate_uri();
+                match self.lsp_client {
+                    None => {},
+                    Some(ref mut client) => {
+                        //TODO replace filename with URI
+
+                        client.will_save_text(&uri, 1).expect("Failed to send will save text");
+
+                        client.process_messages().expect("Failed to process messages");
+                    },
+                }
+
+                
                 if let Some(file_name) = command_args.next() {
                     self.file_name = Some(PathBuf::from(file_name));
                 }
 
                 self.save_buffer().expect("Failed to save file");
                 self.contents.add_new_rope();
+
+                match self.lsp_client {
+                    None => {},
+                    Some(ref mut client) => {
+
+                        let text = self.contents.to_string();
+                        
+                        client.did_save_text(&uri, &text).expect("Failed to send did save text");
+
+                        client.process_messages().expect("Failed to process messages");
+                    },
+                }
             },
             "w!" => {
+
+                let uri = self.generate_uri();
+                match self.lsp_client {
+                    None => {},
+                    Some(ref mut client) => {
+                        //TODO replace filename with URI
+
+                        client.will_save_text(&uri, 1).expect("Failed to send will save text");
+
+                        client.process_messages().expect("Failed to process messages");
+                    },
+                }
+
+                
                 if let Some(file_name) = command_args.next() {
                     self.file_name = Some(PathBuf::from(file_name));
                 }
 
                 self.save_buffer().expect("Failed to save file");
                 self.contents.add_new_rope();
+
+                match self.lsp_client {
+                    None => {},
+                    Some(ref mut client) => {
+
+                        let text = self.contents.to_string();
+                        
+                        client.did_save_text(&uri, &text).expect("Failed to send did save text");
+
+                        client.process_messages().expect("Failed to process messages");
+                    },
+                }
+
             },
             "wq" => {
+
+                let uri = self.generate_uri();
+                match self.lsp_client {
+                    None => {},
+                    Some(ref mut client) => {
+                        //TODO replace filename with URI
+
+                        client.will_save_text(&uri, 1).expect("Failed to send will save text");
+
+                        client.process_messages().expect("Failed to process messages");
+                    },
+                }
+
+                
                 self.save_buffer().expect("Failed to save file");
                 self.sender.send(Message::ClosePane(false)).unwrap();
+
+                match self.lsp_client {
+                    None => {},
+                    Some(ref mut client) => {
+
+                        let text = self.contents.to_string();
+                        
+                        client.did_save_text(&uri, &text).expect("Failed to send did save text");
+
+                        client.process_messages().expect("Failed to process messages");
+                    },
+                }
+
+
+                match self.lsp_client {
+                    None => {},
+                    Some(ref mut client) => {
+
+                        client.did_close(&uri).expect("Failed to send did close");
+
+                        client.process_messages().expect("Failed to process messages");
+                    },
+                }
+                
             },
             "q!" => {
                 self.sender.send(Message::ClosePane(false)).unwrap();
+                let uri = self.generate_uri();
+
+                match self.lsp_client {
+                    None => {},
+                    Some(ref mut client) => {
+
+                        client.did_close(&uri).expect("Failed to send did close");
+
+                        client.process_messages().expect("Failed to process messages");
+                    },
+                }
+
             },
             "move" => {
                 let direction = command_args.next();

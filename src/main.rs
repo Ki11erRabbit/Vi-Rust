@@ -13,26 +13,12 @@ pub mod treesitter;
 pub mod editor;
 pub mod lsp_client;
 
-
+const EDITOR_NAME: &str = "vi";
 
 
 fn main() -> io::Result<()> {
     //let _cleanup = CleanUp;
     //terminal::enable_raw_mode()?;
-
-    let clangd = Command::new("clangd")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("Failed to spawn clangd");
-
-    let mut lsp_client = lsp_client::LspClient::new(clangd.stdin.unwrap(), clangd.stdout.unwrap());
-
-    lsp_client.initialize()?;
-
-    thread::sleep(Duration::from_millis(100));
-    
-    lsp_client.process_messages()?;
 
     let mut editor = Editor::new();
 

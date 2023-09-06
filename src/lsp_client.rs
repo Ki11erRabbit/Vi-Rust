@@ -88,6 +88,121 @@ impl<R: Read, W: Write> LspClient<W, R> {
         self.send_message(message)?;
         Ok(())
     }
+
+    pub fn figure_out_capabilities(&mut self) -> io::Result<()> {
+        self.process_messages()
+    }
+
+    pub fn send_did_open(&mut self, language_id: &str, uri: &str, text: &str) -> io::Result<()> {
+        let message = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": language_id,
+                    "version": 1,
+                    "text": text,
+                },
+            },
+        });
+        self.send_message(message)?;
+        Ok(())
+    }
+
+    pub fn did_change_text(&mut self, uri: &str, version: u64, text: &str) -> io::Result<()> {
+        let message = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "textDocument/didChange",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "version": version,
+                },
+                "contentChanges": [
+                    {
+                        "text": text,
+                    },
+                ],
+            },
+        });
+        self.send_message(message)?;
+        Ok(())
+    }
+
+    pub fn did_save_text(&mut self, uri: &str, text: &str) -> io::Result<()> {
+        let message = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "textDocument/didSave",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                },
+                "text": text,
+            },
+        });
+        self.send_message(message)?;
+        Ok(())
+    }
+
+    pub fn will_save_text(&mut self, uri: &str, reason: usize) -> io::Result<()> {
+        let message = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "textDocument/willSave",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                },
+                "reason": reason,
+            },
+        });
+        self.send_message(message)?;
+        Ok(())
+    }
+
+    pub fn did_close(&mut self, uri: &str) -> io::Result<()> {
+        let message = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 5,
+            "method": "textDocument/didClose",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                },
+            },
+        });
+        self.send_message(message)?;
+        Ok(())
+    }
+
+    pub fn send_shutdown(&mut self) -> io::Result<()> {
+        let message = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "shutdown",
+        });
+        self.send_message(message)?;
+        Ok(())
+    }
+
+    pub fn send_exit(&mut self) -> io::Result<()> {
+        let message = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "exit",
+        });
+        self.send_message(message)?;
+        Ok(())
+    }
 }
 
-
+impl<R: Read, W: Write> Drop for LspClient<W, R> {
+    fn drop(&mut self) {
+        self.send_shutdown().expect("Failed to send shutdown");
+        self.send_exit().expect("Failed to send exit");
+    }
+}
