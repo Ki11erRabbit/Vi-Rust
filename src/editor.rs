@@ -45,9 +45,10 @@ impl Editor {
 
 
         thread::spawn(move || {
-            controller.run();
+            controller.run()
         });
 
+        //eprintln!("Editor created");
         let lsp_listener = Rc::new(lsp_controller_reciever);
         
         Self {

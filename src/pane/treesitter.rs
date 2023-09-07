@@ -772,11 +772,11 @@ impl Pane for TreesitterPane {
 
         
         
-        match self.lsp_client {
+        match &self.lsp_client {
             None => {},
             Some((sender, _)) => {
                 sender.send(ControllerMessage::Notification(
-                    self.lang.into(),
+                    self.lang.clone().into(),
                     LspNotification::Open(uri.into(),
                                           self.contents.to_string().into()))
                 ).expect("Failed to send message");
@@ -817,12 +817,12 @@ impl Pane for TreesitterPane {
                 }
 
                 let uri = self.generate_uri();
-                match self.lsp_client {
+                match &self.lsp_client {
                     None => {},
                     Some((sender,_)) => {
 
                         sender.send(ControllerMessage::Notification(
-                            self.lang.into(),
+                            self.lang.clone().into(),
                             LspNotification::Close(uri.into())
                         )).expect("Failed to send message");
                     },
@@ -835,14 +835,14 @@ impl Pane for TreesitterPane {
                 self.file_version += 1;
 
                 let uri = self.generate_uri();
-                match self.lsp_client {
+                match &self.lsp_client {
                     None => {},
                     Some((sender, _)) => {
                         //TODO replace filename with URI
 
                         sender.send(ControllerMessage::Notification(
-                            self.lang.into(),
-                            LspNotification::WillSave(uri.into(), "manual".into())
+                            self.lang.clone().into(),
+                            LspNotification::WillSave(uri.clone().into(), "manual".into())
                         )).expect("Failed to send message");
 
                     },
@@ -856,14 +856,14 @@ impl Pane for TreesitterPane {
                 self.save_buffer().expect("Failed to save file");
                 self.contents.add_new_rope();
 
-                match self.lsp_client {
+                match &self.lsp_client {
                     None => {},
                     Some((sender, _)) => {
 
                         let text = self.contents.to_string();
 
                         sender.send(ControllerMessage::Notification(
-                            self.lang.into(),
+                            self.lang.clone().into(),
                             LspNotification::Save(uri.into(), text.into())
                         )).expect("Failed to send message");
                     },
@@ -874,14 +874,14 @@ impl Pane for TreesitterPane {
                 self.file_version += 1;
 
                 let uri = self.generate_uri();
-                match self.lsp_client {
+                match &self.lsp_client {
                     None => {},
                     Some((sender, _)) => {
                         //TODO replace filename with URI
 
                         sender.send(ControllerMessage::Notification(
-                            self.lang.into(),
-                            LspNotification::WillSave(uri.into(), "manual".into())
+                            self.lang.clone().into(),
+                            LspNotification::WillSave(uri.clone().into(), "manual".into())
                         )).expect("Failed to send message");
 
                     },
@@ -895,14 +895,14 @@ impl Pane for TreesitterPane {
                 self.save_buffer().expect("Failed to save file");
                 self.contents.add_new_rope();
 
-                match self.lsp_client {
+                match &self.lsp_client {
                     None => {},
                     Some((sender, _)) => {
 
                         let text = self.contents.to_string();
 
                         sender.send(ControllerMessage::Notification(
-                            self.lang.into(),
+                            self.lang.clone().into(),
                             LspNotification::Save(uri.into(), text.into())
                         )).expect("Failed to send message");
                     },
@@ -915,14 +915,14 @@ impl Pane for TreesitterPane {
                 self.file_version += 1;
 
                 let uri = self.generate_uri();
-                match self.lsp_client {
+                match &self.lsp_client {
                     None => {},
                     Some((sender, _)) => {
                         //TODO replace filename with URI
 
                         sender.send(ControllerMessage::Notification(
-                            self.lang.into(),
-                            LspNotification::WillSave(uri.into(), "manual".into())
+                            self.lang.clone().into(),
+                            LspNotification::WillSave(uri.clone().into(), "manual".into())
                         )).expect("Failed to send message");
 
                     },
@@ -932,26 +932,26 @@ impl Pane for TreesitterPane {
                 self.save_buffer().expect("Failed to save file");
                 self.sender.send(Message::ClosePane(false)).unwrap();
 
-                match self.lsp_client {
+                match &self.lsp_client {
                     None => {},
                     Some((sender, _)) => {
 
                         let text = self.contents.to_string();
 
                         sender.send(ControllerMessage::Notification(
-                            self.lang.into(),
-                            LspNotification::Save(uri.into(), text.into())
+                            self.lang.clone().into(),
+                            LspNotification::Save(uri.clone().into(), text.into())
                         )).expect("Failed to send message");
                     },
                 }
 
 
-                match self.lsp_client {
+                match &self.lsp_client {
                     None => {},
                     Some((sender,_)) => {
 
                         sender.send(ControllerMessage::Notification(
-                            self.lang.into(),
+                            self.lang.clone().into(),
                             LspNotification::Close(uri.into())
                         )).expect("Failed to send message");
                     },
@@ -962,12 +962,12 @@ impl Pane for TreesitterPane {
                 self.sender.send(Message::ClosePane(false)).unwrap();
                 let uri = self.generate_uri();
 
-                match self.lsp_client {
+                match &self.lsp_client {
                     None => {},
                     Some((sender,_)) => {
 
                         sender.send(ControllerMessage::Notification(
-                            self.lang.into(),
+                            self.lang.clone().into(),
                             LspNotification::Close(uri.into())
                         )).expect("Failed to send message");
                     },

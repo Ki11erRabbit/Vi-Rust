@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::io;
 use std::io::Write;
-use std::sync::mpsc::{Sender, Receiver, self};
+use std::sync::mpsc::{Sender, Receiver, self, TryRecvError};
 use std::time::Duration;
 
 use crossterm::event::{KeyEvent, self, Event};
@@ -136,6 +136,7 @@ impl Window {
     }
 
     fn file_opener(&mut self, filename: PathBuf) -> io::Result<Rc<RefCell<dyn Pane>>> {
+        eprintln!("Opening file: {:?}", filename);
         let file_type = filename.extension().and_then(|s| s.to_str()).unwrap_or("txt").to_string();
 
         let pane: Rc<RefCell<dyn Pane>> = match file_type.as_str() {
@@ -169,12 +170,26 @@ impl Window {
 
                 self.lsp_responder.send(ControllerMessage::CreateClient("c".to_string().into())).unwrap();
 
-                let lsp_client = match self.lsp_listener.recv().unwrap() {
-                    ControllerMessage::ClientCreated(language_rcv) => {
-                        language_rcv
-                    },
-                    _ => unreachable!(),
-                };
+                let lsp_client;
+                
+                loop {
+
+                    match self.lsp_listener.try_recv() {
+                        Ok(ControllerMessage::ClientCreated(language_rcv)) => {
+                            lsp_client = language_rcv;
+                            break;
+                        },
+                        Ok(_) => {
+                            continue;
+                        },
+                        Err(TryRecvError::Empty) => {
+                            continue;
+                        },
+                        Err(TryRecvError::Disconnected) => {
+                            unreachable!();
+                        },
+                    }
+                }
 
                 let lsp_client = Some((self.lsp_responder.clone(), lsp_client));
                 

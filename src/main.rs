@@ -1,4 +1,4 @@
-use std::{io, process::{Command, Stdio}, time::Duration, thread};
+use std::io;
 
 
 use crate::editor::Editor;
@@ -13,7 +13,7 @@ pub mod treesitter;
 pub mod editor;
 pub mod lsp;
 
-const EDITOR_NAME: &str = "vi";
+//const EDITOR_NAME: &str = "vi";
 
 
 fn main() -> io::Result<()> {
@@ -25,6 +25,7 @@ fn main() -> io::Result<()> {
     if let Some(filename) = std::env::args().nth(1) {
         editor.open_file(&filename)?;
     }
+    eprintln!("Welcome to the editor!");
 
     while editor.run()? {}
 

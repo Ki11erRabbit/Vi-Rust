@@ -1,8 +1,13 @@
+
+use std::sync::Arc;
+
+use futures::lock::Mutex;
 use tokio::{io::{BufReader, AsyncBufReadExt, AsyncWriteExt, AsyncReadExt, BufWriter, self}, process::{ChildStdout, ChildStdin}};
 
 
 
-pub async fn process_messages(output: &mut BufReader<ChildStdout>) -> io::Result<serde_json::Value> {
+pub async fn process_messages(output: Arc<Mutex<BufReader<ChildStdout>>> ) -> io::Result<serde_json::Value> {
+    let mut output = output.lock().await;
     let mut header = String::new();
     let mut content_length = 0;
     let mut content_type = String::new();
@@ -24,7 +29,7 @@ pub async fn process_messages(output: &mut BufReader<ChildStdout>) -> io::Result
     }
 
     let mut body = vec![0; content_length];
-    output.read_exact(&mut body);
+    output.read_exact(&mut body).await?;
 
 
     let body = match content_type {
@@ -44,7 +49,7 @@ pub async fn process_messages(output: &mut BufReader<ChildStdout>) -> io::Result
 pub trait LspClient {
     //fn process_messages(&mut self) -> io::Result<serde_json::Value>;
 
-    fn get_output(&mut self) -> &mut BufReader<ChildStdout>;
+    fn get_output(&self) -> Arc<Mutex<BufReader<ChildStdout>>> ;
     fn send_message(&mut self, message: serde_json::Value) -> io::Result<()>;
 
     fn initialize(&mut self) -> io::Result<()>;
@@ -71,13 +76,15 @@ unsafe impl Send for Client {}
 
 pub struct Client {
     input: BufWriter<ChildStdin>,
-    output: BufReader<ChildStdout>,
+    output: Arc<Mutex<BufReader<ChildStdout>>>,
 }
 
 impl Client {
     pub fn new(input: ChildStdin, output: ChildStdout) -> Self {
         let input = BufWriter::new(input);
         let output = BufReader::new(output);
+
+        let output = Arc::new(Mutex::new(output));
 
         Client {
             input,
@@ -97,8 +104,8 @@ impl Drop for Client {
 
 impl LspClient for Client {
 
-    fn get_output(&mut self) -> &mut BufReader<ChildStdout> {
-        &mut self.output
+    fn get_output(&self) -> Arc<Mutex<BufReader<ChildStdout>>> {
+        self.output.clone()
     }
     
     /*fn process_messages(&mut self) -> io::Result<serde_json::Value> {

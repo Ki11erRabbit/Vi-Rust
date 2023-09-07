@@ -1,4 +1,5 @@
 use std::{collections::HashMap, sync::{mpsc::{Sender, Receiver}, Arc}, io, process::Stdio, fmt::Display};
+use futures::executor::block_on;
 use tokio::process::Command;
 
 use self::lsp_client::{LspClient, process_messages};
@@ -72,6 +73,7 @@ pub struct LspController {
     listen: Option<Receiver<ControllerMessage>>,
     response: Option<Sender<ControllerMessage>>,
     server_channels: HashMap<String, (Sender<ControllerMessage>, Arc<Receiver<ControllerMessage>>)>,
+    runtime: tokio::runtime::Runtime,
 }
 
 
@@ -85,6 +87,7 @@ impl LspController {
             listen: None,
             response: None,
             server_channels: HashMap::new(),
+            runtime: tokio::runtime::Runtime::new().unwrap(),
         }
     }
 
@@ -99,16 +102,27 @@ impl LspController {
 
 
     pub fn run(&mut self) -> io::Result<()> {
+        eprintln!("Running lsp controller");
         loop {
             self.check_messages()?;
+            
+            block_on(self.check_clients());
 
+            //eprintln!("Checked clients");
         }
     }
 
-    async fn check_clients(&mut self) {
+    fn check_clients(&mut self) {
         for (language, client) in self.clients.iter_mut() {
-            let output = client.get_output();
-            let json = process_messages(output).await.expect("Error processing messages");
+            let output = client.get_output().clone();
+
+            let handle = self.runtime.spawn_blocking(|| {
+                let json = process_messages(output).expect("Error processing messages");
+                json
+            });
+            let json = handle.await.expect("Error getting json");
+            
+            //let json = process_messages(output).await.expect("Error processing messages");
 
             //todo: process json
 
