@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::mpsc::{Sender, Receiver}, io, process::{Command, Stdio}};
+use std::{collections::HashMap, sync::mpsc::{Sender, Receiver}, io, process::{Command, Stdio}, task::Poll};
 
 use self::lsp_client::LspClient;
 
@@ -80,6 +80,21 @@ impl LspController {
     pub fn run(&mut self) -> io::Result<()> {
         loop {
             self.check_messages()?;
+
+            for (_, client) in self.clients.iter_mut() {
+                let json = client.process_messages()?;
+                match json.poll() {
+                    Ok(Poll::Ready(json)) => {
+                        json.wake();
+                    },
+                    Err(Poll::Ready(err)) => {
+                        return Err(io::Error::new(io::ErrorKind::Other, "Error processing messages"));
+                    },
+                    Ok(Poll::Pending) | Err(Poll::Pending) => {
+                        continue;
+                    },
+                }
+            }
         }
     }
 

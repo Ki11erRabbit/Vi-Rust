@@ -27,12 +27,12 @@ pub trait LspClient {
     
 }
 
-pub struct Client<W: AsyncWrite,R: AsyncRead> {
+pub struct Client<W: Write,R: AsyncRead> {
     input: BufWriter<W>,
     output: BufReader<R>,
 }
 
-impl<R: AsyncRead, W: AsyncWrite> Client<W, R> {
+impl<R: AsyncRead, W: Write> Client<W, R> {
     pub fn new(input: W, output: R) -> Self {
         let input = BufWriter::new(input);
         let output = BufReader::new(output);
@@ -46,7 +46,7 @@ impl<R: AsyncRead, W: AsyncWrite> Client<W, R> {
 }
 
 
-impl<R: AsyncRead, W: AsyncWrite> Drop for Client<W, R> {
+impl<R: AsyncRead, W: Write> Drop for Client<W, R> {
     fn drop(&mut self) {
         self.send_shutdown().expect("Failed to send shutdown");
         self.send_exit().expect("Failed to send exit");
@@ -54,7 +54,7 @@ impl<R: AsyncRead, W: AsyncWrite> Drop for Client<W, R> {
 }
 
 #[async_trait]
-impl<R: AsyncRead, W: AsyncWrite> LspClient for Client<W, R> {
+impl<R: AsyncRead, W: Write> LspClient for Client<W, R> {
 
     async fn process_messages(&mut self) -> io::Result<serde_json::Value> {
 
