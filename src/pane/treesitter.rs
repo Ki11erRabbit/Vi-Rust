@@ -1,10 +1,10 @@
-use std::{sync::mpsc::{Sender, Receiver}, cell::RefCell, rc::Rc, path::PathBuf, collections::HashMap, io::{self, Write, Read}};
+use std::{sync::{mpsc::{Sender, Receiver}, Arc}, cell::RefCell, rc::Rc, path::PathBuf, collections::HashMap, io::{self, Write}};
 
 use crop::RopeSlice;
 use crossterm::event::KeyEvent;
 use tree_sitter::{Parser, Tree, Point, Language, InputEdit};
 
-use crate::{window::{Message, StyledChar}, cursor::{Cursor, Direction, CursorMove}, mode::{Mode, base::{Normal, Insert, Command}, prompt::PromptType}, buffer::Buffer, settings::{Settings, SyntaxHighlight, ColorScheme}, lsp_client::LspClient, lsp::{ControllerMessage, LspNotification}};
+use crate::{window::{Message, StyledChar}, cursor::{Cursor, Direction, CursorMove}, mode::{Mode, base::{Normal, Insert, Command}, prompt::PromptType}, buffer::Buffer, settings::{Settings, SyntaxHighlight, ColorScheme},  lsp::{ControllerMessage, LspNotification}};
 
 use super::{text::{JumpTable, Waiting}, PaneMessage, Pane, PaneContainer, popup::PopUpPane};
 
@@ -14,7 +14,7 @@ pub struct TreesitterPane {
     parser: Parser,
     tree: Tree,
     lang: String,
-    lsp_client: Option<(Sender<ControllerMessage>, Rc<Receiver<ControllerMessage>>)>,
+    lsp_client: Option<(Sender<ControllerMessage>, Arc<Receiver<ControllerMessage>>)>,
     file_version: usize,
 
     cursor: Rc<RefCell<Cursor>>,
@@ -36,7 +36,7 @@ impl TreesitterPane {
                sender: Sender<Message>,
                lang: Language,
                lang_string: &str,
-               mut lsp: Option<(Sender<ControllerMessage>, Rc<Receiver<ControllerMessage>>)>)
+               mut lsp: Option<(Sender<ControllerMessage>, Arc<Receiver<ControllerMessage>>)>)
                -> Self {
         let mut modes: HashMap<String, Rc<RefCell<dyn Mode>>> = HashMap::new();
         let normal = Rc::new(RefCell::new(Normal::new()));

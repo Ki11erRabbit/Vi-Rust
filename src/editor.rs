@@ -40,7 +40,7 @@ impl Editor {
         let (lsp_sender, lsp_reciever) = std::sync::mpsc::channel();
         let (lsp_controller, lsp_controller_reciever) = std::sync::mpsc::channel();
 
-        controller.set_listener(lsp_reciever);
+        controller.set_listen(lsp_reciever);
         controller.set_response(lsp_controller);
 
 
@@ -51,7 +51,7 @@ impl Editor {
         let lsp_listener = Rc::new(lsp_controller_reciever);
         
         Self {
-            windows: vec![Window::new(sender.clone(), lsp_sender.clone(), lsp_controller.clone())],
+            windows: vec![Window::new(sender.clone(), lsp_sender.clone(), lsp_listener.clone())],
             active_window: 0,
             reciever,
             sender,
@@ -79,7 +79,7 @@ impl Editor {
                         Ok(())
                     },
                     EditorMessage::NewWindow(pane) => {
-                        self.windows.push(Window::new(self.sender.clone(), self.lsp_listener.clone(), self.lsp_responder.clone()));
+                        self.windows.push(Window::new(self.sender.clone(), self.lsp_responder.clone(), self.lsp_listener.clone()));
                         self.active_window = self.windows.len() - 1;
                         if let Some(pane) = pane {
                             self.windows[self.active_window].replace_pane(0, pane);

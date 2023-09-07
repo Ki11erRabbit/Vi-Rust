@@ -1,9 +1,50 @@
-use async_trait::async_trait;
-use tokio::io::{AsyncRead, BufReader, AsyncBufReadExt, AsyncWriteExt, AsyncReadExt, BufWriter, AsyncWrite, self};
+use tokio::{io::{BufReader, AsyncBufReadExt, AsyncWriteExt, AsyncReadExt, BufWriter, self}, process::{ChildStdout, ChildStdin}};
 
-#[async_trait]
+
+
+pub async fn process_messages(output: &mut BufReader<ChildStdout>) -> io::Result<serde_json::Value> {
+    let mut header = String::new();
+    let mut content_length = 0;
+    let mut content_type = String::new();
+    while let Ok(bytes_read) = output.read_line(&mut header).await {
+        if bytes_read == 0 {
+            break;
+        }
+        if header.starts_with("Content-Length: ") {
+            content_length = header[16..].trim().parse::<usize>().expect("Failed to parse content length");
+            header.clear();
+        }
+        if header.starts_with("Content-Type: ") {
+            content_type = header[14..].trim().to_string();
+            header.clear();
+        }
+        if header == "\r\n" {
+            break;
+        }
+    }
+
+    let mut body = vec![0; content_length];
+    output.read_exact(&mut body);
+
+
+    let body = match content_type {
+        _ => {
+            String::from_utf8(body).expect("Failed to parse body as utf8")
+        },
+    };
+
+
+    serde_json::from_str(&body).and_then(|json_data| {
+        Ok(json_data)
+    }).map_err(|err| {
+        io::Error::new(io::ErrorKind::Other, err)
+    })
+}
+
 pub trait LspClient {
-    async fn process_messages(&mut self) -> io::Result<serde_json::Value>;
+    //fn process_messages(&mut self) -> io::Result<serde_json::Value>;
+
+    fn get_output(&mut self) -> &mut BufReader<ChildStdout>;
     fn send_message(&mut self, message: serde_json::Value) -> io::Result<()>;
 
     fn initialize(&mut self) -> io::Result<()>;
@@ -26,13 +67,15 @@ pub trait LspClient {
     
 }
 
-pub struct Client<W: AsyncWrite,R: AsyncRead> {
-    input: BufWriter<W>,
-    output: BufReader<R>,
+unsafe impl Send for Client {}
+
+pub struct Client {
+    input: BufWriter<ChildStdin>,
+    output: BufReader<ChildStdout>,
 }
 
-impl<R: AsyncRead, W: AsyncWrite> Client<W, R> {
-    pub fn new(input: W, output: R) -> Self {
+impl Client {
+    pub fn new(input: ChildStdin, output: ChildStdout) -> Self {
         let input = BufWriter::new(input);
         let output = BufReader::new(output);
 
@@ -45,61 +88,28 @@ impl<R: AsyncRead, W: AsyncWrite> Client<W, R> {
 }
 
 
-impl<R: AsyncRead, W: AsyncWrite> Drop for Client<W, R> {
+impl Drop for Client {
     fn drop(&mut self) {
         self.send_shutdown().expect("Failed to send shutdown");
         self.send_exit().expect("Failed to send exit");
     }
 }
 
-#[async_trait]
-impl<R: AsyncRead, W: AsyncWrite> LspClient for Client<W, R> {
+impl LspClient for Client {
 
-    async fn process_messages(&mut self) -> io::Result<serde_json::Value> {
-
-        let mut header = String::new();
-        let mut content_length = 0;
-        let mut content_type = String::new();
-        while let Ok(bytes_read) = self.output.read_line(&mut header).await {
-            if bytes_read == 0 {
-                break;
-            }
-            if header.starts_with("Content-Length: ") {
-                content_length = header[16..].trim().parse::<usize>().expect("Failed to parse content length");
-                header.clear();
-            }
-            if header.starts_with("Content-Type: ") {
-                content_type = header[14..].trim().to_string();
-                header.clear();
-            }
-            if header == "\r\n" {
-                break;
-            }
-        }
-
-        let mut body = vec![0; content_length];
-        self.output.read_exact(&mut body)?;
-
-
-        let body = match content_type {
-            _ => {
-                String::from_utf8(body).expect("Failed to parse body as utf8")
-            },
-        };
-
-        
-        serde_json::from_str(&body).and_then(|json_data| {
-            Ok(json_data)
-        }).map_err(|err| {
-            io::Error::new(io::ErrorKind::Other, err)
-        })
+    fn get_output(&mut self) -> &mut BufReader<ChildStdout> {
+        &mut self.output
     }
+    
+    /*fn process_messages(&mut self) -> io::Result<serde_json::Value> {
+
+    }*/
 
     fn send_message(&mut self, message: serde_json::Value) -> io::Result<()> {
         let message = serde_json::to_string(&message).expect("Failed to serialize json");
         let message = format!("Content-Length: {}\r\n\r\n{}", message.len(), message);
-        self.input.write_all(message.as_bytes())?;
-        self.input.flush()?;
+        self.input.write_all(message.as_bytes());
+        self.input.flush();
         Ok(())
     }
 

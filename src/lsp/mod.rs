@@ -1,11 +1,12 @@
-use std::{collections::HashMap, sync::mpsc::{Sender, Receiver}, io, process::Stdio, task::Poll, fmt::Display};
+use std::{collections::HashMap, sync::{mpsc::{Sender, Receiver}, Arc}, io, process::Stdio, fmt::Display};
 use tokio::process::Command;
 
-use self::lsp_client::LspClient;
+use self::lsp_client::{LspClient, process_messages};
 
 pub mod lsp_client;
 
 
+unsafe impl Send for LspRequest {}
 pub enum LspRequest {
     /// Tells the server to shutdown
     Shutdown,
@@ -14,10 +15,13 @@ pub enum LspRequest {
 
 }
 
+unsafe impl Send for LspResponse {}
+
 pub enum LspResponse {
 
 }
 
+unsafe impl Send for LspNotification {}
 pub enum LspNotification {
     /// 0 is the uri
     /// 1 is the version
@@ -38,6 +42,9 @@ pub enum LspNotification {
 
 }
 
+
+unsafe impl Send for ControllerMessage {}
+
 pub enum ControllerMessage {
     /// String is the language id
     Request(Box<str>, LspRequest),
@@ -49,7 +56,7 @@ pub enum ControllerMessage {
     CreateClient(Box<str>),
     /// Notification to tell the caller how to recieve responses
     /// The receiver is for the language server side
-    ClientCreated(Receiver<ControllerMessage>),
+    ClientCreated(Arc<Receiver<ControllerMessage>>),
     /// Notification to tell the caller that there is no client for the language
     NoClient,
     Resend
@@ -57,13 +64,14 @@ pub enum ControllerMessage {
 
 }
 
+unsafe impl Send for LspController {}
 
 pub struct LspController {
-    clients: HashMap<String, Box<dyn LspClient>>,
+    clients: HashMap<String, Box<dyn LspClient + Send>>,
     channels: (Sender<ControllerMessage>, Receiver<ControllerMessage>),
     listen: Option<Receiver<ControllerMessage>>,
     response: Option<Sender<ControllerMessage>>,
-    server_channels: HashMap<String, Sender<ControllerMessage>>,
+    server_channels: HashMap<String, (Sender<ControllerMessage>, Arc<Receiver<ControllerMessage>>)>,
 }
 
 
@@ -94,20 +102,19 @@ impl LspController {
         loop {
             self.check_messages()?;
 
-            for (_, client) in self.clients.iter_mut() {
-                let json = client.process_messages();
-                match json.poll() {
-                    Ok(Poll::Ready(json)) => {
-                        json.wake();
-                    },
-                    Err(Poll::Ready(err)) => {
-                        return Err(io::Error::new(io::ErrorKind::Other, "Error processing messages"));
-                    },
-                    Ok(Poll::Pending) | Err(Poll::Pending) => {
-                        continue;
-                    },
-                }
-            }
+        }
+    }
+
+    async fn check_clients(&mut self) {
+        for (language, client) in self.clients.iter_mut() {
+            let output = client.get_output();
+            let json = process_messages(output).await.expect("Error processing messages");
+
+            //todo: process json
+
+
+
+
         }
     }
 
@@ -196,7 +203,7 @@ impl LspController {
     }
 
     fn create_client<R>(&mut self, lang: R) -> io::Result<()> where R: AsRef<str> {
-        let client = match lang.as_ref() {
+        let client: Box<dyn LspClient + Send> = match lang.as_ref() {
             "rust" => {
                 let rust_analyzer = Command::new("rust-analyzer")
                     .stdin(Stdio::piped())
@@ -207,7 +214,7 @@ impl LspController {
 
                 lsp_client.initialize()?;
 
-                Box::new(lsp_client) as Box<dyn LspClient>
+                Box::new(lsp_client)
             },
             "c" | "cpp" => {
                 let clangd = Command::new("clangd")
@@ -219,7 +226,7 @@ impl LspController {
 
                 lsp_client.initialize()?;
 
-                Box::new(lsp_client) as Box<dyn LspClient>
+                Box::new(lsp_client)
             },
             "python" => {
                 let python_lsp = Command::new("python-lsp-server")
@@ -231,7 +238,7 @@ impl LspController {
 
                 lsp_client.initialize()?;
 
-                Box::new(lsp_client) as Box<dyn LspClient>
+                Box::new(lsp_client)
             },
             "swift" => {
                 let apple_swift = Command::new("sourcekit-lsp")
@@ -243,7 +250,7 @@ impl LspController {
 
                 lsp_client.initialize()?;
 
-                Box::new(lsp_client) as Box<dyn LspClient>
+                Box::new(lsp_client)
             },
             "go" => {
                 let gopls = Command::new("gopls")
@@ -255,7 +262,7 @@ impl LspController {
 
                 lsp_client.initialize()?;
 
-                Box::new(lsp_client) as Box<dyn LspClient>
+                Box::new(lsp_client)
             },
             "bash" => {
                 let bash_lsp = Command::new("bash-language-server")
@@ -267,7 +274,7 @@ impl LspController {
 
                 lsp_client.initialize()?;
 
-                Box::new(lsp_client) as Box<dyn LspClient>
+                Box::new(lsp_client)
             },
             _ => {
                 self.response.as_ref().unwrap().send(ControllerMessage::NoClient).unwrap();
@@ -277,7 +284,9 @@ impl LspController {
 
         let (tx, rx) = std::sync::mpsc::channel();
 
-        self.server_channels.insert(lang.as_ref().to_string(), tx);
+        let rx = Arc::new(rx);
+
+        self.server_channels.insert(lang.as_ref().to_string(), (tx, rx.clone()));
 
         self.clients.insert(lang.as_ref().to_string(), client);
 

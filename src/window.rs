@@ -1,8 +1,7 @@
 use std::cell::RefCell;
 use std::cmp;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::path::PathBuf;
-use std::process::{Command, Stdio, ChildStdin, ChildStdout};
 use std::rc::Rc;
 use std::io;
 use std::io::Write;
@@ -15,7 +14,6 @@ use crossterm::{terminal::{self, ClearType}, execute, cursor, queue};
 
 use crate::editor::EditorMessage;
 use crate::lsp::ControllerMessage;
-use crate::lsp_client;
 use crate::pane::treesitter::TreesitterPane;
 use crate::settings::ColorScheme;
 use crate::{apply_colors, settings::Settings};
@@ -226,7 +224,7 @@ impl Window {
             }
             "lsp" => {
                 let language = tree_sitter_commonlisp::language();
-                let mut pane: TreesitterPane<ChildStdin, ChildStdout> = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"commonlisp", None);
+                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"commonlisp", None);
                 pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
@@ -290,14 +288,14 @@ impl Window {
             }
             "js" => {
                 let language = tree_sitter_javascript::language();
-                let mut pane: TreesitterPane<ChildStdin, ChildStdout> = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"javascript", None);
+                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"javascript", None);
                 pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
             "cs" => {
                 let language = tree_sitter_c_sharp::language();
-                let mut pane: TreesitterPane<ChildStdin, ChildStdout> = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"csharp", None);
+                let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"csharp", None);
                 pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
