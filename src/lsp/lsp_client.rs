@@ -1,34 +1,67 @@
-use std::io::{BufReader, BufWriter, self, BufRead, Read, Write};
+use async_trait::async_trait;
+use std::io::{self, Write, BufWriter};
+use tokio::io::{AsyncRead, BufReader, };
+
+#[async_trait]
+pub trait LspClient {
+    async fn process_messages(&mut self) -> io::Result<serde_json::Value>;
+    fn send_message(&mut self, message: serde_json::Value) -> io::Result<()>;
+
+    fn initialize(&mut self) -> io::Result<()>;
+    fn figure_out_capabilities(&mut self) -> io::Result<()>;
 
 
+    fn send_did_open(&mut self, language_id: &str, uri: &str, text: &str) -> io::Result<()>;
 
+    fn did_change_text(&mut self, uri: &str, version: usize, text: &str) -> io::Result<()>;
 
+    fn did_save_text(&mut self, uri: &str, text: &str) -> io::Result<()>;
 
-pub struct LspClient<W: Write,R: Read> {
-    input: BufWriter<W>,
-    output: BufReader<R>,
-    json_data: serde_json::Value,
+    fn will_save_text(&mut self, uri: &str, reason: usize) -> io::Result<()>;
+
+    fn did_close(&mut self, uri: &str) -> io::Result<()>;
+
+    fn send_shutdown(&mut self) -> io::Result<()>;
+
+    fn send_exit(&mut self) -> io::Result<()>;
+    
 }
 
-impl<R: Read, W: Write> LspClient<W, R> {
+pub struct Client<W: AsyncWrite,R: AsyncRead> {
+    input: BufWriter<W>,
+    output: BufReader<R>,
+}
+
+impl<R: AsyncRead, W: AsyncWrite> Client<W, R> {
     pub fn new(input: W, output: R) -> Self {
         let input = BufWriter::new(input);
         let output = BufReader::new(output);
 
-        LspClient {
+        Client {
             input,
             output,
-            json_data: serde_json::Value::Null,
         }
 
     }
+}
 
-    pub fn process_messages(&mut self) -> io::Result<()> {
+
+impl<R: AsyncRead, W: AsyncWrite> Drop for Client<W, R> {
+    fn drop(&mut self) {
+        self.send_shutdown().expect("Failed to send shutdown");
+        self.send_exit().expect("Failed to send exit");
+    }
+}
+
+#[async_trait]
+impl<R: AsyncRead, W: AsyncWrite> LspClient for Client<W, R> {
+
+    async fn process_messages(&mut self) -> io::Result<serde_json::Value> {
 
         let mut header = String::new();
         let mut content_length = 0;
         let mut content_type = String::new();
-        while let Ok(bytes_read) = self.output.read_line(&mut header) {
+        while let Ok(bytes_read) = self.output.read_line(&mut header).await {
             if bytes_read == 0 {
                 break;
             }
@@ -56,16 +89,14 @@ impl<R: Read, W: Write> LspClient<W, R> {
         };
 
         
-        let json_data: serde_json::Value = serde_json::from_str(&body).expect("Failed to parse json");
-
-        self.json_data = json_data;
-
-        eprintln!("Received message: {:#?}", self.json_data);
-        
-        Ok(())
+        serde_json::from_str(&body).and_then(|json_data| {
+            Ok(json_data)
+        }).map_err(|err| {
+            io::Error::new(io::ErrorKind::Other, err)
+        })
     }
 
-    pub fn send_message(&mut self, message: serde_json::Value) -> io::Result<()> {
+    fn send_message(&mut self, message: serde_json::Value) -> io::Result<()> {
         let message = serde_json::to_string(&message).expect("Failed to serialize json");
         let message = format!("Content-Length: {}\r\n\r\n{}", message.len(), message);
         self.input.write_all(message.as_bytes())?;
@@ -73,7 +104,7 @@ impl<R: Read, W: Write> LspClient<W, R> {
         Ok(())
     }
 
-    pub fn initialize(&mut self) -> io::Result<()> {
+    fn initialize(&mut self) -> io::Result<()> {
         let message = serde_json::json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -89,12 +120,12 @@ impl<R: Read, W: Write> LspClient<W, R> {
         Ok(())
     }
 
-    pub fn figure_out_capabilities(&mut self) -> io::Result<()> {
+    fn figure_out_capabilities(&mut self) -> io::Result<()> {
         self.process_messages()
     }
 
 
-    pub fn send_did_open(&mut self, language_id: &str, uri: &str, text: &str) -> io::Result<()> {
+    fn send_did_open(&mut self, language_id: &str, uri: &str, text: &str) -> io::Result<()> {
         let message = serde_json::json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -111,7 +142,7 @@ impl<R: Read, W: Write> LspClient<W, R> {
         Ok(())
     }
 
-    pub fn did_change_text(&mut self, uri: &str, version: usize, text: &str) -> io::Result<()> {
+    fn did_change_text(&mut self, uri: &str, version: usize, text: &str) -> io::Result<()> {
         let message = serde_json::json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didChange",
@@ -131,7 +162,7 @@ impl<R: Read, W: Write> LspClient<W, R> {
         Ok(())
     }
 
-    pub fn did_save_text(&mut self, uri: &str, text: &str) -> io::Result<()> {
+    fn did_save_text(&mut self, uri: &str, text: &str) -> io::Result<()> {
         let message = serde_json::json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didSave",
@@ -146,7 +177,7 @@ impl<R: Read, W: Write> LspClient<W, R> {
         Ok(())
     }
 
-    pub fn will_save_text(&mut self, uri: &str, reason: usize) -> io::Result<()> {
+    fn will_save_text(&mut self, uri: &str, reason: usize) -> io::Result<()> {
         let message = serde_json::json!({
             "jsonrpc": "2.0",
             "method": "textDocument/willSave",
@@ -161,7 +192,7 @@ impl<R: Read, W: Write> LspClient<W, R> {
         Ok(())
     }
 
-    pub fn did_close(&mut self, uri: &str) -> io::Result<()> {
+    fn did_close(&mut self, uri: &str) -> io::Result<()> {
         let message = serde_json::json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didClose",
@@ -175,7 +206,7 @@ impl<R: Read, W: Write> LspClient<W, R> {
         Ok(())
     }
 
-    pub fn send_shutdown(&mut self) -> io::Result<()> {
+    fn send_shutdown(&mut self) -> io::Result<()> {
         let message = serde_json::json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -185,7 +216,7 @@ impl<R: Read, W: Write> LspClient<W, R> {
         Ok(())
     }
 
-    pub fn send_exit(&mut self) -> io::Result<()> {
+    fn send_exit(&mut self) -> io::Result<()> {
         let message = serde_json::json!({
             "jsonrpc": "2.0",
             "id": 2,
@@ -196,9 +227,3 @@ impl<R: Read, W: Write> LspClient<W, R> {
     }
 }
 
-impl<R: Read, W: Write> Drop for LspClient<W, R> {
-    fn drop(&mut self) {
-        self.send_shutdown().expect("Failed to send shutdown");
-        self.send_exit().expect("Failed to send exit");
-    }
-}

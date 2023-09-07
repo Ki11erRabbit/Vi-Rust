@@ -11,7 +11,7 @@ pub mod pane;
 pub mod buffer;
 pub mod treesitter;
 pub mod editor;
-pub mod lsp_client;
+pub mod lsp;
 
 const EDITOR_NAME: &str = "vi";
 
