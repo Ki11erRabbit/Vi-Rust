@@ -1,4 +1,5 @@
-use std::{collections::HashMap, sync::mpsc::{Sender, Receiver}, io, process::{Command, Stdio}, task::Poll};
+use std::{collections::HashMap, sync::mpsc::{Sender, Receiver}, io, process::Stdio, task::Poll, fmt::Display};
+use tokio::process::Command;
 
 use self::lsp_client::LspClient;
 
@@ -51,7 +52,7 @@ pub enum ControllerMessage {
     ClientCreated(Receiver<ControllerMessage>),
     /// Notification to tell the caller that there is no client for the language
     NoClient,
-    
+    Resend
     
 
 }
@@ -60,6 +61,8 @@ pub enum ControllerMessage {
 pub struct LspController {
     clients: HashMap<String, Box<dyn LspClient>>,
     channels: (Sender<ControllerMessage>, Receiver<ControllerMessage>),
+    listen: Option<Receiver<ControllerMessage>>,
+    response: Option<Sender<ControllerMessage>>,
     server_channels: HashMap<String, Sender<ControllerMessage>>,
 }
 
@@ -71,8 +74,18 @@ impl LspController {
         LspController {
             clients: HashMap::new(),
             channels: std::sync::mpsc::channel(),
+            listen: None,
+            response: None,
             server_channels: HashMap::new(),
         }
+    }
+
+    pub fn set_listen(&mut self, listen: Receiver<ControllerMessage>) {
+        self.listen = Some(listen);
+    }
+
+    pub fn set_response(&mut self, response: Sender<ControllerMessage>) {
+        self.response = Some(response);
     }
 
 
@@ -82,7 +95,7 @@ impl LspController {
             self.check_messages()?;
 
             for (_, client) in self.clients.iter_mut() {
-                let json = client.process_messages()?;
+                let json = client.process_messages();
                 match json.poll() {
                     Ok(Poll::Ready(json)) => {
                         json.wake();
@@ -101,7 +114,7 @@ impl LspController {
 
     fn check_messages(&mut self) -> io::Result<()> {
        
-        match self.channels.1.try_recv() {
+        match self.listen.as_ref().unwrap().try_recv() {
             Ok(ControllerMessage::CreateClient(lang)) => {
                 self.create_client(lang)
             },
@@ -124,18 +137,18 @@ impl LspController {
 
     }
 
-    fn check_notification<R>(&mut self, lang: R, notif: LspNotification) -> io::Result<()> where R: AsRef<str> {
-        match self.clients.get_mut(&*lang) {
+    fn check_notification<R>(&mut self, lang: R, notif: LspNotification) -> io::Result<()> where R: AsRef<str> + Display {
+        match self.clients.get_mut(&lang.to_string()) {
             Some(client) => {
                 match notif {
                     LspNotification::ChangeText(uri, version, text) => {
                         client.did_change_text(uri.as_ref(), version, text.as_ref())?;
                     },
                     LspNotification::Open(uri, text) => {
-                        client.did_open_text(uri, text)?;
+                        client.send_did_open(&lang.to_string(),uri.as_ref(), text.as_ref())?;
                     },
                     LspNotification::Close(uri) => {
-                        client.send_did_close_text(uri)?;
+                        client.did_close(uri.as_ref())?;
                     },
                     LspNotification::Save(uri, text) => {
                         client.did_save_text(uri.as_ref(), text.as_ref())?;
@@ -183,7 +196,7 @@ impl LspController {
     }
 
     fn create_client<R>(&mut self, lang: R) -> io::Result<()> where R: AsRef<str> {
-        let client = match lang {
+        let client = match lang.as_ref() {
             "rust" => {
                 let rust_analyzer = Command::new("rust-analyzer")
                     .stdin(Stdio::piped())
@@ -202,7 +215,7 @@ impl LspController {
                     .stdout(Stdio::piped())
                     .spawn()?;
 
-                let mut lsp_client = lsp_client::LspClient::new(clangd.stdin.unwrap(), clangd.stdout.unwrap());
+                let mut lsp_client = lsp_client::Client::new(clangd.stdin.unwrap(), clangd.stdout.unwrap());
 
                 lsp_client.initialize()?;
 
@@ -214,7 +227,7 @@ impl LspController {
                     .stdout(Stdio::piped())
                     .spawn()?;
 
-                let mut lsp_client = lsp_client::LspClient::new(python_lsp.stdin.unwrap(), python_lsp.stdout.unwrap());
+                let mut lsp_client = lsp_client::Client::new(python_lsp.stdin.unwrap(), python_lsp.stdout.unwrap());
 
                 lsp_client.initialize()?;
 
@@ -226,7 +239,7 @@ impl LspController {
                     .stdout(Stdio::piped())
                     .spawn()?;
 
-                let mut lsp_client = lsp_client::LspClient::new(apple_swift.stdin.unwrap(), apple_swift.stdout.unwrap());
+                let mut lsp_client = lsp_client::Client::new(apple_swift.stdin.unwrap(), apple_swift.stdout.unwrap());
 
                 lsp_client.initialize()?;
 
@@ -238,7 +251,7 @@ impl LspController {
                     .stdout(Stdio::piped())
                     .spawn()?;
 
-                let mut lsp_client = lsp_client::LspClient::new(gopls.stdin.unwrap(), gopls.stdout.unwrap());
+                let mut lsp_client = lsp_client::Client::new(gopls.stdin.unwrap(), gopls.stdout.unwrap());
 
                 lsp_client.initialize()?;
 
@@ -250,14 +263,15 @@ impl LspController {
                     .stdout(Stdio::piped())
                     .spawn()?;
 
-                let mut lsp_client = lsp_client::LspClient::new(bash_lsp.stdin.unwrap(), bash_lsp.stdout.unwrap());
+                let mut lsp_client = lsp_client::Client::new(bash_lsp.stdin.unwrap(), bash_lsp.stdout.unwrap());
 
                 lsp_client.initialize()?;
 
                 Box::new(lsp_client) as Box<dyn LspClient>
             },
             _ => {
-                self.channels.0.send(ControllerMessage::NoClient).unwrap();
+                self.response.as_ref().unwrap().send(ControllerMessage::NoClient).unwrap();
+                return Ok(());
             }
         };
 
@@ -267,7 +281,7 @@ impl LspController {
 
         self.clients.insert(lang.as_ref().to_string(), client);
 
-        self.channels.0.send(ControllerMessage::ClientCreated(rx)).unwrap();
+        self.response.as_ref().unwrap().send(ControllerMessage::ClientCreated(rx)).unwrap();
 
         Ok(())
     }
