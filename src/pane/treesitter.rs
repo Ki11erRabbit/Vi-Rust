@@ -15,6 +15,7 @@ pub struct TreesitterPane<W: Write, R: io::Read> {
     tree: Tree,
     lang: String,
     lsp_client: Option<LspClient<W, R>>,
+    file_version: usize,
 
     cursor: Rc<RefCell<Cursor>>,
     file_name: Option<PathBuf>,
@@ -66,6 +67,7 @@ impl<W: Write, R: Read> TreesitterPane<W, R> {
             parser,
             tree,
             lsp_client: lsp,
+            file_version: 0,
             lang: lang_string.to_string(),
             cursor: Rc::new(RefCell::new(Cursor::new((0,0)))),
             file_name: None,
@@ -145,10 +147,11 @@ impl<W: Write, R: Read> TreesitterPane<W, R> {
     }
 
     fn generate_uri(& self) -> String {
+        let working_dir = std::env::current_dir().unwrap();
         match &self.file_name {
-            None => format!("untitled://{}", EDITOR_NAME),
+            None => format!("untitled://{}", working_dir.display()),
             Some(file_name) => {
-                let uri = format!("file://{}/{}", EDITOR_NAME, file_name.display());
+                let uri = format!("file://{}/{}", working_dir.display(), file_name.display());
 
                 uri
             },
@@ -821,6 +824,8 @@ impl<W: Write, R: Read> Pane for TreesitterPane<W, R> {
             },
             "w" => {
 
+                self.file_version += 1;
+
                 let uri = self.generate_uri();
                 match self.lsp_client {
                     None => {},
@@ -854,6 +859,8 @@ impl<W: Write, R: Read> Pane for TreesitterPane<W, R> {
                 }
             },
             "w!" => {
+
+                self.file_version += 1;
 
                 let uri = self.generate_uri();
                 match self.lsp_client {
@@ -889,6 +896,9 @@ impl<W: Write, R: Read> Pane for TreesitterPane<W, R> {
 
             },
             "wq" => {
+
+
+                self.file_version += 1;
 
                 let uri = self.generate_uri();
                 match self.lsp_client {
@@ -1002,9 +1012,9 @@ impl<W: Write, R: Read> Pane for TreesitterPane<W, R> {
                             }
                             else {
                                 if let Some(new_cursor) = self.jump_table.named_jump(other, *cursor) {
-                                    eprintln!("New Cursor: {:?}", new_cursor);
-                                    eprintln!("Old Cursor: {:?}", *cursor);
-                                    eprintln!("Jumping to named jump");
+                                    //eprintln!("New Cursor: {:?}", new_cursor);
+                                    //eprintln!("Old Cursor: {:?}", *cursor);
+                                    //eprintln!("Jumping to named jump");
                                     *cursor = new_cursor;
                                 }
 
@@ -1017,7 +1027,7 @@ impl<W: Write, R: Read> Pane for TreesitterPane<W, R> {
 
             },
             "set_jump" => {
-                eprintln!("Setting jump");
+                //eprintln!("Setting jump");
                 let cursor = self.cursor.borrow();
                 if let Some(jump) = command_args.next() {
                     self.jump_table.add_named(jump, *cursor);

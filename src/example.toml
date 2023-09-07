@@ -4,7 +4,7 @@ line_number = true
 relative_line_number = false
 tab_size = 4
 use_spaces = true
-key_timeout = 100
+ky_timeout = 100
     
 [color.pane]
 foreground = "grey"
@@ -19,7 +19,7 @@ underline = "magenta"
 attribute = []
 
 [color]
-mode = [{ mode = "Normal", color = { foreground = "black", background = "cyan", attribute = ["bold"] } }, { mode = "Insert", color = { foreground = "black", background = "green", attribute = ["bold"] } }, { mode = "Command", color = { foreground = "black", background = "magenta", attirbute ["bold"] } }]
+mode = [{ mode = "Normal", color = { foreground = "black", background = "cyan", attribute = ["bold"] } }, { mode = "Insert", color = { foreground = "black", background = "green", attribute = ["bold"] } }, { mode = "Command", color = { foreground = "black", background = "magenta", attribute = ["bold"] } }]
 
         
 [normal]
