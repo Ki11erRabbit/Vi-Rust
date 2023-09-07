@@ -97,7 +97,6 @@ impl<R: Read, W: Write> LspClient<W, R> {
     pub fn send_did_open(&mut self, language_id: &str, uri: &str, text: &str) -> io::Result<()> {
         let message = serde_json::json!({
             "jsonrpc": "2.0",
-            "id": 2,
             "method": "textDocument/didOpen",
             "params": {
                 "textDocument": {
