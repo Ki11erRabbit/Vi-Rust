@@ -1,12 +1,15 @@
-use std::{collections::HashMap, sync::{mpsc::{Sender, Receiver}, Arc, Mutex}, io, process::Stdio, fmt::Display, task::Poll };
-use futures::{executor::{block_on, ThreadPool, LocalPool}, task::{Spawn, FutureObj, LocalSpawn}, poll, try_join, pending};
+use std::{collections::HashMap, sync::{mpsc::{Sender, Receiver}, Arc}, io, process::Stdio, fmt::Display, };
+use futures::executor::block_on;
 use futures::FutureExt;
 use serde_json::Value;
 use tokio::process::Command;
 
-use self::lsp_client::Client;
+use crate::lsp::lsp_utils::{process_json, LSPMessage};
+
+use self::{lsp_client::Client, lsp_utils::Diagnostics};
 
 pub mod lsp_client;
+pub mod lsp_utils;
 
 
 unsafe impl Send for LspRequest {}
@@ -21,6 +24,7 @@ pub enum LspRequest {
 unsafe impl Send for LspResponse {}
 
 pub enum LspResponse {
+    PublishDiagnostics(Diagnostics),
 
 }
 
@@ -51,8 +55,8 @@ unsafe impl Send for ControllerMessage {}
 pub enum ControllerMessage {
     /// String is the language id
     Request(Box<str>, LspRequest),
-    /// Box<str> is the language id
-    Response(Box<str>, LspResponse),
+    /// Response to a request
+    Response(LspResponse),
     /// Box<str> is the language id
     Notification(Box<str>, LspNotification),
     /// String is the language id
@@ -154,56 +158,20 @@ impl LspController {
 
             eprintln!("Json for: {} \n{:#?}", language, json);
 
+            match process_json(json)? {
+                LSPMessage::Diagnostics(diagnostics) => {
+                    let sender = self.server_channels.get(language).unwrap().0.clone();
 
-            /*let future = client.process_messages();
-            let val = try_join!(future);
-            let _json = val.expect("Error processing messages");*/
+                    let message = ControllerMessage::Response(
+                        LspResponse::PublishDiagnostics(diagnostics)
+                    );
 
-            
-            //let json = future.await.expect("Error processing messages");
-
-            /*loop {
-                match client.try_lock() {
-                    Ok(mut client) => {
-                        let future = client.process_messages();
-                        let json = future.await.expect("Error processing messages");
-                        break;
-                    },
-                    Err(_) => {
-                        continue;
-                    }
+                    sender.send(message).expect("Failed to send diagnostics");
+                },
+                LSPMessage::None => {
+                    continue;
                 }
-            }*/
-            
-            /*let client = client.clone();
-
-            let tokio_handle = tokio::runtime::Handle::current();
-            tokio_handle.spawn_blocking(move || {
-                let json;
-                loop {
-                    match client.try_lock() {
-                        Ok(mut client) => {
-                            json = block_on(client.process_messages());
-                            break;
-                        },
-                        Err(_) => {
-                            continue;
-                        }
-                    }
-                }
-            });*/
-            //let json = client.process_messages().await.expect("Error processing messages");
-
-
-                
-            
-            //let json = process_messages(output).await.expect("Error processing messages");
-
-            //todo: process json
-
-
-
-
+            }
         }
 
         Ok(())
