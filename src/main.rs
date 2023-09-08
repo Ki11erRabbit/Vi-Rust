@@ -1,7 +1,7 @@
 use std::{io, rc::Rc, time::Duration, thread};
 
 
-use crate::{editor::Editor, lsp::LspController};
+use crate::{editor::Editor, lsp::{LspController, ControllerMessage}};
 
 pub mod window;
 pub mod mode;
@@ -33,7 +33,7 @@ fn main() -> io::Result<()> {
     let lsp_listener = Rc::new(lsp_controller_reciever);
 
 
-    let mut editor = Editor::new(lsp_sender, lsp_listener);
+    let mut editor = Editor::new(lsp_sender.clone(), lsp_listener);
 
 
     let thread_handle = std::thread::spawn(move || {
@@ -41,7 +41,8 @@ fn main() -> io::Result<()> {
         let tokio_runtime = tokio::runtime::Runtime::new().unwrap();
         let tokio_handle = tokio_runtime.spawn_blocking(move || {
             eprintln!("Starting Tokio thread");
-            controller.run().unwrap();
+            let _ = controller.run();
+            drop(controller);
         });
         eprintln!("Starting Tokio runtime");
         tokio_runtime.block_on(tokio_handle).unwrap();
@@ -56,6 +57,10 @@ fn main() -> io::Result<()> {
 
 
     while editor.run()? {}
+
+    lsp_sender.send(ControllerMessage::Exit).unwrap();
+    
+    thread_handle.join().unwrap();
 
     Ok(())
 }

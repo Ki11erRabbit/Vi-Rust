@@ -82,7 +82,6 @@ pub struct Client {
 
 impl Client {
     pub fn new(mut child: Child) -> Self {
-        eprintln!("Creating client");
         let input = child.stdin.take().expect("Failed to get stdin");
         let output = child.stdout.take().expect("Failed to get stdout");
         let input = BufWriter::new(input);
@@ -100,11 +99,10 @@ impl Client {
 
 impl Drop for Client {
     fn drop(&mut self) {
-        eprintln!("Dropping client");
         self.send_shutdown().expect("Failed to send shutdown");
         self.send_exit().expect("Failed to send exit");
         let future = async {
-            self.child.kill().await.expect("Failed to kill child");
+            self.child.wait().await.expect("Failed to wait for child");
         };
         block_on(future);
     }
@@ -113,44 +111,48 @@ impl Drop for Client {
 impl Client {
 
     pub async fn process_messages(&mut self) -> io::Result<serde_json::Value> {
-        let mut header = String::new();
-        let mut content_length = 0;
-        let mut content_type = String::new();
-        while let Ok(bytes_read) = self.output.read_line(&mut header).await {
-            if bytes_read == 0 {
-                break;
-            }
-            if header.starts_with("Content-Length: ") {
-                content_length = header[16..].trim().parse::<usize>().expect("Failed to parse content length");
-                header.clear();
-            }
-            if header.starts_with("Content-Type: ") {
-                content_type = header[14..].trim().to_string();
-                header.clear();
-            }
-            if header == "\r\n" {
-                break;
-            }
-        }
 
-        let mut body = vec![0; content_length];
-        self.output.read_exact(&mut body).await?;
+        let value = async {
+            let mut header = String::new();
+            let mut content_length = 0;
+            let mut content_type = String::new();
+            while let Ok(bytes_read) = self.output.read_line(&mut header).await {
+                if bytes_read == 0 {
+                    break;
+                }
+                if header.starts_with("Content-Length: ") {
+                    content_length = header[16..].trim().parse::<usize>().expect("Failed to parse content length");
+                    header.clear();
+                }
+                if header.starts_with("Content-Type: ") {
+                    content_type = header[14..].trim().to_string();
+                    header.clear();
+                }
+                if header == "\r\n" {
+                    break;
+                }
+            }
+
+            let mut body = vec![0; content_length];
+            self.output.read_exact(&mut body).await?;
 
 
-        let body = match content_type {
-            _ => {
-                String::from_utf8(body).expect("Failed to parse body as utf8")
-            },
+            let body = match content_type {
+                _ => {
+                    String::from_utf8(body).expect("Failed to parse body as utf8")
+                },
+            };
+
+            //eprintln!("Body: {}", body);
+
+
+            serde_json::from_str(&body).and_then(|json_data| {
+                Ok(json_data)
+            }).map_err(|err| {
+                io::Error::new(io::ErrorKind::Other, err)
+            })
         };
-
-        eprintln!("Body: {}", body);
-
-
-        serde_json::from_str(&body).and_then(|json_data| {
-            Ok(json_data)
-        }).map_err(|err| {
-            io::Error::new(io::ErrorKind::Other, err)
-        })
+        value.await
     }
 
     pub async fn figure_out_capabilities(&mut self) -> io::Result<()> {
@@ -280,7 +282,6 @@ impl Client {
     pub fn send_exit(&mut self) -> io::Result<()> {
         let message = serde_json::json!({
             "jsonrpc": "2.0",
-            "id": 2,
             "method": "exit",
         });
         self.send_message(message)?;

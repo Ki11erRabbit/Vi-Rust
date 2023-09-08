@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::{mpsc::{Sender, Receiver}, Arc, Mutex}, io, process::Stdio, fmt::Display, task::Poll };
 use futures::{executor::{block_on, ThreadPool, LocalPool}, task::{Spawn, FutureObj, LocalSpawn}, poll, try_join, pending};
-use futures::Future;
+use futures::FutureExt;
 use serde_json::Value;
 use tokio::process::Command;
 
@@ -62,7 +62,9 @@ pub enum ControllerMessage {
     ClientCreated(Arc<Receiver<ControllerMessage>>),
     /// Notification to tell the caller that there is no client for the language
     NoClient,
-    Resend
+    Resend,
+    Exit,
+
     
 
 }
@@ -85,8 +87,7 @@ pub struct LspController {
     listen: Option<Receiver<ControllerMessage>>,
     response: Option<Sender<ControllerMessage>>,
     server_channels: HashMap<String, (Sender<ControllerMessage>, Arc<Receiver<ControllerMessage>>)>,
-    runtime: tokio::runtime::Runtime,
-    tasks: HashMap<String, tokio::task::JoinHandle<io::Result<Value>>>,
+    exit: bool,
 }
 
 
@@ -100,8 +101,7 @@ impl LspController {
             listen: None,
             response: None,
             server_channels: HashMap::new(),
-            runtime: tokio::runtime::Runtime::new().unwrap(),
-            tasks: HashMap::new(),
+            exit: false,
             
         }
     }
@@ -118,7 +118,7 @@ impl LspController {
 
     pub fn run(&mut self) -> io::Result<()> {
         eprintln!("Running lsp controller");
-        loop {
+        while !self.exit {
             self.check_messages()?;
 
             
@@ -127,12 +127,13 @@ impl LspController {
                         
 
         }
+        Ok(())
     }
 
     async fn check_client(client: &mut Client) -> io::Result<Value> {
         let future = client.process_messages();
         let val = future.await;
-        let json = val.expect("Error processing messages");
+        let json = val?;
         Ok(json)
     }
 
@@ -140,7 +141,18 @@ impl LspController {
 
         for (language, client) in self.clients.iter_mut() {
 
-            Self::check_client(client).await?;
+            let json;
+            let mut future = Self::check_client(client).boxed();
+
+            if let Some(value) = (&mut future).now_or_never() {
+                json = value?;
+                eprintln!("Got json");
+            } else {
+                continue;
+                //json = future.await?;
+            }
+
+            eprintln!("Json for: {} \n{:#?}", language, json);
 
 
             /*let future = client.process_messages();
@@ -209,6 +221,10 @@ impl LspController {
             },
             Ok(ControllerMessage::Notification(lang, notif)) => {
                 self.check_notification(lang, notif)
+            },
+            Ok(ControllerMessage::Exit) => {
+                self.exit = true;
+                return Ok(());
             },
             Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                 return Err(io::Error::new(io::ErrorKind::Other, "Channel disconnected"));
