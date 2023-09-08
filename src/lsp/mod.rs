@@ -1,9 +1,9 @@
-use std::{collections::HashMap, sync::{mpsc::{Sender, Receiver}, Arc}, io, process::Stdio, fmt::Display, task::Poll};
-use futures::{executor::block_on, poll};
+use std::{collections::HashMap, sync::{mpsc::{Sender, Receiver}, Arc, Mutex}, io, process::Stdio, fmt::Display };
+use futures::executor::block_on;
 use serde_json::Value;
 use tokio::process::Command;
 
-use self::lsp_client::{process_messages, Client};
+use self::lsp_client::Client;
 
 pub mod lsp_client;
 
@@ -69,7 +69,7 @@ pub enum ControllerMessage {
 unsafe impl Send for LspController {}
 
 pub struct LspController {
-    clients: HashMap<String, Client>,
+    clients: HashMap<String, Arc<Mutex<Client>>>,
     //channels: (Sender<ControllerMessage>, Receiver<ControllerMessage>),
     listen: Option<Receiver<ControllerMessage>>,
     response: Option<Sender<ControllerMessage>>,
@@ -111,7 +111,7 @@ impl LspController {
             self.check_messages()?;
 
 
-            //self.check_clients().await;
+            self.check_clients();
 
         }
     }
@@ -119,7 +119,24 @@ impl LspController {
     async fn check_clients(&mut self) {
         for (language, client) in self.clients.iter_mut() {
 
-            let json = client.process_messages().await.expect("Error processing messages");
+            let client = client.clone();
+
+            let tokio_handle = tokio::runtime::Handle::current();
+            tokio_handle.spawn_blocking(move || {
+                let json;
+                loop {
+                    match client.try_lock() {
+                        Ok(mut client) => {
+                            json = block_on(client.process_messages());
+                            break;
+                        },
+                        Err(_) => {
+                            continue;
+                        }
+                    }
+                }
+            });
+            //let json = client.process_messages().await.expect("Error processing messages");
 
 
                 
@@ -165,16 +182,60 @@ impl LspController {
             Some(client) => {
                 match notif {
                     LspNotification::ChangeText(uri, version, text) => {
-                        client.did_change_text(uri.as_ref(), version, text.as_ref())?;
+                        loop {
+                            match client.try_lock() {
+                                Ok(mut client) => {
+                                    client.did_change_text(uri.as_ref(), version, text.as_ref())?;
+                                    break;
+                                },
+                                Err(_) => {
+                                    continue;
+                                }
+                            }
+                        }
+                        //client.did_change_text(uri.as_ref(), version, text.as_ref())?;
                     },
                     LspNotification::Open(uri, text) => {
-                        client.send_did_open(&lang.to_string(),uri.as_ref(), text.as_ref())?;
+                        loop {
+                            match client.try_lock() {
+                                Ok(mut client) => {
+                                    client.send_did_open(&lang.to_string(),uri.as_ref(), text.as_ref())?;
+                                    break;
+                                },
+                                Err(_) => {
+                                    continue;
+                                }
+                            }
+                        }
+                        //client.send_did_open(&lang.to_string(),uri.as_ref(), text.as_ref())?;
                     },
                     LspNotification::Close(uri) => {
-                        client.did_close(uri.as_ref())?;
+                        loop {
+                            match client.try_lock() {
+                                Ok(mut client) => {
+                                    client.did_close(uri.as_ref())?;
+                                    break;
+                                },
+                                Err(_) => {
+                                    continue;
+                                }
+                            }
+                        }
+                        //client.did_close(uri.as_ref())?;
                     },
                     LspNotification::Save(uri, text) => {
-                        client.did_save_text(uri.as_ref(), text.as_ref())?;
+                        loop {
+                            match client.try_lock() {
+                                Ok(mut client) => {
+                                    client.did_save_text(uri.as_ref(), text.as_ref())?;
+                                    break;
+                                },
+                                Err(_) => {
+                                    continue;
+                                }
+                            }
+                        }
+                        //client.did_save_text(uri.as_ref(), text.as_ref())?;
                     },
                     LspNotification::WillSave(uri, reason) => {
                         let reason = match reason.as_ref() {
@@ -185,8 +246,19 @@ impl LspController {
                                 return Err(io::Error::new(io::ErrorKind::Other, "Invalid reason"));
                             }
                         };
-                        
-                        client.will_save_text(uri.as_ref(), reason)?;
+
+                        loop {
+                            match client.try_lock() {
+                                Ok(mut client) => {
+                                    client.will_save_text(uri.as_ref(), reason)?;
+                                    break;
+                                },
+                                Err(_) => {
+                                    continue;
+                                }
+                            }
+                        }
+                        //client.will_save_text(uri.as_ref(), reason)?;
                     },
                 }
             },
@@ -203,10 +275,32 @@ impl LspController {
             Some(client) => {
                 match req {
                     LspRequest::Shutdown => {
-                        client.send_shutdown()?;
+                        loop {
+                            match client.try_lock() {
+                                Ok(mut client) => {
+                                    client.send_shutdown()?;
+                                    break;
+                                },
+                                Err(_) => {
+                                    continue;
+                                }
+                            }
+                        }
+                        //client.send_shutdown()?;
                     },
                     LspRequest::Exit => {
-                        client.send_exit()?;
+                        loop {
+                            match client.try_lock() {
+                                Ok(mut client) => {
+                                    client.send_exit()?;
+                                    break;
+                                },
+                                Err(_) => {
+                                    continue;
+                                }
+                            }
+                        }
+                        //client.send_exit()?;
                     },
                 }
             },
@@ -307,6 +401,8 @@ impl LspController {
         let rx = Arc::new(rx);
 
         self.server_channels.insert(lang.as_ref().to_string(), (tx, rx.clone()));
+
+        let client = Arc::new(Mutex::new(client));
 
         self.clients.insert(lang.as_ref().to_string(), client);
 
