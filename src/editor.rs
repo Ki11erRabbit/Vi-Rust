@@ -45,7 +45,10 @@ impl Editor {
 
 
         thread::spawn(move || {
-            controller.run()
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            runtime.spawn_blocking(move || {
+                controller.run()
+            });
         });
 
         //eprintln!("Editor created");

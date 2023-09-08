@@ -1,8 +1,9 @@
-use std::{collections::HashMap, sync::{mpsc::{Sender, Receiver}, Arc}, io, process::Stdio, fmt::Display};
-use futures::executor::block_on;
+use std::{collections::HashMap, sync::{mpsc::{Sender, Receiver}, Arc}, io, process::Stdio, fmt::Display, task::Poll};
+use futures::{executor::block_on, poll};
+use serde_json::Value;
 use tokio::process::Command;
 
-use self::lsp_client::{LspClient, process_messages};
+use self::lsp_client::{LspClient, process_messages, Client};
 
 pub mod lsp_client;
 
@@ -68,12 +69,13 @@ pub enum ControllerMessage {
 unsafe impl Send for LspController {}
 
 pub struct LspController {
-    clients: HashMap<String, Box<dyn LspClient + Send>>,
-    channels: (Sender<ControllerMessage>, Receiver<ControllerMessage>),
+    clients: HashMap<String, Client>,
+    //channels: (Sender<ControllerMessage>, Receiver<ControllerMessage>),
     listen: Option<Receiver<ControllerMessage>>,
     response: Option<Sender<ControllerMessage>>,
     server_channels: HashMap<String, (Sender<ControllerMessage>, Arc<Receiver<ControllerMessage>>)>,
     runtime: tokio::runtime::Runtime,
+    tasks: HashMap<String, tokio::task::JoinHandle<io::Result<Value>>>,
 }
 
 
@@ -83,11 +85,13 @@ impl LspController {
     pub fn new() -> Self {
         LspController {
             clients: HashMap::new(),
-            channels: std::sync::mpsc::channel(),
+            //channels: std::sync::mpsc::channel(),
             listen: None,
             response: None,
             server_channels: HashMap::new(),
             runtime: tokio::runtime::Runtime::new().unwrap(),
+            tasks: HashMap::new(),
+            
         }
     }
 
@@ -105,22 +109,34 @@ impl LspController {
         eprintln!("Running lsp controller");
         loop {
             self.check_messages()?;
-            
-            block_on(self.check_clients());
 
-            //eprintln!("Checked clients");
+
+            if self.tasks.len() < self.server_channels.len() {
+                self.check_clients();
+            }
+
+            eprintln!("Checked clients");
         }
     }
 
     fn check_clients(&mut self) {
         for (language, client) in self.clients.iter_mut() {
+
+            if self.tasks.contains_key(language) {
+                continue;
+            }
+                
             let output = client.get_output().clone();
 
-            let handle = self.runtime.spawn_blocking(|| {
-                let json = process_messages(output).expect("Error processing messages");
+            let task = self.runtime.spawn_blocking(move || {
+                let json = block_on(process_messages(output));
                 json
             });
-            let json = handle.await.expect("Error getting json");
+
+            self.tasks.insert(language.to_string(), task);
+
+
+                
             
             //let json = process_messages(output).await.expect("Error processing messages");
 

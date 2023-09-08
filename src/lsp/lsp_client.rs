@@ -1,7 +1,7 @@
 
 use std::sync::Arc;
 
-use futures::lock::Mutex;
+use futures::{lock::Mutex, executor::block_on};
 use tokio::{io::{BufReader, AsyncBufReadExt, AsyncWriteExt, AsyncReadExt, BufWriter, self}, process::{ChildStdout, ChildStdin}};
 
 
@@ -46,7 +46,7 @@ pub async fn process_messages(output: Arc<Mutex<BufReader<ChildStdout>>> ) -> io
     })
 }
 
-pub trait LspClient {
+/*pub trait LspClient {
     //fn process_messages(&mut self) -> io::Result<serde_json::Value>;
 
     fn get_output(&self) -> Arc<Mutex<BufReader<ChildStdout>>> ;
@@ -70,21 +70,19 @@ pub trait LspClient {
 
     fn send_exit(&mut self) -> io::Result<()>;
     
-}
+}*/
 
 unsafe impl Send for Client {}
 
 pub struct Client {
     input: BufWriter<ChildStdin>,
-    output: Arc<Mutex<BufReader<ChildStdout>>>,
+    output: BufReader<ChildStdout>,
 }
 
 impl Client {
     pub fn new(input: ChildStdin, output: ChildStdout) -> Self {
         let input = BufWriter::new(input);
         let output = BufReader::new(output);
-
-        let output = Arc::new(Mutex::new(output));
 
         Client {
             input,
@@ -102,25 +100,64 @@ impl Drop for Client {
     }
 }
 
-impl LspClient for Client {
+impl Client {
 
-    fn get_output(&self) -> Arc<Mutex<BufReader<ChildStdout>>> {
-        self.output.clone()
+    pub async fn process_messages(&mut self) -> io::Result<serde_json::Value> {
+        let mut header = String::new();
+        let mut content_length = 0;
+        let mut content_type = String::new();
+        while let Ok(bytes_read) = self.output.read_line(&mut header).await {
+            if bytes_read == 0 {
+                break;
+            }
+            if header.starts_with("Content-Length: ") {
+                content_length = header[16..].trim().parse::<usize>().expect("Failed to parse content length");
+                header.clear();
+            }
+            if header.starts_with("Content-Type: ") {
+                content_type = header[14..].trim().to_string();
+                header.clear();
+            }
+            if header == "\r\n" {
+                break;
+            }
+        }
+
+        let mut body = vec![0; content_length];
+        self.output.read_exact(&mut body).await?;
+
+
+        let body = match content_type {
+            _ => {
+                String::from_utf8(body).expect("Failed to parse body as utf8")
+            },
+        };
+
+
+        serde_json::from_str(&body).and_then(|json_data| {
+            Ok(json_data)
+        }).map_err(|err| {
+            io::Error::new(io::ErrorKind::Other, err)
+        })
     }
-    
-    /*fn process_messages(&mut self) -> io::Result<serde_json::Value> {
 
-    }*/
-
-    fn send_message(&mut self, message: serde_json::Value) -> io::Result<()> {
-        let message = serde_json::to_string(&message).expect("Failed to serialize json");
-        let message = format!("Content-Length: {}\r\n\r\n{}", message.len(), message);
-        self.input.write_all(message.as_bytes());
-        self.input.flush();
+    pub async fn figure_out_capabilities(&mut self) -> io::Result<()> {
+        self.process_messages().await?;
         Ok(())
     }
 
-    fn initialize(&mut self) -> io::Result<()> {
+
+    pub fn send_message(&mut self, message: serde_json::Value) -> io::Result<()> {
+        let future = async {
+            let message = serde_json::to_string(&message).expect("Failed to serialize json");
+            let message = format!("Content-Length: {}\r\n\r\n{}", message.len(), message);
+            self.input.write_all(message.as_bytes()).await;
+            self.input.flush().await;
+        };
+        block_on(future);
+        Ok(())
+    }
+    pub fn initialize(&mut self) -> io::Result<()> {
         let message = serde_json::json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -136,13 +173,7 @@ impl LspClient for Client {
         Ok(())
     }
 
-    fn figure_out_capabilities(&mut self) -> io::Result<()> {
-        //self.process_messages()
-        unimplemented!()
-    }
-
-
-    fn send_did_open(&mut self, language_id: &str, uri: &str, text: &str) -> io::Result<()> {
+    pub fn send_did_open(&mut self, language_id: &str, uri: &str, text: &str) -> io::Result<()> {
         let message = serde_json::json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -159,7 +190,7 @@ impl LspClient for Client {
         Ok(())
     }
 
-    fn did_change_text(&mut self, uri: &str, version: usize, text: &str) -> io::Result<()> {
+    pub fn did_change_text(&mut self, uri: &str, version: usize, text: &str) -> io::Result<()> {
         let message = serde_json::json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didChange",
@@ -179,7 +210,7 @@ impl LspClient for Client {
         Ok(())
     }
 
-    fn did_save_text(&mut self, uri: &str, text: &str) -> io::Result<()> {
+    pub fn did_save_text(&mut self, uri: &str, text: &str) -> io::Result<()> {
         let message = serde_json::json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didSave",
@@ -194,7 +225,7 @@ impl LspClient for Client {
         Ok(())
     }
 
-    fn will_save_text(&mut self, uri: &str, reason: usize) -> io::Result<()> {
+    pub fn will_save_text(&mut self, uri: &str, reason: usize) -> io::Result<()> {
         let message = serde_json::json!({
             "jsonrpc": "2.0",
             "method": "textDocument/willSave",
@@ -209,7 +240,7 @@ impl LspClient for Client {
         Ok(())
     }
 
-    fn did_close(&mut self, uri: &str) -> io::Result<()> {
+    pub fn did_close(&mut self, uri: &str) -> io::Result<()> {
         let message = serde_json::json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didClose",
@@ -223,7 +254,7 @@ impl LspClient for Client {
         Ok(())
     }
 
-    fn send_shutdown(&mut self) -> io::Result<()> {
+    pub fn send_shutdown(&mut self) -> io::Result<()> {
         let message = serde_json::json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -233,7 +264,7 @@ impl LspClient for Client {
         Ok(())
     }
 
-    fn send_exit(&mut self) -> io::Result<()> {
+    pub fn send_exit(&mut self) -> io::Result<()> {
         let message = serde_json::json!({
             "jsonrpc": "2.0",
             "id": 2,
