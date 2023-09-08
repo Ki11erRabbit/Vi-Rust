@@ -746,6 +746,9 @@ impl Pane for TreesitterPane {
     fn refresh(&mut self, container: &mut PaneContainer) {
         self.mode.borrow_mut().refresh();
         self.check_messages(container);
+        if self.rainbow_delimiters.borrow().len() > 0 {
+            self.rainbow_delimiters.borrow_mut().clear();
+        }
     }
 
 

@@ -151,12 +151,26 @@ impl Window {
 
                 self.lsp_responder.send(ControllerMessage::CreateClient("rust".to_string().into())).unwrap();
 
-                let lsp_client = match self.lsp_listener.recv().unwrap() {
-                    ControllerMessage::ClientCreated(language_rcv) => {
-                        language_rcv
-                    },
-                    _ => unreachable!(),
-                };
+                let lsp_client;
+
+                loop {
+                        
+                    match self.lsp_listener.try_recv() {
+                        Ok(ControllerMessage::ClientCreated(language_rcv)) => {
+                            lsp_client = language_rcv;
+                            break;
+                        },
+                        Ok(_) => {
+                            continue;
+                        },
+                        Err(TryRecvError::Empty) => {
+                            continue;
+                        },
+                        Err(TryRecvError::Disconnected) => {
+                            unreachable!();
+                        },
+                    }
+                }
 
                 let lsp_client = Some((self.lsp_responder.clone(), lsp_client));
                 

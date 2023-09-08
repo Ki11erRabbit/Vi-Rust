@@ -377,6 +377,10 @@ impl LspController {
     fn create_client<R>(&mut self, lang: R) -> io::Result<()> where R: AsRef<str> {
         let client = match lang.as_ref() {
             "rust" => {
+                if let Some((_, recv)) = self.server_channels.get("rust") {
+                    self.response.as_ref().unwrap().send(ControllerMessage::ClientCreated(recv.clone())).unwrap();
+                    return Ok(());
+                }
                 let rust_analyzer = Command::new("rust-analyzer")
                     .stdin(Stdio::piped())
                     .stdout(Stdio::piped())
@@ -389,22 +393,28 @@ impl LspController {
                 lsp_client
             },
             "c" | "cpp" => {
-                eprintln!("Starting clangd");
+
+                if let Some((_, recv)) = self.server_channels.get(lang.as_ref()) {
+                    self.response.as_ref().unwrap().send(ControllerMessage::ClientCreated(recv.clone())).unwrap();
+                    return Ok(());
+                }
+
                 let clangd = Command::new("clangd")
                     .stdin(Stdio::piped())
                     .stdout(Stdio::piped())
-                    .spawn().expect("Error starting clangd");
+                    .spawn()?;
 
-                eprintln!("Started clangd");
                 let mut lsp_client = lsp_client::Client::new(clangd);
 
-                eprintln!("Initializing client");
                 lsp_client.initialize()?;
 
-                eprintln!("Initialized client");
                 lsp_client
             },
             "python" => {
+                if let Some((_, recv)) = self.server_channels.get(lang.as_ref()) {
+                    self.response.as_ref().unwrap().send(ControllerMessage::ClientCreated(recv.clone())).unwrap();
+                    return Ok(());
+                }
                 let python_lsp = Command::new("python-lsp-server")
                     .stdin(Stdio::piped())
                     .stdout(Stdio::piped())
@@ -417,6 +427,10 @@ impl LspController {
                 lsp_client
             },
             "swift" => {
+                if let Some((_, recv)) = self.server_channels.get(lang.as_ref()) {
+                    self.response.as_ref().unwrap().send(ControllerMessage::ClientCreated(recv.clone())).unwrap();
+                    return Ok(());
+                }
                 let apple_swift = Command::new("sourcekit-lsp")
                     .stdin(Stdio::piped())
                     .stdout(Stdio::piped())
@@ -429,6 +443,10 @@ impl LspController {
                 lsp_client
             },
             "go" => {
+                if let Some((_, recv)) = self.server_channels.get(lang.as_ref()) {
+                    self.response.as_ref().unwrap().send(ControllerMessage::ClientCreated(recv.clone())).unwrap();
+                    return Ok(());
+                }
                 let gopls = Command::new("gopls")
                     .stdin(Stdio::piped())
                     .stdout(Stdio::piped())
@@ -441,6 +459,10 @@ impl LspController {
                 lsp_client
             },
             "bash" => {
+                if let Some((_, recv)) = self.server_channels.get(lang.as_ref()) {
+                    self.response.as_ref().unwrap().send(ControllerMessage::ClientCreated(recv.clone())).unwrap();
+                    return Ok(());
+                }
                 let bash_lsp = Command::new("bash-language-server")
                     .stdin(Stdio::piped())
                     .stdout(Stdio::piped())
