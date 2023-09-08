@@ -15,8 +15,7 @@ pub mod lsp;
 
 //const EDITOR_NAME: &str = "vi";
 
-#[tokio::main]
-async fn main() -> io::Result<()> {
+fn main() -> io::Result<()> {
     //let _cleanup = CleanUp;
     //terminal::enable_raw_mode()?;
 
@@ -36,20 +35,28 @@ async fn main() -> io::Result<()> {
 
     let mut editor = Editor::new(lsp_sender, lsp_listener);
 
+
+    let thread_handle = std::thread::spawn(move || {
+        eprintln!("Starting LSP thread");
+        let tokio_runtime = tokio::runtime::Runtime::new().unwrap();
+        let tokio_handle = tokio_runtime.spawn_blocking(move || {
+            eprintln!("Starting Tokio thread");
+            controller.run();
+        });
+        eprintln!("Starting Tokio runtime");
+        tokio_runtime.block_on(tokio_handle).unwrap();
+    });
+
+
+    
     if let Some(filename) = std::env::args().nth(1) {
         editor.open_file(&filename)?;
     }
 
-    let tokio_handle = tokio::runtime::Handle::current();
 
-    let handle = tokio_handle.spawn_blocking(move || {
-        controller.run();
-    });
-    
 
     while editor.run()? {}
 
-    handle.await.unwrap();
 
     Ok(())
 }

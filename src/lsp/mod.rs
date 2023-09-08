@@ -105,15 +105,14 @@ impl LspController {
 
 
 
-    pub fn run(&mut self) {
+    pub fn run(&mut self) -> io::Result<()> {
         eprintln!("Running lsp controller");
         loop {
-            self.check_messages().expect("Error checking messages");
+            self.check_messages()?;
 
 
-            //block_on(self.check_clients());
+            //self.check_clients().await;
 
-            eprintln!("Checked clients");
         }
     }
 
