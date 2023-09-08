@@ -1,10 +1,10 @@
 use std::{sync::{mpsc::{Sender, Receiver}, Arc}, cell::RefCell, rc::Rc, path::PathBuf, collections::HashMap, io::{self, Write}};
 
 use crop::RopeSlice;
-use crossterm::event::KeyEvent;
+use crossterm::{event::KeyEvent, style::{Attribute, Color}};
 use tree_sitter::{Parser, Tree, Point, Language, InputEdit};
 
-use crate::{window::{Message, StyledChar}, cursor::{Cursor, Direction, CursorMove}, mode::{Mode, base::{Normal, Insert, Command}, prompt::PromptType}, buffer::Buffer, settings::{Settings, SyntaxHighlight, ColorScheme},  lsp::{ControllerMessage, LspNotification}};
+use crate::{window::{Message, StyledChar}, cursor::{Cursor, Direction, CursorMove}, mode::{Mode, base::{Normal, Insert, Command}, prompt::PromptType}, buffer::Buffer, settings::{Settings, SyntaxHighlight, ColorScheme},  lsp::{ControllerMessage, LspNotification, lsp_utils::{Diagnostic, Diagnostics}, LspResponse}};
 
 use super::{text::{JumpTable, Waiting}, PaneMessage, Pane, PaneContainer, popup::PopUpPane};
 
@@ -16,6 +16,7 @@ pub struct TreesitterPane {
     lang: String,
     lsp_client: Option<(Sender<ControllerMessage>, Arc<Receiver<ControllerMessage>>)>,
     file_version: usize,
+    lsp_diagnostics: Diagnostics,
 
     cursor: Rc<RefCell<Cursor>>,
     file_name: Option<PathBuf>,
@@ -36,7 +37,7 @@ impl TreesitterPane {
                sender: Sender<Message>,
                lang: Language,
                lang_string: &str,
-               mut lsp: Option<(Sender<ControllerMessage>, Arc<Receiver<ControllerMessage>>)>)
+               lsp: Option<(Sender<ControllerMessage>, Arc<Receiver<ControllerMessage>>)>)
                -> Self {
         let mut modes: HashMap<String, Rc<RefCell<dyn Mode>>> = HashMap::new();
         let normal = Rc::new(RefCell::new(Normal::new()));
@@ -67,6 +68,7 @@ impl TreesitterPane {
             tree,
             lsp_client: lsp,
             file_version: 0,
+            lsp_diagnostics: Diagnostics::new(),
             lang: lang_string.to_string(),
             cursor: Rc::new(RefCell::new(Cursor::new((0,0)))),
             file_name: None,
@@ -153,6 +155,44 @@ impl TreesitterPane {
                 let uri = format!("file://{}/{}", working_dir.display(), file_name.display());
 
                 uri
+            },
+        }
+    }
+
+    fn read_lsp_messages(&mut self) {
+        match self.lsp_client.as_ref() {
+            None => {},
+            Some((sender, receiver)) => {
+                loop {
+                    match receiver.try_recv() {
+                        Ok(ControllerMessage::Response(resp)) => {
+                            eprintln!("Response from LSP");
+                            match resp {
+                                LspResponse::PublishDiagnostics(diags) => {
+                                    eprintln!("{}", diags.uri);
+                                    eprintln!("{}", self.generate_uri());
+                                    if diags.uri == self.generate_uri() {
+                                        self.lsp_diagnostics = diags;
+                                    }
+                                    else {
+                                        sender.send(ControllerMessage::Resend(
+                                            self.lang.clone().into(),
+                                            LspResponse::PublishDiagnostics(diags)
+                                        )).unwrap();
+                                    }
+                                },
+                            }
+
+                        },
+                        Ok(_) => {
+                            eprintln!("Got message from LSP");
+                        },
+                        Err(e) => {
+                            eprintln!("Error receiving message from LSP: {:?}", e);
+                            break;
+                        },
+                    }
+                }
             },
         }
     }
@@ -601,6 +641,10 @@ impl Pane for TreesitterPane {
                             else {
                                 color_settings
                             };
+
+                            
+
+                            
                             match c {
                                 '(' | ')' | '{' | '}' | '[' | ']' | '<' | '>' => {
                                     if self.settings.borrow().editor_settings.rainbow_delimiters {
@@ -711,7 +755,21 @@ impl Pane for TreesitterPane {
                                     }
                                 },
                                 _ => {
-                                    output.push(Some(StyledChar::new(c, color_settings.clone())));
+
+                                    let diagnostic = self.lsp_diagnostics.get_diagnostic(real_row, count);
+                                    //eprintln!("Diagnostic: {:?}", diagnostic);
+                                    match diagnostic {
+                                        None => output.push(Some(StyledChar::new(c, color_settings.clone()))),
+                                        Some(diagnostic) => {
+                                            eprintln!("Diagnostic: {:?}", diagnostic);
+                                            let mut color_settings = color_settings.add_attribute(Attribute::Undercurled);
+                                            color_settings.underline_color = Color::Red;
+                                            output.push(Some(StyledChar::new(c, color_settings)));
+                                        }
+                                        
+                                    }
+                                    
+                                    //output.push(Some(StyledChar::new(c, color_settings.clone())));
                                 }
                             }
                         }
@@ -749,6 +807,8 @@ impl Pane for TreesitterPane {
         if self.rainbow_delimiters.borrow().len() > 0 {
             self.rainbow_delimiters.borrow_mut().clear();
         }
+
+        self.read_lsp_messages();
     }
 
 

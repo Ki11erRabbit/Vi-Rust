@@ -18,6 +18,43 @@ pub struct Diagnostics {
     pub version: usize,
 }
 
+impl Diagnostics {
+    pub fn new() -> Self {
+        Diagnostics {
+            diagnostics: Vec::new(),
+            uri: String::new(),
+            version: 0,
+        }
+    }
+    pub fn diagnostics_on_line(&self, line: usize) -> Vec<&Diagnostic> {
+        let mut result = Vec::new();
+        for diagnostic in &self.diagnostics {
+            let start_line = diagnostic.range.start.line;
+            let end_line = diagnostic.range.end.line;
+            if line >= start_line && line <= end_line {
+                result.push(diagnostic);
+            }
+        }
+        result
+    }
+
+    pub fn get_diagnostic(&self, line: usize, character: usize) -> Option<&Diagnostic> {
+        //eprintln!("{:?}", self.diagnostics);
+        for diagnostic in &self.diagnostics {
+            let start_line = diagnostic.range.start.line;
+            let end_line = diagnostic.range.end.line;
+            let start_character = diagnostic.range.start.character;
+            let end_character = diagnostic.range.end.character;
+            if line >= start_line && line <= end_line {
+                if character >= start_character && character <= end_character {
+                    return Some(diagnostic);
+                }
+            }
+        }
+        None
+    }
+}
+
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct Diagnostic {
     pub code: String,

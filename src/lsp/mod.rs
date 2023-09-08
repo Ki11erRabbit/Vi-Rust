@@ -66,7 +66,7 @@ pub enum ControllerMessage {
     ClientCreated(Arc<Receiver<ControllerMessage>>),
     /// Notification to tell the caller that there is no client for the language
     NoClient,
-    Resend,
+    Resend(Box<str>, LspResponse),
     Exit,
 
     
@@ -158,8 +158,9 @@ impl LspController {
 
             eprintln!("Json for: {} \n{:#?}", language, json);
 
-            match process_json(json)? {
+            match process_json(json).expect("Failed to process json") {
                 LSPMessage::Diagnostics(diagnostics) => {
+                    eprintln!("Got diagnostics");
                     let sender = self.server_channels.get(language).unwrap().0.clone();
 
                     let message = ControllerMessage::Response(
@@ -169,6 +170,7 @@ impl LspController {
                     sender.send(message).expect("Failed to send diagnostics");
                 },
                 LSPMessage::None => {
+                    eprintln!("Got none");
                     continue;
                 }
             }
