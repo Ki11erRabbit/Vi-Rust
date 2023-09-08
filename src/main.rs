@@ -1,4 +1,4 @@
-use std::{io, rc::Rc};
+use std::{io, rc::Rc, time::Duration, thread};
 
 
 use crate::{editor::Editor, lsp::LspController};
@@ -41,7 +41,7 @@ fn main() -> io::Result<()> {
         let tokio_runtime = tokio::runtime::Runtime::new().unwrap();
         let tokio_handle = tokio_runtime.spawn_blocking(move || {
             eprintln!("Starting Tokio thread");
-            controller.run();
+            controller.run().unwrap();
         });
         eprintln!("Starting Tokio runtime");
         tokio_runtime.block_on(tokio_handle).unwrap();
@@ -56,7 +56,6 @@ fn main() -> io::Result<()> {
 
 
     while editor.run()? {}
-
 
     Ok(())
 }

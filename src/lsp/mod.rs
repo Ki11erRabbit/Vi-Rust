@@ -1,5 +1,6 @@
-use std::{collections::HashMap, sync::{mpsc::{Sender, Receiver}, Arc, Mutex}, io, process::Stdio, fmt::Display };
-use futures::executor::block_on;
+use std::{collections::HashMap, sync::{mpsc::{Sender, Receiver}, Arc, Mutex}, io, process::Stdio, fmt::Display, task::Poll };
+use futures::{executor::{block_on, ThreadPool, LocalPool}, task::{Spawn, FutureObj, LocalSpawn}, poll, try_join, pending};
+use futures::Future;
 use serde_json::Value;
 use tokio::process::Command;
 
@@ -66,10 +67,20 @@ pub enum ControllerMessage {
 
 }
 
+
+impl Drop for LspController {
+    fn drop(&mut self) {
+        eprintln!("Dropping lsp controller");
+        for (_, client) in self.clients.iter_mut() {
+            drop(client);
+        }
+    }
+}
+
 unsafe impl Send for LspController {}
 
 pub struct LspController {
-    clients: HashMap<String, Arc<Mutex<Client>>>,
+    clients: HashMap<String, Client>,
     //channels: (Sender<ControllerMessage>, Receiver<ControllerMessage>),
     listen: Option<Receiver<ControllerMessage>>,
     response: Option<Sender<ControllerMessage>>,
@@ -110,16 +121,49 @@ impl LspController {
         loop {
             self.check_messages()?;
 
-
-            self.check_clients();
+            
+            let future = self.check_clients();
+            let _ = block_on(future);
+                        
 
         }
     }
 
-    async fn check_clients(&mut self) {
+    async fn check_client(client: &mut Client) -> io::Result<Value> {
+        let future = client.process_messages();
+        let val = future.await;
+        let json = val.expect("Error processing messages");
+        Ok(json)
+    }
+
+    async fn check_clients(&mut self) -> io::Result<()> {
+
         for (language, client) in self.clients.iter_mut() {
 
-            let client = client.clone();
+            Self::check_client(client).await?;
+
+
+            /*let future = client.process_messages();
+            let val = try_join!(future);
+            let _json = val.expect("Error processing messages");*/
+
+            
+            //let json = future.await.expect("Error processing messages");
+
+            /*loop {
+                match client.try_lock() {
+                    Ok(mut client) => {
+                        let future = client.process_messages();
+                        let json = future.await.expect("Error processing messages");
+                        break;
+                    },
+                    Err(_) => {
+                        continue;
+                    }
+                }
+            }*/
+            
+            /*let client = client.clone();
 
             let tokio_handle = tokio::runtime::Handle::current();
             tokio_handle.spawn_blocking(move || {
@@ -135,7 +179,7 @@ impl LspController {
                         }
                     }
                 }
-            });
+            });*/
             //let json = client.process_messages().await.expect("Error processing messages");
 
 
@@ -149,6 +193,8 @@ impl LspController {
 
 
         }
+
+        Ok(())
     }
 
 
@@ -182,7 +228,7 @@ impl LspController {
             Some(client) => {
                 match notif {
                     LspNotification::ChangeText(uri, version, text) => {
-                        loop {
+                        /*loop {
                             match client.try_lock() {
                                 Ok(mut client) => {
                                     client.did_change_text(uri.as_ref(), version, text.as_ref())?;
@@ -192,11 +238,11 @@ impl LspController {
                                     continue;
                                 }
                             }
-                        }
-                        //client.did_change_text(uri.as_ref(), version, text.as_ref())?;
+                        }*/
+                        client.did_change_text(uri.as_ref(), version, text.as_ref())?;
                     },
                     LspNotification::Open(uri, text) => {
-                        loop {
+                        /*loop {
                             match client.try_lock() {
                                 Ok(mut client) => {
                                     client.send_did_open(&lang.to_string(),uri.as_ref(), text.as_ref())?;
@@ -206,11 +252,11 @@ impl LspController {
                                     continue;
                                 }
                             }
-                        }
-                        //client.send_did_open(&lang.to_string(),uri.as_ref(), text.as_ref())?;
+                        }*/
+                        client.send_did_open(&lang.to_string(),uri.as_ref(), text.as_ref())?;
                     },
                     LspNotification::Close(uri) => {
-                        loop {
+                        /*loop {
                             match client.try_lock() {
                                 Ok(mut client) => {
                                     client.did_close(uri.as_ref())?;
@@ -220,11 +266,11 @@ impl LspController {
                                     continue;
                                 }
                             }
-                        }
-                        //client.did_close(uri.as_ref())?;
+                        }*/
+                        client.did_close(uri.as_ref())?;
                     },
                     LspNotification::Save(uri, text) => {
-                        loop {
+                        /*loop {
                             match client.try_lock() {
                                 Ok(mut client) => {
                                     client.did_save_text(uri.as_ref(), text.as_ref())?;
@@ -234,8 +280,8 @@ impl LspController {
                                     continue;
                                 }
                             }
-                        }
-                        //client.did_save_text(uri.as_ref(), text.as_ref())?;
+                        }*/
+                        client.did_save_text(uri.as_ref(), text.as_ref())?;
                     },
                     LspNotification::WillSave(uri, reason) => {
                         let reason = match reason.as_ref() {
@@ -247,7 +293,7 @@ impl LspController {
                             }
                         };
 
-                        loop {
+                        /*loop {
                             match client.try_lock() {
                                 Ok(mut client) => {
                                     client.will_save_text(uri.as_ref(), reason)?;
@@ -257,8 +303,8 @@ impl LspController {
                                     continue;
                                 }
                             }
-                        }
-                        //client.will_save_text(uri.as_ref(), reason)?;
+                        }*/
+                        client.will_save_text(uri.as_ref(), reason)?;
                     },
                 }
             },
@@ -275,7 +321,7 @@ impl LspController {
             Some(client) => {
                 match req {
                     LspRequest::Shutdown => {
-                        loop {
+                        /*loop {
                             match client.try_lock() {
                                 Ok(mut client) => {
                                     client.send_shutdown()?;
@@ -285,11 +331,11 @@ impl LspController {
                                     continue;
                                 }
                             }
-                        }
-                        //client.send_shutdown()?;
+                        }*/
+                        client.send_shutdown()?;
                     },
                     LspRequest::Exit => {
-                        loop {
+                        /*loop {
                             match client.try_lock() {
                                 Ok(mut client) => {
                                     client.send_exit()?;
@@ -299,8 +345,8 @@ impl LspController {
                                     continue;
                                 }
                             }
-                        }
-                        //client.send_exit()?;
+                        }*/
+                        client.send_exit()?;
                     },
                 }
             },
@@ -320,7 +366,7 @@ impl LspController {
                     .stdout(Stdio::piped())
                     .spawn()?;
 
-                let mut lsp_client = lsp_client::Client::new(rust_analyzer.stdin.unwrap(), rust_analyzer.stdout.unwrap());
+                let mut lsp_client = lsp_client::Client::new(rust_analyzer);
 
                 lsp_client.initialize()?;
 
@@ -334,7 +380,7 @@ impl LspController {
                     .spawn().expect("Error starting clangd");
 
                 eprintln!("Started clangd");
-                let mut lsp_client = lsp_client::Client::new(clangd.stdin.unwrap(), clangd.stdout.unwrap());
+                let mut lsp_client = lsp_client::Client::new(clangd);
 
                 eprintln!("Initializing client");
                 lsp_client.initialize()?;
@@ -348,7 +394,7 @@ impl LspController {
                     .stdout(Stdio::piped())
                     .spawn()?;
 
-                let mut lsp_client = lsp_client::Client::new(python_lsp.stdin.unwrap(), python_lsp.stdout.unwrap());
+                let mut lsp_client = lsp_client::Client::new(python_lsp);
 
                 lsp_client.initialize()?;
 
@@ -360,7 +406,7 @@ impl LspController {
                     .stdout(Stdio::piped())
                     .spawn()?;
 
-                let mut lsp_client = lsp_client::Client::new(apple_swift.stdin.unwrap(), apple_swift.stdout.unwrap());
+                let mut lsp_client = lsp_client::Client::new(apple_swift);
 
                 lsp_client.initialize()?;
 
@@ -372,7 +418,7 @@ impl LspController {
                     .stdout(Stdio::piped())
                     .spawn()?;
 
-                let mut lsp_client = lsp_client::Client::new(gopls.stdin.unwrap(), gopls.stdout.unwrap());
+                let mut lsp_client = lsp_client::Client::new(gopls);
 
                 lsp_client.initialize()?;
 
@@ -384,7 +430,7 @@ impl LspController {
                     .stdout(Stdio::piped())
                     .spawn()?;
 
-                let mut lsp_client = lsp_client::Client::new(bash_lsp.stdin.unwrap(), bash_lsp.stdout.unwrap());
+                let mut lsp_client = lsp_client::Client::new(bash_lsp);
 
                 lsp_client.initialize()?;
 
@@ -402,7 +448,7 @@ impl LspController {
 
         self.server_channels.insert(lang.as_ref().to_string(), (tx, rx.clone()));
 
-        let client = Arc::new(Mutex::new(client));
+        //let client = Arc::new(Mutex::new(client));
 
         self.clients.insert(lang.as_ref().to_string(), client);
 

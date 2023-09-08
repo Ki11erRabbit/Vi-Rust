@@ -2,7 +2,7 @@
 use std::sync::Arc;
 
 use futures::{lock::Mutex, executor::block_on};
-use tokio::{io::{BufReader, AsyncBufReadExt, AsyncWriteExt, AsyncReadExt, BufWriter, self}, process::{ChildStdout, ChildStdin}};
+use tokio::{io::{BufReader, AsyncBufReadExt, AsyncWriteExt, AsyncReadExt, BufWriter, self}, process::{ChildStdout, ChildStdin, Child}};
 
 
 
@@ -75,17 +75,21 @@ pub async fn process_messages(output: Arc<Mutex<BufReader<ChildStdout>>> ) -> io
 unsafe impl Send for Client {}
 
 pub struct Client {
+    child: Child,
     input: BufWriter<ChildStdin>,
     output: BufReader<ChildStdout>,
 }
 
 impl Client {
-    pub fn new(input: ChildStdin, output: ChildStdout) -> Self {
+    pub fn new(mut child: Child) -> Self {
         eprintln!("Creating client");
+        let input = child.stdin.take().expect("Failed to get stdin");
+        let output = child.stdout.take().expect("Failed to get stdout");
         let input = BufWriter::new(input);
         let output = BufReader::new(output);
 
         Client {
+            child,
             input,
             output,
         }
@@ -99,6 +103,10 @@ impl Drop for Client {
         eprintln!("Dropping client");
         self.send_shutdown().expect("Failed to send shutdown");
         self.send_exit().expect("Failed to send exit");
+        let future = async {
+            self.child.kill().await.expect("Failed to kill child");
+        };
+        block_on(future);
     }
 }
 
@@ -134,6 +142,8 @@ impl Client {
                 String::from_utf8(body).expect("Failed to parse body as utf8")
             },
         };
+
+        eprintln!("Body: {}", body);
 
 
         serde_json::from_str(&body).and_then(|json_data| {
