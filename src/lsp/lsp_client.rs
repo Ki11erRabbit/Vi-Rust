@@ -81,6 +81,7 @@ pub struct Client {
 
 impl Client {
     pub fn new(input: ChildStdin, output: ChildStdout) -> Self {
+        eprintln!("Creating client");
         let input = BufWriter::new(input);
         let output = BufReader::new(output);
 
@@ -95,6 +96,7 @@ impl Client {
 
 impl Drop for Client {
     fn drop(&mut self) {
+        eprintln!("Dropping client");
         self.send_shutdown().expect("Failed to send shutdown");
         self.send_exit().expect("Failed to send exit");
     }
@@ -148,11 +150,12 @@ impl Client {
 
 
     pub fn send_message(&mut self, message: serde_json::Value) -> io::Result<()> {
+        eprintln!("Sending messag");
         let future = async {
             let message = serde_json::to_string(&message).expect("Failed to serialize json");
             let message = format!("Content-Length: {}\r\n\r\n{}", message.len(), message);
-            self.input.write_all(message.as_bytes()).await;
-            self.input.flush().await;
+            self.input.write_all(message.as_bytes()).await.expect("Failed to write");
+            self.input.flush().await.expect("Failed to flush");
         };
         block_on(future);
         Ok(())

@@ -28,31 +28,17 @@ pub struct Editor {
 
 
 impl Editor {
-    pub fn new() -> Self {
+    pub fn new(lsp_sender: Sender<ControllerMessage>, lsp_listener: Rc<Receiver<ControllerMessage>>) -> Self {
         terminal::enable_raw_mode().expect("Failed to enable raw mode");
         execute!(std::io::stdout(), terminal::EnterAlternateScreen).expect("Failed to enter alternate screen");
         execute!(io::stdout(), SetCursorStyle::BlinkingBlock).expect("Could not set cursor style");
 
+
         let (sender, reciever) = std::sync::mpsc::channel();
 
-        let mut controller = LspController::new();
-
-        let (lsp_sender, lsp_reciever) = std::sync::mpsc::channel();
-        let (lsp_controller, lsp_controller_reciever) = std::sync::mpsc::channel();
-
-        controller.set_listen(lsp_reciever);
-        controller.set_response(lsp_controller);
-
-
-        thread::spawn(move || {
-            let runtime = tokio::runtime::Runtime::new().unwrap();
-            runtime.spawn_blocking(move || {
-                controller.run()
-            });
-        });
 
         //eprintln!("Editor created");
-        let lsp_listener = Rc::new(lsp_controller_reciever);
+        //let lsp_listener = Rc::new(lsp_controller_reciever);
         
         Self {
             windows: vec![Window::new(sender.clone(), lsp_sender.clone(), lsp_listener.clone())],

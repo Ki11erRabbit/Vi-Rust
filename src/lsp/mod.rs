@@ -3,7 +3,7 @@ use futures::{executor::block_on, poll};
 use serde_json::Value;
 use tokio::process::Command;
 
-use self::lsp_client::{LspClient, process_messages, Client};
+use self::lsp_client::{process_messages, Client};
 
 pub mod lsp_client;
 
@@ -105,35 +105,22 @@ impl LspController {
 
 
 
-    pub fn run(&mut self) -> io::Result<()> {
+    pub fn run(&mut self) {
         eprintln!("Running lsp controller");
         loop {
-            self.check_messages()?;
+            self.check_messages().expect("Error checking messages");
 
 
-            if self.tasks.len() < self.server_channels.len() {
-                self.check_clients();
-            }
+            //block_on(self.check_clients());
 
             eprintln!("Checked clients");
         }
     }
 
-    fn check_clients(&mut self) {
+    async fn check_clients(&mut self) {
         for (language, client) in self.clients.iter_mut() {
 
-            if self.tasks.contains_key(language) {
-                continue;
-            }
-                
-            let output = client.get_output().clone();
-
-            let task = self.runtime.spawn_blocking(move || {
-                let json = block_on(process_messages(output));
-                json
-            });
-
-            self.tasks.insert(language.to_string(), task);
+            let json = client.process_messages().await.expect("Error processing messages");
 
 
                 
@@ -233,7 +220,7 @@ impl LspController {
     }
 
     fn create_client<R>(&mut self, lang: R) -> io::Result<()> where R: AsRef<str> {
-        let client: Box<dyn LspClient + Send> = match lang.as_ref() {
+        let client = match lang.as_ref() {
             "rust" => {
                 let rust_analyzer = Command::new("rust-analyzer")
                     .stdin(Stdio::piped())
@@ -244,19 +231,23 @@ impl LspController {
 
                 lsp_client.initialize()?;
 
-                Box::new(lsp_client)
+                lsp_client
             },
             "c" | "cpp" => {
+                eprintln!("Starting clangd");
                 let clangd = Command::new("clangd")
                     .stdin(Stdio::piped())
                     .stdout(Stdio::piped())
-                    .spawn()?;
+                    .spawn().expect("Error starting clangd");
 
+                eprintln!("Started clangd");
                 let mut lsp_client = lsp_client::Client::new(clangd.stdin.unwrap(), clangd.stdout.unwrap());
 
+                eprintln!("Initializing client");
                 lsp_client.initialize()?;
 
-                Box::new(lsp_client)
+                eprintln!("Initialized client");
+                lsp_client
             },
             "python" => {
                 let python_lsp = Command::new("python-lsp-server")
@@ -268,7 +259,7 @@ impl LspController {
 
                 lsp_client.initialize()?;
 
-                Box::new(lsp_client)
+                lsp_client
             },
             "swift" => {
                 let apple_swift = Command::new("sourcekit-lsp")
@@ -280,7 +271,7 @@ impl LspController {
 
                 lsp_client.initialize()?;
 
-                Box::new(lsp_client)
+                lsp_client
             },
             "go" => {
                 let gopls = Command::new("gopls")
@@ -292,7 +283,7 @@ impl LspController {
 
                 lsp_client.initialize()?;
 
-                Box::new(lsp_client)
+                lsp_client
             },
             "bash" => {
                 let bash_lsp = Command::new("bash-language-server")
@@ -304,7 +295,7 @@ impl LspController {
 
                 lsp_client.initialize()?;
 
-                Box::new(lsp_client)
+                lsp_client
             },
             _ => {
                 self.response.as_ref().unwrap().send(ControllerMessage::NoClient).unwrap();

@@ -14,7 +14,7 @@ crop = "0.3.0"
 toml = "0.7.6"
 serde = { version = "1.0.185", features = ["derive"] }
 serde_json = "1.0.105"
-tokio = { version = "1.32.0", features = ["io-util", "process", "rt", "rt-multi-thread"] }
+tokio = { version = "1.32.0", features = ["io-util", "process", "rt", "rt-multi-thread", "macros"] }
 futures = { version = "0.3.28", features = ["executor"] }
 tree-sitter = "0.20.10"
 tree-sitter-rust = "0.20.4"
