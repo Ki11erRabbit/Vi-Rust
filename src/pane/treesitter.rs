@@ -166,11 +166,8 @@ impl TreesitterPane {
                 loop {
                     match receiver.try_recv() {
                         Ok(ControllerMessage::Response(resp)) => {
-                            eprintln!("Response from LSP");
                             match resp {
                                 LspResponse::PublishDiagnostics(diags) => {
-                                    eprintln!("{}", diags.uri);
-                                    eprintln!("{}", self.generate_uri());
                                     if diags.uri == self.generate_uri() {
                                         self.lsp_diagnostics = diags;
                                     }
@@ -185,10 +182,8 @@ impl TreesitterPane {
 
                         },
                         Ok(_) => {
-                            eprintln!("Got message from LSP");
                         },
-                        Err(e) => {
-                            eprintln!("Error receiving message from LSP: {:?}", e);
+                        Err(_) => {
                             break;
                         },
                     }
@@ -761,10 +756,23 @@ impl Pane for TreesitterPane {
                                     match diagnostic {
                                         None => output.push(Some(StyledChar::new(c, color_settings.clone()))),
                                         Some(diagnostic) => {
-                                            eprintln!("Diagnostic: {:?}", diagnostic);
-                                            let mut color_settings = color_settings.add_attribute(Attribute::Undercurled);
-                                            color_settings.underline_color = Color::Red;
-                                            output.push(Some(StyledChar::new(c, color_settings)));
+                                            match diagnostic.severity {
+                                                3 => {
+                                                    let mut color_settings = color_settings.add_attribute(Attribute::Undercurled);
+                                                    color_settings.underline_color = Color::DarkRed;
+                                                    output.push(Some(StyledChar::new(c, color_settings)));
+                                                },
+                                                2 => {
+                                                    let mut color_settings = color_settings.add_attribute(Attribute::Undercurled);
+                                                    color_settings.underline_color = Color::DarkYellow;
+                                                    output.push(Some(StyledChar::new(c, color_settings)));
+                                                },
+                                                1 | _ => {
+                                                    let mut color_settings = color_settings.add_attribute(Attribute::Undercurled);
+                                                    color_settings.underline_color = Color::Yellow;
+                                                    output.push(Some(StyledChar::new(c, color_settings)));
+                                                },
+                                            }
                                         }
                                         
                                     }

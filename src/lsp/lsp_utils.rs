@@ -57,11 +57,16 @@ impl Diagnostics {
 
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct Diagnostic {
-    pub code: String,
+    /// The type of the diagnostic.
+    pub code: Option<String>,
+    /// The message to display to the user.
     pub message: String,
+    /// The range where the error/warning is located in the source code.
     pub range: LSPRange,
+    /// The severity of the error/warning.
     pub severity: usize,
-    pub source: String,
+    /// The source of the error/warning which is the LSP
+    pub source: Option<String>,
 }
 
 #[derive(Debug, Deserialize, PartialEq)]
@@ -92,8 +97,15 @@ pub fn process_json(json: Value) -> io::Result<LSPMessage> {
     match method {
         "textDocument/publishDiagnostics" => {
             let obj = json["params"].clone();
-            
-            let diagnostics: Diagnostics = serde_json::from_value(obj)?;
+            eprintln!("diagnostics");
+
+            let diagnostics: Diagnostics = match serde_json::from_value(obj) {
+                Ok(value) => value,
+                Err(e) => {
+                    eprintln!("Error: {:?}", e);
+                    return Ok(LSPMessage::None);
+                }
+            };
             Ok(LSPMessage::Diagnostics(diagnostics))
         }
         _ => {
