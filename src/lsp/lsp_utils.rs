@@ -15,7 +15,7 @@ pub enum LSPMessage {
 pub struct Diagnostics {
     pub diagnostics: Vec<Diagnostic>,
     pub uri: String,
-    pub version: usize,
+    pub version: Option<usize>,
 }
 
 impl Diagnostics {
@@ -23,7 +23,7 @@ impl Diagnostics {
         Diagnostics {
             diagnostics: Vec::new(),
             uri: String::new(),
-            version: 0,
+            version: Some(0),
         }
     }
     pub fn diagnostics_on_line(&self, line: usize) -> Vec<&Diagnostic> {
@@ -53,12 +53,30 @@ impl Diagnostics {
         }
         None
     }
+
+    pub fn merge(&mut self, other: Diagnostics) {
+        self.diagnostics.extend(other.diagnostics);
+    }
+}
+
+#[derive(Debug, PartialEq, Deserialize, Hash, Eq, Clone)]
+pub struct CodeDescription {
+    pub href: String,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Hash, Eq, Clone)]
+pub struct Data {
+    pub rendered: String,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Hash, Eq, Clone)]
 pub struct Diagnostic {
     /// The type of the diagnostic.
     pub code: Option<String>,
+    /// The description of the diagnostic.
+    pub code_description: Option<CodeDescription>,
+    /// Additional metadata about the diagnostic.
+    pub data: Option<Data>,
     /// The message to display to the user.
     pub message: String,
     /// The range where the error/warning is located in the source code.

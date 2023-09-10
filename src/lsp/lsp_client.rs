@@ -130,6 +130,9 @@ impl Client {
             },
         });
         self.send_message(message)?;
+
+        self.send_inialized()?;
+        
         Ok(())
     }
 
@@ -221,6 +224,16 @@ impl Client {
             "params": {
                 "textDocument": uri,
             },
+        });
+        self.send_message(message)?;
+        Ok(())
+    }
+
+    pub fn send_inialized(&mut self) -> io::Result<()> {
+        let message = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "initialized",
+            "params": {},
         });
         self.send_message(message)?;
         Ok(())

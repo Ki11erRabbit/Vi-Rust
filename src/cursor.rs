@@ -131,15 +131,19 @@ impl Cursor {
             self.col_offset = self.col_offset.saturating_sub(1);
         }
 
-        if self.y >= pane_y && self.went_down && self.y != 0 {
-            self.row_offset = self.y - pane_y + 1;
+        //eprintln!("row offset: {}, y: {}, pane y: {}", self.row_offset, self.y, pane_y);
+
+        if self.went_down && (self.y - self.row_offset) >= pane_y {
+            
+            let new_offset = self.y - pane_y + 1;
+
+            self.row_offset = new_offset;
+
+            //eprintln!("1row offset: {}, 1y: {}, 1pane y: {}", self.row_offset, self.y, pane_y);
         }
-        else if self.y >= pane_y && self.went_down && self.y != 0 {
-            self.row_offset = pane_y - self.y;
-        }
-        else if self.y < self.row_offset && !self.went_down {
-            self.y = self.row_offset.saturating_sub(1);
-            self.row_offset = self.row_offset.saturating_sub(1);
+        else if !self.went_down && (self.y.saturating_sub(self.row_offset)) == 0 {
+            self.row_offset = self.y;
+            //eprintln!("2row offset: {}, 2y: {}, 2pane y: {}", self.row_offset, self.y, pane_y);
         }
 
     }

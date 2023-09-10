@@ -176,7 +176,7 @@ impl TreesitterPane {
                             match resp {
                                 LspResponse::PublishDiagnostics(diags) => {
                                     if diags.uri == self.generate_uri() {
-                                        self.lsp_diagnostics = diags;
+                                        self.lsp_diagnostics.merge(diags);
                                     }
                                     else {
                                         sender.send(ControllerMessage::Resend(

@@ -152,17 +152,17 @@ impl LspController {
 
             if let Some(value) = (&mut future).now_or_never() {
                 json = value?;
-                eprintln!("Got json");
+                //eprintln!("Got json");
             } else {
                 continue;
                 //json = future.await?;
             }
 
-            eprintln!("Json for: {} \n{:#?}", language, json);
+            //eprintln!("Json for: {} \n{:#?}", language, json);
 
             match process_json(json).expect("Failed to process json") {
                 LSPMessage::Diagnostics(diagnostics) => {
-                    eprintln!("Got diagnostics");
+                    //eprintln!("Got diagnostics");
                     let sender = self.server_channels.get(language).unwrap().0.clone();
 
                     let message = ControllerMessage::Response(
@@ -172,7 +172,7 @@ impl LspController {
                     sender.send(message).expect("Failed to send diagnostics");
                 },
                 LSPMessage::None => {
-                    eprintln!("Got none");
+                    //eprintln!("Got none");
                     continue;
                 }
             }
@@ -309,31 +309,9 @@ impl LspController {
             Some(client) => {
                 match req {
                     LspRequest::Shutdown => {
-                        /*loop {
-                            match client.try_lock() {
-                                Ok(mut client) => {
-                                    client.send_shutdown()?;
-                                    break;
-                                },
-                                Err(_) => {
-                                    continue;
-                                }
-                            }
-                        }*/
                         client.send_shutdown()?;
                     },
                     LspRequest::Exit => {
-                        /*loop {
-                            match client.try_lock() {
-                                Ok(mut client) => {
-                                    client.send_exit()?;
-                                    break;
-                                },
-                                Err(_) => {
-                                    continue;
-                                }
-                            }
-                        }*/
                         client.send_exit()?;
                     },
                     LspRequest::RequestDiagnostic(uri) => {
