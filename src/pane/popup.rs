@@ -3,7 +3,7 @@ use std::{rc::Rc, cell::RefCell, sync::mpsc::{Sender, Receiver}, path::PathBuf, 
 
 use uuid::Uuid;
 
-use crate::{mode::{Mode, prompt::PromptType, Promptable}, cursor::Cursor, window::{StyledChar, Message}, settings::Settings, buffer::Buffer};
+use crate::{mode::{Mode, PromptType, Promptable}, cursor::Cursor, window::{StyledChar, Message}, settings::Settings, buffer::Buffer};
 use super::{PaneMessage, PaneContainer, Pane};
 
 

@@ -1,3 +1,4 @@
+use crate::mode::PromptType;
 use crate::{pane::Pane, window::StyledChar, cursor::CursorMove, buffer::Buffer};
 use std::{io::Write, sync::mpsc::Receiver};
 
@@ -9,7 +10,6 @@ use crossterm::event::KeyEvent;
 use crate::{cursor::{Cursor, Direction}, mode::{Mode, base::{Normal, Insert, Command}}, settings::Settings, window::Message};
 
 use super::{PaneContainer, PaneMessage, popup::PopUpPane};
-use crate::mode::prompt::PromptType;
 
 
 #[derive(Debug, Clone)]
