@@ -12,6 +12,7 @@ use crate::{settings::Settings, window::{StyledChar, Message}, cursor::Cursor, b
 
 pub enum PaneMessage {
     String(String),
+    Close,
 }
 
 

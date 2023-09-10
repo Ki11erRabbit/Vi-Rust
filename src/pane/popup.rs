@@ -1,7 +1,7 @@
-use std::{rc::Rc, cell::RefCell, sync::mpsc::Sender, path::PathBuf, io};
+use std::{rc::Rc, cell::RefCell, sync::mpsc::{Sender, Receiver}, path::PathBuf, io};
 
 
-use crate::{mode::{Mode, prompt::{PromptType, Promptable}}, cursor::Cursor, window::{StyledChar, Message}, settings::Settings, buffer::Buffer};
+use crate::{mode::{Mode, prompt::PromptType, Promptable}, cursor::Cursor, window::{StyledChar, Message}, settings::Settings, buffer::Buffer};
 use super::{PaneMessage, PaneContainer, Pane};
 
 
@@ -15,14 +15,22 @@ pub struct PopUpPane {
     mode : Rc<RefCell<dyn Promptable>>,
     window_sender: Sender<Message>,
     pane_sender: Sender<PaneMessage>,
+    pane_receiver: Receiver<PaneMessage>,
     prompt: Vec<String>,
     drawn_prompt: RefCell<usize>,
     prompt_level: RefCell<usize>,
     settings: Rc<RefCell<Settings>>,
+    border: bool,
 }
 
 impl PopUpPane {
-    pub fn new(settings: Rc<RefCell<Settings>>, prompt: Vec<String>, window_sender: Sender<Message>, pane_sender: Sender<PaneMessage>, prompts: Vec<PromptType>) -> PopUpPane {
+    pub fn new_prompt(settings: Rc<RefCell<Settings>>,
+                      prompt: Vec<String>,
+                      window_sender: Sender<Message>,
+                      pane_sender: Sender<PaneMessage>,
+                      pane_receiver: Receiver<PaneMessage>,
+                      prompts: Vec<PromptType>,
+                      border: bool) -> PopUpPane {
 
         let mode = Rc::new(RefCell::new(crate::mode::prompt::Prompt::new(prompts)));
 
@@ -32,10 +40,37 @@ impl PopUpPane {
             mode,
             window_sender,
             pane_sender,
+            pane_receiver,
             prompt,
             drawn_prompt: RefCell::new(0),
             prompt_level: RefCell::new(0),
             settings,
+            border
+        }
+    }
+
+    pub fn new_info(settings: Rc<RefCell<Settings>>,
+                    prompt: Vec<String>,
+                    window_sender: Sender<Message>,
+                    pane_sender: Sender<PaneMessage>,
+                    pane_receiver: Receiver<PaneMessage>,
+                    body: Vec<Option<String>>,
+                    border: bool) -> PopUpPane {
+
+        let mode = Rc::new(RefCell::new(crate::mode::info::Info::new(body)));
+
+        //mode.borrow_mut().add_keybindings(settings.borrow().mode_keybindings.get("Info").unwrap().clone());
+        
+        PopUpPane {
+            mode,
+            window_sender,
+            pane_sender,
+            pane_receiver,
+            prompt,
+            drawn_prompt: RefCell::new(0),
+            prompt_level: RefCell::new(0),
+            settings,
+            border
         }
     }
 
@@ -63,66 +98,104 @@ impl Pane for PopUpPane {
         let (width, height) = container.get_size();
         
         let color_settings = container.settings.borrow().colors.clone().popup.clone();
-        
-        if index == 0 {
-            output.push(Some(StyledChar::new('┌', color_settings.clone())));
-            for _ in 0..width - 2 {
-                output.push(Some(StyledChar::new('─', color_settings.clone())));
-            }
-            output.push(Some(StyledChar::new('┐', color_settings.clone())));
 
-            *self.prompt_level.borrow_mut() = 0;
-            *self.drawn_prompt.borrow_mut() = 0;
-        }
-        else if index == height {
-            output.push(Some(StyledChar::new('└', color_settings.clone())));
-            for _ in 0..width - 2 {
-                output.push(Some(StyledChar::new('─', color_settings.clone())));
-            }
-            output.push(Some(StyledChar::new('┘', color_settings.clone())));
-        }
-        else {
-            output.push(Some(StyledChar::new('│', color_settings.clone())));
-
-            if *self.drawn_prompt.borrow() < self.prompt.len() {
-                let prompt = *self.drawn_prompt.borrow();
-                let side_len = width.saturating_sub(2 + self.prompt[prompt].chars().count());
-                let side_len = side_len / 2;
-                for _ in 0..side_len {
-                    output.push(Some(StyledChar::new(' ', color_settings.clone())));
-                }
-
-                for c in self.prompt[prompt].chars() {
-                    output.push(Some(StyledChar::new(c, color_settings.clone())));
-                }
-
-                for _ in 0..side_len {
-                    output.push(Some(StyledChar::new(' ', color_settings.clone())));
-                }
-
-                *self.drawn_prompt.borrow_mut() += 1;
-            }
-            else if *self.drawn_prompt.borrow() == self.prompt.len() {
+        if self.border {
+            if index == 0 {
+                output.push(Some(StyledChar::new('┌', color_settings.clone())));
                 for _ in 0..width - 2 {
-                    output.push(Some(StyledChar::new(' ', color_settings.clone())));
+                    output.push(Some(StyledChar::new('─', color_settings.clone())));
                 }
-                *self.drawn_prompt.borrow_mut() += 1;
+                output.push(Some(StyledChar::new('┐', color_settings.clone())));
+
+                *self.prompt_level.borrow_mut() = 0;
+                *self.drawn_prompt.borrow_mut() = 0;
+            }
+            else if index == height {
+                output.push(Some(StyledChar::new('└', color_settings.clone())));
+                for _ in 0..width - 2 {
+                    output.push(Some(StyledChar::new('─', color_settings.clone())));
+                }
+                output.push(Some(StyledChar::new('┘', color_settings.clone())));
             }
             else {
-                let row_offset = *self.prompt_level.borrow();
-                let mode = self.mode.clone();
-                mode.borrow_mut().draw_prompt(index - index + row_offset, container, output);
+                output.push(Some(StyledChar::new('│', color_settings.clone())));
 
-                *self.prompt_level.borrow_mut() += 1;
+                if *self.drawn_prompt.borrow() < self.prompt.len() {
+                    let prompt = *self.drawn_prompt.borrow();
+                    let side_len = width.saturating_sub(2 + self.prompt[prompt].chars().count());
+                    let side_len = side_len / 2;
+                    for _ in 0..side_len {
+                        output.push(Some(StyledChar::new(' ', color_settings.clone())));
+                    }
+
+                    for c in self.prompt[prompt].chars() {
+                        output.push(Some(StyledChar::new(c, color_settings.clone())));
+                    }
+
+                    for _ in 0..side_len {
+                        output.push(Some(StyledChar::new(' ', color_settings.clone())));
+                    }
+
+                    *self.drawn_prompt.borrow_mut() += 1;
+                }
+                else if *self.drawn_prompt.borrow() == self.prompt.len() {
+                    for _ in 0..width - 2 {
+                        output.push(Some(StyledChar::new(' ', color_settings.clone())));
+                    }
+                    *self.drawn_prompt.borrow_mut() += 1;
+                }
+                else {
+                    let row_offset = *self.prompt_level.borrow();
+                    let mode = self.mode.clone();
+                    mode.borrow_mut().draw_prompt(index - index + row_offset, container, output);
+
+                    *self.prompt_level.borrow_mut() += 1;
+                }
+                output.push(Some(StyledChar::new('│', color_settings.clone())));
             }
-            
-            
+        }
+        else {
+            if index == 0 {
+                *self.prompt_level.borrow_mut() = 0;
+                *self.drawn_prompt.borrow_mut() = 0;
+            }
+            else if index == height {
+                *self.prompt_level.borrow_mut() = 0;
+                *self.drawn_prompt.borrow_mut() = 0;
+            }
+            else {
+                if *self.drawn_prompt.borrow() < self.prompt.len() {
+                    let prompt = *self.drawn_prompt.borrow();
+                    let side_len = width.saturating_sub(self.prompt[prompt].chars().count());
+                    let side_len = side_len / 2;
+                    for _ in 0..side_len {
+                        output.push(Some(StyledChar::new(' ', color_settings.clone())));
+                    }
 
+                    for c in self.prompt[prompt].chars() {
+                        output.push(Some(StyledChar::new(c, color_settings.clone())));
+                    }
 
+                    for _ in 0..side_len {
+                        output.push(Some(StyledChar::new(' ', color_settings.clone())));
+                    }
 
+                    *self.drawn_prompt.borrow_mut() += 1;
+                }
+                else if *self.drawn_prompt.borrow() == self.prompt.len() {
+                    for _ in 0..width {
+                        output.push(Some(StyledChar::new(' ', color_settings.clone())));
+                    }
+                    *self.drawn_prompt.borrow_mut() += 1;
+                }
+                else {
+                    let row_offset = *self.prompt_level.borrow();
+                    let mode = self.mode.clone();
+                    mode.borrow_mut().draw_prompt(index - index + row_offset, container, output);
 
-            
-            output.push(Some(StyledChar::new('│', color_settings.clone())));
+                    *self.prompt_level.borrow_mut() += 1;
+                }
+            }
         }
     }
 

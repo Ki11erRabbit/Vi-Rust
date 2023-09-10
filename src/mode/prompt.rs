@@ -8,12 +8,9 @@ use crate::settings::{ColorScheme, Key};
 use crate::{mode::Mode, pane::Pane, settings::Keys};
 use crate::window::StyledChar;
 
+use super::Promptable;
 
-pub trait Promptable: Mode {
-    fn draw_prompt(&mut self, row: usize, container: &PaneContainer, output: &mut Vec<Option<StyledChar>>);
 
-    fn max_width(&self) -> usize;
-}
 
 
 pub enum PromptType {

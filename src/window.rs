@@ -108,6 +108,30 @@ impl Window {
     }
 
     fn create_popup(&mut self, pane: PaneContainer, make_active: bool) {
+
+        /*let mut offset = self.active_layer;
+        while self.panes.len() <= offset {
+            if offset == self.panes.len() {
+                eprintln!("Creating new layer");
+                self.panes.push(vec![pane]);
+                self.buffers.push(TextBuffer::new());
+                break;
+            }
+            if self.panes[offset].len() == 0 {
+                eprintln!("Adding to existing layer");
+                self.panes[offset].push(pane);
+                break;
+            }
+            offset += 1;
+        }
+        if make_active {
+            eprintln!("Making new pane active");
+            self.active_layer = offset;
+            self.active_panes[self.active_layer] = self.panes[self.active_layer].len() - 1;
+
+        }*/
+
+        
         if self.panes.len() - 1 == self.active_layer {
             eprintln!("Creating new layer");
             self.panes.push(vec![pane]);
@@ -919,7 +943,7 @@ impl Window {
         //eprintln!("x: {} y: {}", x, y);
 
         
-        let x = x + cursor.number_line_size;
+        let x = x;// + cursor.number_line_size;
 
         let (x, y) = if cursor.ignore_offset {
             cursor.get_draw_cursor()

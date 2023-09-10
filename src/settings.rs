@@ -419,6 +419,15 @@ impl Settings {
             key: KeyCode::Char('T'),
             modifier: KeyModifiers::NONE,
         }], "open_tab_with_pane".to_string());
+
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('\\'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('i'),
+            modifier: KeyModifiers::NONE,
+        }], "info".to_string());
+            
                                        
 
     }

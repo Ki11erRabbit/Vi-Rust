@@ -27,7 +27,7 @@ pub struct TreesitterPane {
     settings: Rc<RefCell<Settings>>,
     jump_table: JumpTable,
     sender: Sender<Message>,
-    receiver: Option<Receiver<PaneMessage>>,
+    popup_channels: Option<(Sender<PaneMessage>, Receiver<PaneMessage>)>,
     waiting: Waiting,
     rainbow_delimiters: RefCell<Vec<(char, ColorScheme)>>,
 }
@@ -79,7 +79,7 @@ impl TreesitterPane {
             settings,
             jump_table: JumpTable::new(),
             sender,
-            receiver: None,
+            popup_channels: None,
             waiting: Waiting::None,
             rainbow_delimiters: RefCell::new(Vec::new()),
         }
@@ -116,9 +116,9 @@ impl TreesitterPane {
     }
 
     fn check_messages(&mut self, container: &PaneContainer) {
-        match self.receiver.as_ref() {
+        match self.popup_channels.as_ref() {
             None => {},
-            Some(receiver) => {
+            Some((_, receiver)) => {
                 match receiver.try_recv() {
                     Ok(message) => {
                         match message {
@@ -139,6 +139,7 @@ impl TreesitterPane {
                                     },
                                 }
                             },
+                            PaneMessage::Close => self.run_command("q!", container),
                         }
                     },
                     Err(_) => {},
@@ -190,6 +191,87 @@ impl TreesitterPane {
                 }
             },
         }
+    }
+
+    fn open_info(&mut self, container: &PaneContainer) {
+
+        match &self.popup_channels {
+            Some((send,_)) => {
+                match self.waiting {
+                    Waiting::None => {
+                        
+                        match send.send(PaneMessage::Close) {
+                            Ok(_) => {},
+                            Err(_) => {},
+                        }
+                        self.popup_channels = None;
+                    },
+                    _ => {},
+                }
+            },
+            None => {},
+        }
+
+        
+        let cursor = self.cursor.borrow().get_cursor();
+
+        let diagnostic = self.lsp_diagnostics.get_diagnostic(cursor.1, cursor.0);
+        match diagnostic {
+            Some(diagnostic) => {
+                let (send, recv) = std::sync::mpsc::channel();
+                let (send2, recv2) = std::sync::mpsc::channel();
+
+                let prompt = match &diagnostic.code {
+                    Some(code) => vec![code.clone()],
+                    None => Vec::new(),
+                };
+
+                let mut max = 0;
+
+                let body = diagnostic.message.split("\n").map(|s| if s.len() == 0 {
+                    None
+                } else {
+                    if s.len() > max {
+                        max = s.len();
+                    }
+                    eprintln!("{}", s);
+                    Some(s.to_string())
+                }).collect::<Vec<Option<String>>>();
+
+                
+                let size = (max + 1, body.len() + 3);
+                
+
+                let pane = PopUpPane::new_info(self.settings.clone(),
+                                               prompt,
+                                               self.sender.clone(),
+                                               send,
+                                               recv2,
+                                               body,
+                                               false);
+                let pane = Rc::new(RefCell::new(pane));
+
+                let (_, (x2, y2)) = container.get_corners();
+                let (x, y) = container.get_size();
+
+                let pos = self.cursor.borrow().get_real_cursor();
+                eprintln!("pos: {:?}", pos);
+
+                let max_size = container.get_size();
+
+                let mut container = PaneContainer::new(max_size, size, pane, self.settings.clone());
+                container.set_position(pos);
+                container.set_size(size);
+
+                self.sender.send(Message::CreatePopup(container, false)).expect("Failed to send message");
+                self.waiting = Waiting::None;
+
+                self.popup_channels = Some((send2, recv));
+            },
+            None => {},
+        }
+            
+        
     }
 
 }
@@ -817,6 +899,9 @@ impl Pane for TreesitterPane {
         }
 
         self.read_lsp_messages();
+
+        self.open_info(container);
+
     }
 
 
@@ -862,6 +947,7 @@ impl Pane for TreesitterPane {
     fn process_keypress(&mut self, key: KeyEvent, container: &mut PaneContainer) -> io::Result<bool> {
         let mode = self.mode.clone();
         let result = mode.borrow_mut().process_keypress(key, self, container);
+
         result
     }
 
@@ -1162,13 +1248,22 @@ impl Pane for TreesitterPane {
             },
             "prompt_jump" => {
                 let (send, recv) = std::sync::mpsc::channel();
+                let (send2, recv2) = std::sync::mpsc::channel();
 
-                self.receiver = Some(recv);
+                self.popup_channels = Some((send2, recv));
 
                 let txt_prompt = PromptType::Text(String::new(), None, false);
                 let prompt = vec!["Enter Jump".to_string(), "Target".to_string()];
 
-                let pane = PopUpPane::new(self.settings.clone(), prompt, self.sender.clone(), send, vec![txt_prompt]);
+                let pane = PopUpPane::new_prompt(
+                    self.settings.clone(),
+                    prompt,
+                    self.sender.clone(),
+                    send,
+                    recv2,
+                    vec![txt_prompt],
+                    true
+                );
 
                 let pane = Rc::new(RefCell::new(pane));
 
@@ -1197,13 +1292,22 @@ impl Pane for TreesitterPane {
             },
             "prompt_set_jump" => {
                 let (send, recv) = std::sync::mpsc::channel();
+                let (send2, recv2) = std::sync::mpsc::channel();
 
-                self.receiver = Some(recv);
+                self.popup_channels = Some((send2, recv));
 
                 let txt_prompt = PromptType::Text(String::new(), None, false);
                 let prompt = vec!["Name the".to_string(), "Target".to_string()];
 
-                let pane = PopUpPane::new(self.settings.clone(), prompt, self.sender.clone(), send, vec![txt_prompt]);
+                let pane = PopUpPane::new_prompt(
+                    self.settings.clone(),
+                    prompt,
+                    self.sender.clone(),
+                    send,
+                    recv2,
+                    vec![txt_prompt],
+                    true
+                );
 
                 let pane = Rc::new(RefCell::new(pane));
 
@@ -1270,6 +1374,11 @@ impl Pane for TreesitterPane {
             "open_tab_with_pane" => {
                 self.sender.send(Message::OpenNewTabWithPane).expect("Failed to send message");
             },
+            "info" => {
+                
+                self.open_info(container);
+
+            }
 
             _ => {}
         }
