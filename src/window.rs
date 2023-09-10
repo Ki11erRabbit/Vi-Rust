@@ -712,6 +712,7 @@ impl Window {
                                 if go_down {
                                     self.active_layer = coords.0.saturating_sub(1);
                                 }
+                                self.force_refresh_screen()?;
                             }
                         }
                         
@@ -719,6 +720,7 @@ impl Window {
                     },
                     Message::CreatePopup(container, make_active) => {
                         self.create_popup(container, make_active);
+                        self.force_refresh_screen()?;
                         Ok(())
                     },
                     Message::OpenNewTab => {

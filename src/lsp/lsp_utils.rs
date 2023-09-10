@@ -55,7 +55,7 @@ impl Diagnostics {
     }
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, PartialEq, Hash, Eq, Clone)]
 pub struct Diagnostic {
     /// The type of the diagnostic.
     pub code: Option<String>,
@@ -69,13 +69,13 @@ pub struct Diagnostic {
     pub source: Option<String>,
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, PartialEq, Hash, Eq, Clone, Copy)]
 pub struct LSPRange {
     pub start: Position,
     pub end: Position,
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, PartialEq, Hash, Eq, Clone, Copy)]
 pub struct Position {
     pub line: usize,
     pub character: usize,

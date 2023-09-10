@@ -198,6 +198,10 @@ impl Pane for PopUpPane {
                         output.push(Some(StyledChar::new(' ', color_settings.clone())));
                     }
 
+                    if side_len * 2 + self.prompt[prompt].chars().count() < width {
+                        output.push(Some(StyledChar::new(' ', color_settings.clone())));
+                    }
+
                     *self.drawn_prompt.borrow_mut() += 1;
                 }
                 else if *self.drawn_prompt.borrow() == self.prompt.len() {

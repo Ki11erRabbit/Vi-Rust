@@ -1,4 +1,4 @@
-use std::{sync::{mpsc::{Sender, Receiver}, Arc}, cell::RefCell, rc::Rc, path::PathBuf, collections::HashMap, io::{self, Write}};
+use std::{sync::{mpsc::{Sender, Receiver}, Arc}, cell::RefCell, rc::Rc, path::PathBuf, collections::{HashMap, HashSet}, io::{self, Write}};
 
 use crop::RopeSlice;
 use crossterm::{event::KeyEvent, style::{Attribute, Color}};
@@ -17,6 +17,7 @@ pub struct TreesitterPane {
     lsp_client: Option<(Sender<ControllerMessage>, Arc<Receiver<ControllerMessage>>)>,
     file_version: usize,
     lsp_diagnostics: Diagnostics,
+    sent_diagnostics: HashSet<Diagnostic>,
 
     cursor: Rc<RefCell<Cursor>>,
     file_name: Option<PathBuf>,
@@ -69,6 +70,7 @@ impl TreesitterPane {
             lsp_client: lsp,
             file_version: 0,
             lsp_diagnostics: Diagnostics::new(),
+            sent_diagnostics: HashSet::new(),
             lang: lang_string.to_string(),
             cursor: Rc::new(RefCell::new(Cursor::new((0,0)))),
             file_name: None,
@@ -207,6 +209,7 @@ impl TreesitterPane {
                             Ok(_) => {},
                             Err(_) => {},
                         }
+
                         self.popup_channels = None;
                     },
                     _ => {},
@@ -221,6 +224,12 @@ impl TreesitterPane {
         let diagnostic = self.lsp_diagnostics.get_diagnostic(cursor.1, cursor.0);
         match diagnostic {
             Some(diagnostic) => {
+
+                if self.sent_diagnostics.contains(diagnostic) {
+                    self.sent_diagnostics.remove(diagnostic);
+                    return;
+                }
+                
                 let (send, recv) = std::sync::mpsc::channel();
                 let (send2, recv2) = std::sync::mpsc::channel();
 
@@ -270,6 +279,7 @@ impl TreesitterPane {
                 self.waiting = Waiting::None;
 
                 self.popup_channels = Some((send2, recv));
+                self.sent_diagnostics.insert(diagnostic.clone());
             },
             None => {
                 match &self.popup_channels {
@@ -281,6 +291,7 @@ impl TreesitterPane {
                                     Ok(_) => {},
                                     Err(_) => {},
                                 }
+                                self.sent_diagnostics.clear();
                                 self.popup_channels = None;
                             },
                             _ => {},
@@ -921,7 +932,6 @@ impl Pane for TreesitterPane {
 
         self.read_lsp_messages();
 
-        self.open_info(container);
 
     }
 
@@ -968,7 +978,8 @@ impl Pane for TreesitterPane {
     fn process_keypress(&mut self, key: KeyEvent, container: &mut PaneContainer) -> io::Result<bool> {
         let mode = self.mode.clone();
         let result = mode.borrow_mut().process_keypress(key, self, container);
-
+        
+        self.open_info(container);
         result
     }
 
@@ -1220,6 +1231,8 @@ impl Pane for TreesitterPane {
                         }
 
                     }
+
+                    self.open_info(container);
                 }
 
             },
@@ -1461,7 +1474,8 @@ impl Pane for TreesitterPane {
 
         self.tree.edit(&edit);
         self.tree = self.parser.parse(&self.contents.to_string(), Some(&self.tree)).unwrap();
-        
+
+
     }
 
     fn insert_str(&mut self, s: &str) {
