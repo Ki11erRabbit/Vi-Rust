@@ -320,7 +320,6 @@ impl Insert {
         } else {
             cursor.move_cursor(Direction::Right, 1, &mut *pane);
         }
-        cursor.move_cursor(Direction::Right, 1, &mut *pane);
         Ok(true)
     }
 }

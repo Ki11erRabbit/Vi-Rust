@@ -4,7 +4,7 @@ use crop::RopeSlice;
 use crossterm::{event::KeyEvent, style::{Attribute, Color}};
 use tree_sitter::{Parser, Tree, Point, Language, InputEdit};
 
-use crate::{window::{Message, StyledChar}, cursor::{Cursor, Direction, CursorMove}, mode::{Mode, base::{Normal, Insert, Command}, prompt::PromptType}, buffer::Buffer, settings::{Settings, SyntaxHighlight, ColorScheme},  lsp::{ControllerMessage, LspNotification, lsp_utils::{Diagnostic, Diagnostics}, LspResponse}};
+use crate::{window::{Message, StyledChar}, cursor::{Cursor, Direction, CursorMove}, mode::{Mode, base::{Normal, Insert, Command}, prompt::PromptType}, buffer::Buffer, settings::{Settings, SyntaxHighlight, ColorScheme},  lsp::{ControllerMessage, LspNotification, lsp_utils::{Diagnostic, Diagnostics}, LspResponse, LspRequest}};
 
 use super::{text::{JumpTable, Waiting}, PaneMessage, Pane, PaneContainer, popup::PopUpPane};
 
@@ -62,6 +62,7 @@ impl TreesitterPane {
         parser.set_language(lang).unwrap();
 
         let tree = parser.parse("".as_bytes(), None).unwrap();
+                
 
         
         Self {
@@ -198,6 +199,10 @@ impl TreesitterPane {
         }
     }
 
+    /// This function is to create an informational popup that will display
+    /// the diagnostics for the current cursor position.
+    /// Therefore, it should get called whenever something might have changed
+    /// the diagnostics for the current cursor position.
     fn open_info(&mut self, container: &PaneContainer) {
 
         match &self.popup_channels {
@@ -234,7 +239,30 @@ impl TreesitterPane {
                 let (send2, recv2) = std::sync::mpsc::channel();
 
                 let prompt = match &diagnostic.code {
-                    Some(code) => vec![code.clone()],
+                    Some(code) => {
+                        let split = code.split('_');
+
+                        let mut words = Vec::new();
+                        for word in split {
+                            let mut chars = word.chars();
+                            match chars.next() {
+                                None => {},
+                                Some(c) => {
+                                    let mut word = String::new();
+                                    word.push(c.to_ascii_uppercase());
+                                    for c in chars {
+                                        word.push(c);
+                                    }
+                                    words.push(word);
+                                },
+                            }
+                        }
+
+                        let prompt = words.join(" ");
+                        
+
+                        vec![prompt]
+                    },
                     None => Vec::new(),
                 };
 
@@ -419,7 +447,7 @@ impl Pane for TreesitterPane {
                 let point1 = Point::new(real_row, count);
                 let point2 = Point::new(real_row, count + 1);
                 let node = self.tree.root_node().descendant_for_point_range(point1, point2).unwrap();
-                let mut parent_node = node.parent();
+                let parent_node = node.parent();
                 
                 match c {
                     '\t' => {
@@ -964,9 +992,14 @@ impl Pane for TreesitterPane {
             Some((sender, _)) => {
                 sender.send(ControllerMessage::Notification(
                     self.lang.clone().into(),
-                    LspNotification::Open(uri.into(),
+                    LspNotification::Open(uri.clone().into(),
                                           self.contents.to_string().into()))
                 ).expect("Failed to send message");
+
+                sender.send(ControllerMessage::Request(
+                    self.lang.clone().into(),
+                    LspRequest::RequestDiagnostic(uri.into())
+                )).expect("Failed to send message");
             },
         }
 

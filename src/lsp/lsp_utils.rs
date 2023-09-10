@@ -110,11 +110,7 @@ pub fn process_json(json: Value) -> io::Result<LSPMessage> {
         }
         _ => {
             println!("Unknown method: {}", method);
-            Ok(LSPMessage::Diagnostics(Diagnostics {
-                diagnostics: Vec::new(),
-                uri: String::new(),
-                version: 0,
-            }))
+            Ok(LSPMessage::None)
         }
     }
     

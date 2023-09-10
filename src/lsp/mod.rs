@@ -18,6 +18,8 @@ pub enum LspRequest {
     Shutdown,
     /// Tells the server to exit
     Exit,
+    /// Requires a URI
+    RequestDiagnostic(Box<str>),
 
 }
 
@@ -333,6 +335,9 @@ impl LspController {
                             }
                         }*/
                         client.send_exit()?;
+                    },
+                    LspRequest::RequestDiagnostic(uri) => {
+                        client.request_diagnostic(uri.as_ref())?;
                     },
                 }
             },

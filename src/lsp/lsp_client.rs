@@ -122,6 +122,11 @@ impl Client {
                     "name": "vi",
                     "version": "0.0.1",
                 },
+                "capabilities": {
+                    "diagnostics": {
+                        "refreshSupport": true,
+                    },
+                },
             },
         });
         self.send_message(message)?;
@@ -203,6 +208,18 @@ impl Client {
                 "textDocument": {
                     "uri": uri,
                 },
+            },
+        });
+        self.send_message(message)?;
+        Ok(())
+    }
+
+    pub fn request_diagnostic(&mut self, uri: &str) -> io::Result<()> {
+        let message = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/diagnostic",
+            "params": {
+                "textDocument": uri,
             },
         });
         self.send_message(message)?;
