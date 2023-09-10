@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use std::cmp;
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::io;
@@ -11,6 +11,7 @@ use std::time::Duration;
 use crossterm::event::{KeyEvent, self, Event};
 use crossterm::style::{Stylize, StyledContent};
 use crossterm::{terminal::{self, ClearType}, execute, cursor, queue};
+use uuid::Uuid;
 
 use crate::editor::EditorMessage;
 use crate::lsp::ControllerMessage;
@@ -31,7 +32,8 @@ pub enum Message {
     PaneLeft,
     PaneRight,
     OpenFile(String),
-    ClosePane(bool),
+    /// go down a layer
+    ClosePane(bool, Option<Uuid>),
     CreatePopup(PaneContainer, bool),
     OpenNewTab,
     OpenNewTabWithPane,
@@ -47,6 +49,7 @@ pub struct Window{
     active_panes: Vec<usize>,
     active_layer: usize,
     panes: Vec<Vec<PaneContainer>>,
+    id_to_pane: HashMap<Uuid, (usize, usize)>,
     buffers: Vec<TextBuffer>,
     final_buffer: FinalTextBuffer,
     known_file_types: HashSet<String>,
@@ -79,6 +82,8 @@ impl Window {
         
         let panes = vec![vec![PaneContainer::new(win_size, win_size, pane.clone(), settings.clone())]];
 
+        let mut id_to_pane = HashMap::new();
+        id_to_pane.insert(panes[0][0].get_uuid(), (0, 0));
 
         let mut known_file_types = HashSet::new();
         known_file_types.insert("txt".to_string());
@@ -90,6 +95,7 @@ impl Window {
             active_panes: vec![0],
             active_layer: 0,
             panes,
+            id_to_pane,
             buffers,
             final_buffer: FinalTextBuffer::new(),
             known_file_types,
@@ -457,6 +463,14 @@ impl Window {
                 self.active_panes[i] = cmp::min(self.active_panes[i], layer.len() - 1);
             }
         }
+
+        self.id_to_pane = HashMap::new();
+
+        for (i, layer) in self.panes.iter().enumerate() {
+            for (j, pane) in layer.iter().enumerate() {
+                self.id_to_pane.insert(pane.get_uuid(), (i, j));
+            }
+        }
            
     }
 
@@ -496,6 +510,8 @@ impl Window {
         // This is for testing purposes, we need to make sure that we can actually access the new pane
         self.active_panes[self.active_layer] = new_pane_index;
 
+        self.id_to_pane.insert(self.panes[self.active_layer][new_pane_index].get_uuid(), (self.active_layer, new_pane_index));
+
         //eprintln!("split panes: {:?}", self.panes.len());
     }
 
@@ -529,6 +545,8 @@ impl Window {
         //eprintln!("old corners {:?}", self.panes[self.active_layer][self.active_panes[self.active_layer]].get_corners());
         
         self.active_panes[self.active_layer] = new_pane_index;
+
+        self.id_to_pane.insert(self.panes[self.active_layer][new_pane_index].get_uuid(), (self.active_layer, new_pane_index));
 
         //eprintln!("new corners {:?}", self.panes[self.active_layer][self.active_panes[self.active_layer]].get_corners());
     }
@@ -675,13 +693,26 @@ impl Window {
                     Message::OpenFile(path) => {
                         self.switch_pane(path)
                     }
-                    Message::ClosePane(go_down) => {
-                        //self.panes[self.active_layer].remove(self.active_panes[self.active_layer]);
-                        self.panes[self.active_layer][self.active_panes[self.active_layer]].close();
-                        self.active_panes[self.active_layer] = self.active_panes[self.active_layer].saturating_sub(1);
+                    Message::ClosePane(go_down, uuid) => {
+                        match uuid {
+                            None => {
+                                //self.panes[self.active_layer].remove(self.active_panes[self.active_layer]);
+                                self.panes[self.active_layer][self.active_panes[self.active_layer]].close();
+                                self.active_panes[self.active_layer] = self.active_panes[self.active_layer].saturating_sub(1);
 
-                        if go_down {
-                            self.active_layer = self.active_layer.saturating_sub(1);
+                                if go_down {
+                                    self.active_layer = self.active_layer.saturating_sub(1);
+                                }
+                            },
+                            Some(uuid) => {
+                                let coords = self.id_to_pane.get(&uuid).unwrap();
+
+                                self.panes[coords.0][coords.1].close();
+
+                                if go_down {
+                                    self.active_layer = coords.0.saturating_sub(1);
+                                }
+                            }
                         }
                         
                         Ok(())
@@ -729,6 +760,7 @@ impl Window {
     }
 
     fn process_event(&mut self) -> io::Result<Event> {
+        self.refresh_screen()?;
         loop {
             if event::poll(self.duration)? {
                 return event::read();
@@ -741,14 +773,14 @@ impl Window {
         //self.refresh_screen()?;
         self.read_messages()?;
         self.remove_panes();
-        if self.panes[self.active_layer].len() == 0 {
-            //eprintln!("No panes left");
+        if self.panes[0].len() == 0 {
+            eprintln!("No panes left");
             self.editor_sender.send(EditorMessage::CloseWindow).unwrap();
             return Ok(false);
         }
 
         self.refresh_screen()?;
-        let ((x1, y1), (x2, y2)) = self.panes[self.active_layer][self.active_panes[self.active_layer]].get_corners();
+        let ((x1, y1), (x2, y2)) = self.panes[0][self.active_panes[0]].get_corners();
 
         if x1 == x2 || y1 == y2 {
             //eprintln!("Pane is too small");
@@ -919,8 +951,13 @@ impl Window {
             return Ok(());
         }
 
+        for layer in self.panes.iter_mut() {
+            for pane in layer.iter_mut() {
+                pane.refresh();
+            }
+        }
 
-        self.panes[self.active_layer][self.active_panes[self.active_layer]].refresh();
+        //self.panes[self.active_layer][self.active_panes[self.active_layer]].refresh();
 
         self.panes[self.active_layer][self.active_panes[self.active_layer]].scroll_cursor();
 

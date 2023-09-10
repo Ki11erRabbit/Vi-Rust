@@ -103,7 +103,6 @@ impl Cursor {
     }
 
     pub fn get_real_cursor(&self) -> (usize, usize) {
-        eprintln!(" number line size: {}", self.number_line_size);
         let x = if self.x < self.col_offset {
             self.x + self.col_offset
         }

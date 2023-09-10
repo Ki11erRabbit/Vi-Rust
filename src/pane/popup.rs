@@ -1,6 +1,8 @@
 use std::{rc::Rc, cell::RefCell, sync::mpsc::{Sender, Receiver}, path::PathBuf, io};
 
 
+use uuid::Uuid;
+
 use crate::{mode::{Mode, prompt::PromptType, Promptable}, cursor::Cursor, window::{StyledChar, Message}, settings::Settings, buffer::Buffer};
 use super::{PaneMessage, PaneContainer, Pane};
 
@@ -74,6 +76,21 @@ impl PopUpPane {
         }
     }
 
+
+    fn check_messages(&mut self, container: &PaneContainer) {
+        match self.pane_receiver.try_recv() {
+            Ok(message) => {
+                match message {
+                    PaneMessage::String(string) => {
+                    },
+                    PaneMessage::Close => self.run_command(&format!("close {}", container.get_uuid()), container),
+                }
+            },
+            Err(_) => {},
+        }
+    }
+    
+
 }
 
 
@@ -83,6 +100,7 @@ impl Pane for PopUpPane {
     }
 
     fn refresh(&mut self, container: &mut PaneContainer) {
+        self.check_messages(container);
     }
 
     fn change_mode(&mut self, name: &str) {}
@@ -206,7 +224,7 @@ impl Pane for PopUpPane {
         
         match command {
             "cancel" => {
-                self.window_sender.send(Message::ClosePane(true)).unwrap();
+                self.window_sender.send(Message::ClosePane(true, None)).unwrap();
             },
             "submit" => {
                 let result_type = command_args.next().unwrap();
@@ -214,27 +232,35 @@ impl Pane for PopUpPane {
                 match result_type {
                     "text" => {
                         let value = command_args.next().unwrap();
-                        self.window_sender.send(Message::ClosePane(true)).unwrap();
+                        self.window_sender.send(Message::ClosePane(true, None)).unwrap();
                         self.pane_sender.send(PaneMessage::String(value.to_string())).unwrap();
                     },
                     "radio" => {
                         let value = command_args.next().unwrap();
-                        self.window_sender.send(Message::ClosePane(true)).unwrap();
+                        self.window_sender.send(Message::ClosePane(true, None)).unwrap();
                         self.pane_sender.send(PaneMessage::String(value.to_string())).unwrap();
                     },
                     "button" => {
                         let value = command_args.next().unwrap();
-                        self.window_sender.send(Message::ClosePane(true)).unwrap();
+                        self.window_sender.send(Message::ClosePane(true, None)).unwrap();
                         self.pane_sender.send(PaneMessage::String(value.to_string())).unwrap();
                     },
                     "checkbox" => {
                         let value = command_args.next().unwrap();
-                        self.window_sender.send(Message::ClosePane(true)).unwrap();
+                        self.window_sender.send(Message::ClosePane(true, None)).unwrap();
                         self.pane_sender.send(PaneMessage::String(value.to_string())).unwrap();
                     },
                     x => {
                         panic!("Unknown result type {}", x);
                     }
+                }
+            },
+            "close" => {
+                if let Some(value) = command_args.next() {
+                    self.window_sender.send(Message::ClosePane(true, Some(Uuid::try_parse(value).unwrap()))).unwrap();
+                }
+                else {
+                    self.window_sender.send(Message::ClosePane(true, None)).unwrap();
                 }
             },
             x => {}

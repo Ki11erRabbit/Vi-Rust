@@ -420,7 +420,7 @@ impl Pane for TextPane {
             "q" => {
                 if self.changed {
                 } else {
-                    self.sender.send(Message::ClosePane(false)).unwrap();
+                    self.sender.send(Message::ClosePane(false, None)).unwrap();
                 }
             },
             "w" => {
@@ -441,10 +441,10 @@ impl Pane for TextPane {
             },
             "wq" => {
                 self.save_buffer().expect("Failed to save file");
-                self.sender.send(Message::ClosePane(false)).unwrap();
+                self.sender.send(Message::ClosePane(false, None)).unwrap();
             },
             "q!" => {
-                self.sender.send(Message::ClosePane(false)).unwrap();
+                self.sender.send(Message::ClosePane(false, None)).unwrap();
             },
             "move" => {
                 let direction = command_args.next();

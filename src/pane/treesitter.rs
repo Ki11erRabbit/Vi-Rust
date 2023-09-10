@@ -139,7 +139,10 @@ impl TreesitterPane {
                                     },
                                 }
                             },
-                            PaneMessage::Close => self.run_command("q!", container),
+                            PaneMessage::Close => {
+                                eprintln!("Closing treesitter");
+                                self.run_command("q!", container)
+                            },
                         }
                     },
                     Err(_) => {},
@@ -199,7 +202,7 @@ impl TreesitterPane {
             Some((send,_)) => {
                 match self.waiting {
                     Waiting::None => {
-                        
+
                         match send.send(PaneMessage::Close) {
                             Ok(_) => {},
                             Err(_) => {},
@@ -239,7 +242,7 @@ impl TreesitterPane {
                 }).collect::<Vec<Option<String>>>();
 
                 
-                let size = (max + 1, body.len() + 3);
+                let size = (max + 1, body.len() + 2 + prompt.len());
                 
 
                 let pane = PopUpPane::new_info(self.settings.clone(),
@@ -268,7 +271,25 @@ impl TreesitterPane {
 
                 self.popup_channels = Some((send2, recv));
             },
-            None => {},
+            None => {
+                match &self.popup_channels {
+                    Some((send,_)) => {
+                        match self.waiting {
+                            Waiting::None => {
+
+                                match send.send(PaneMessage::Close) {
+                                    Ok(_) => {},
+                                    Err(_) => {},
+                                }
+                                self.popup_channels = None;
+                            },
+                            _ => {},
+                        }
+                    },
+                    None => {},
+                }
+
+            },
         }
             
         
@@ -970,7 +991,7 @@ impl Pane for TreesitterPane {
             "q" => {
                 if self.changed {
                 } else {
-                    self.sender.send(Message::ClosePane(false)).unwrap();
+                    self.sender.send(Message::ClosePane(false, None)).unwrap();
                 }
 
                 let uri = self.generate_uri();
@@ -1087,7 +1108,7 @@ impl Pane for TreesitterPane {
 
                 
                 self.save_buffer().expect("Failed to save file");
-                self.sender.send(Message::ClosePane(false)).unwrap();
+                self.sender.send(Message::ClosePane(false, None)).unwrap();
 
                 match &self.lsp_client {
                     None => {},
@@ -1116,7 +1137,7 @@ impl Pane for TreesitterPane {
                 
             },
             "q!" => {
-                self.sender.send(Message::ClosePane(false)).unwrap();
+                self.sender.send(Message::ClosePane(false, None)).unwrap();
                 let uri = self.generate_uri();
 
                 match &self.lsp_client {
