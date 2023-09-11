@@ -100,33 +100,34 @@ pub struct Position {
     pub character: usize,
 }
 
-
+#[allow(non_snake_case)]
 #[derive(Debug, Deserialize, PartialEq, Clone)]
 pub struct CompletionList {
-    pub is_incomplete: bool,
+    pub isIncomplete: bool,
     pub items: Vec<CompletionItem>,
 }
 
+#[allow(non_snake_case)]
 #[derive(Debug, Deserialize, PartialEq,   Clone)]
 pub struct CompletionItem {
     pub label: String,
-    pub label_details: Option<CompletionItemLabelDetails>,
+    pub labelDetails: Option<CompletionItemLabelDetails>,
     pub kind: usize,
     pub score: Option<f64>,
     pub tags: Option<Vec<usize>>,
     pub detail: Option<String>,
-    pub documentation: Option<DocumentationType>,
+    pub documentation: Option<Value>,
     pub deprecated: Option<bool>,
     pub preselect: Option<bool>,
-    pub sort_text: Option<String>,
-    pub filter_text: Option<String>,
-    pub insert_text: Option<String>,
-    pub insert_text_format: Option<usize>,
-    pub insert_text_mode: Option<usize>,
-    pub text_edit: Option<TextEditType>,
-    pub text_edit_text: Option<String>,
-    pub additional_text_edits: Option<Vec<TextEdit>>,
-    pub commit_characters: Option<Vec<String>>,
+    pub sortText: Option<String>,
+    pub filterText: Option<String>,
+    pub insertText: Option<String>,
+    pub insertTextFormat: Option<usize>,
+    pub insertTextMode: Option<usize>,
+    pub textEdit: Option<TextEdit>,
+    pub textEditText: Option<String>,
+    pub additionalTextEdits: Option<Vec<TextEdit>>,
+    pub commitCharacters: Option<Vec<String>>,/**/
     pub command: Option<Command>,
     pub data: Option<Value>,
 }
@@ -158,7 +159,7 @@ pub enum TextEditType {
 #[derive(Debug, Deserialize, PartialEq, Hash, Eq, Clone)]
 pub struct TextEdit {
     pub range: LSPRange,
-    pub new_text: String,
+    pub newText: String,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Hash, Eq, Clone)]
@@ -225,7 +226,7 @@ pub fn process_json(json: Value) -> io::Result<LSPMessage> {
                 Ok(LSPMessage::Completions(completion_list))
             },
             _ => {
-                println!("Unknown id: {}", id);
+                eprintln!("Unknown id: {}", id);
                 Ok(LSPMessage::None)
             }
         }

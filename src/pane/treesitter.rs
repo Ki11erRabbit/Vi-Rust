@@ -1468,7 +1468,10 @@ impl Pane for TreesitterPane {
                             LspRequest::RequestCompletion(uri.into(), position, "invoked".into())
                         )).expect("Failed to send message");
 
-                        self.read_lsp_messages();
+                        eprintln!("Sent completion request");
+                        while self.lsp_completion.is_none() {
+                            self.read_lsp_messages();
+                        }
 
                         let completion_items;
 
