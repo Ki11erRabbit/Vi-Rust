@@ -101,21 +101,18 @@ pub struct Position {
 }
 
 
-#[derive(Debug, Deserialize, PartialEq,  Eq, Clone)]
-pub enum CompletionList {
-    CompletionList {
-        is_incomplete: bool,
-        items: Vec<CompletionItem>,
-    },
-    CompletionItems(Vec<CompletionItem>),
-    Null,
+#[derive(Debug, Deserialize, PartialEq, Clone)]
+pub struct CompletionList {
+    pub is_incomplete: bool,
+    pub items: Vec<CompletionItem>,
 }
 
-#[derive(Debug, Deserialize, PartialEq,  Eq, Clone)]
+#[derive(Debug, Deserialize, PartialEq,   Clone)]
 pub struct CompletionItem {
     pub label: String,
     pub label_details: Option<CompletionItemLabelDetails>,
     pub kind: usize,
+    pub score: Option<f64>,
     pub tags: Option<Vec<usize>>,
     pub detail: Option<String>,
     pub documentation: Option<DocumentationType>,
@@ -180,46 +177,63 @@ pub struct Command {
 
 pub fn process_json(json: Value) -> io::Result<LSPMessage> {
 
-    match json["method"] {
-        Value::Null => {
-            return Ok(LSPMessage::None);
+
+    if json["method"] != Value::Null {
+
+        let method = json["method"].as_str().unwrap();
+        match method {
+            "textDocument/publishDiagnostics" => {
+                let obj = json["params"].clone();
+                eprintln!("diagnostics");
+
+                let diagnostics: Diagnostics = match serde_json::from_value(obj) {
+                    Ok(value) => value,
+                    Err(e) => {
+                        eprintln!("Error: {:?}", e);
+                        return Ok(LSPMessage::None);
+                    }
+                };
+                Ok(LSPMessage::Diagnostics(diagnostics))
+            },
+
+            _ => {
+                println!("Unknown method: {}", method);
+                Ok(LSPMessage::None)
+            }
         }
-        _ => {}
     }
-    
-    let method = json["method"].as_str().unwrap();
-    match method {
-        "textDocument/publishDiagnostics" => {
-            let obj = json["params"].clone();
-            eprintln!("diagnostics");
+    else if json["id"] != Value::Null {
+        let id: usize = match serde_json::from_value(json["id"].clone()) {
+            Ok(value) => value,
+            Err(e) => {
+                eprintln!("Id Error: {:?}", e);
+                return Ok(LSPMessage::None);
+            }
+        };
+        match id {
+            2 => {
+                let obj = json["result"].clone();
+                eprintln!("completion");
 
-            let diagnostics: Diagnostics = match serde_json::from_value(obj) {
-                Ok(value) => value,
-                Err(e) => {
-                    eprintln!("Error: {:?}", e);
-                    return Ok(LSPMessage::None);
-                }
-            };
-            Ok(LSPMessage::Diagnostics(diagnostics))
-        },
-        "textDocument/completion" => {
-            let obj = json["params"].clone();
-            eprintln!("completion");
-
-            let completion_list: CompletionList = match serde_json::from_value(obj) {
-                Ok(value) => value,
-                Err(e) => {
-                    eprintln!("Error: {:?}", e);
-                    return Ok(LSPMessage::None);
-                }
-            };
-            Ok(LSPMessage::Completions(completion_list))
-        },
-
-        _ => {
-            println!("Unknown method: {}", method);
-            Ok(LSPMessage::None)
+                let completion_list: CompletionList = match serde_json::from_value(obj) {
+                    Ok(value) => value,
+                    Err(e) => {
+                        eprintln!("Completion Error: {:?}", e);
+                        return Ok(LSPMessage::None);
+                    }
+                };
+                Ok(LSPMessage::Completions(completion_list))
+            },
+            _ => {
+                println!("Unknown id: {}", id);
+                Ok(LSPMessage::None)
+            }
         }
+        
+    }
+    else {
+        eprintln!("Error: no method or result");
+        Ok(LSPMessage::None)
     }
     
 }

@@ -271,6 +271,7 @@ impl Client {
     pub fn request_completion(&mut self, uri: Box<str>, (x, y): (usize, usize), trigger: usize) -> io::Result<()> {
         let message = serde_json::json!({
             "jsonrpc": "2.0",
+            "id": 2,
             "method": "textDocument/completion",
             "params": {
                 "textDocument": {

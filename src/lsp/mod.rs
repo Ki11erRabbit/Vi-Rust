@@ -175,7 +175,7 @@ impl LspController {
                     sender.send(message).expect("Failed to send diagnostics");
                 },
                 LSPMessage::Completions(completion) => {
-                    //eprintln!("Got completion");
+                    eprintln!("Got completion");
                     let sender = self.server_channels.get(language).unwrap().0.clone();
 
                     let message = ControllerMessage::Response(

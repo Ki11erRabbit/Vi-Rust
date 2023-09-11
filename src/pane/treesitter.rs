@@ -4,7 +4,7 @@ use crop::RopeSlice;
 use crossterm::{event::KeyEvent, style::{Attribute, Color}};
 use tree_sitter::{Parser, Tree, Point, Language, InputEdit};
 
-use crate::{window::{Message, StyledChar}, cursor::{Cursor, Direction, CursorMove}, mode::{Mode, base::{Normal, Insert, Command},  PromptType}, buffer::Buffer, settings::{Settings, SyntaxHighlight, ColorScheme},  lsp::{ControllerMessage, LspNotification, lsp_utils::{Diagnostic, Diagnostics}, LspResponse, LspRequest}};
+use crate::{window::{Message, StyledChar}, cursor::{Cursor, Direction, CursorMove}, mode::{Mode, base::{Normal, Insert, Command},  PromptType}, buffer::Buffer, settings::{Settings, SyntaxHighlight, ColorScheme},  lsp::{ControllerMessage, LspNotification, lsp_utils::{Diagnostic, Diagnostics, CompletionList}, LspResponse, LspRequest}};
 
 use super::{text::{JumpTable, Waiting}, PaneMessage, Pane, PaneContainer, popup::PopUpPane};
 
@@ -18,6 +18,7 @@ pub struct TreesitterPane {
     file_version: usize,
     lsp_diagnostics: Diagnostics,
     sent_diagnostics: HashSet<Diagnostic>,
+    lsp_completion: Option<CompletionList>,
 
     cursor: Rc<RefCell<Cursor>>,
     file_name: Option<PathBuf>,
@@ -72,6 +73,7 @@ impl TreesitterPane {
             file_version: 0,
             lsp_diagnostics: Diagnostics::new(),
             sent_diagnostics: HashSet::new(),
+            lsp_completion: None,
             lang: lang_string.to_string(),
             cursor: Rc::new(RefCell::new(Cursor::new((0,0)))),
             file_name: None,
@@ -170,6 +172,7 @@ impl TreesitterPane {
         match self.lsp_client.as_ref() {
             None => {},
             Some((sender, receiver)) => {
+                let mut other_uri_count = 0;
                 loop {
                     match receiver.try_recv() {
                         Ok(ControllerMessage::Response(resp)) => {
@@ -179,6 +182,10 @@ impl TreesitterPane {
                                         self.lsp_diagnostics.merge(diags);
                                     }
                                     else {
+                                        if other_uri_count == 4 {
+                                            break;
+                                        }
+                                        other_uri_count += 1;
                                         sender.send(ControllerMessage::Resend(
                                             self.lang.clone().into(),
                                             LspResponse::PublishDiagnostics(diags)
@@ -186,7 +193,7 @@ impl TreesitterPane {
                                     }
                                 },
                                 LspResponse::Completion(completions) => {
-
+                                    self.lsp_completion = Some(completions);
                                 },
                             }
 
@@ -1461,6 +1468,18 @@ impl Pane for TreesitterPane {
                             LspRequest::RequestCompletion(uri.into(), position, "invoked".into())
                         )).expect("Failed to send message");
 
+                        self.read_lsp_messages();
+
+                        let completion_items;
+
+                        let completion_list = match self.lsp_completion.take() {
+                            None => return,
+                            Some(list) => list,
+                        };
+
+                        completion_items = completion_list.items;
+
+                        eprintln!("Completion items: {:?}", completion_items);
 
                     },
                 }
