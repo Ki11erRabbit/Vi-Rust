@@ -533,6 +533,11 @@ impl Settings {
             modifier: KeyModifiers::NONE,
         }], "open_tab_with_pane".to_string());
 
+        insert_keybindings.insert(vec![Key {
+            key: KeyCode::Char('n'),
+            modifier: KeyModifiers::CONTROL,
+        }], "completion".to_string());
+
 
     }
 

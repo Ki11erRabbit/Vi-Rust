@@ -8,6 +8,7 @@ use serde_json::Value;
 pub enum LSPMessage {
     None,
     Diagnostics(Diagnostics),
+    Completions(CompletionList),
     
 }
 
@@ -100,7 +101,82 @@ pub struct Position {
 }
 
 
+#[derive(Debug, Deserialize, PartialEq,  Eq, Clone)]
+pub enum CompletionList {
+    CompletionList {
+        is_incomplete: bool,
+        items: Vec<CompletionItem>,
+    },
+    CompletionItems(Vec<CompletionItem>),
+    Null,
+}
 
+#[derive(Debug, Deserialize, PartialEq,  Eq, Clone)]
+pub struct CompletionItem {
+    pub label: String,
+    pub label_details: Option<CompletionItemLabelDetails>,
+    pub kind: usize,
+    pub tags: Option<Vec<usize>>,
+    pub detail: Option<String>,
+    pub documentation: Option<DocumentationType>,
+    pub deprecated: Option<bool>,
+    pub preselect: Option<bool>,
+    pub sort_text: Option<String>,
+    pub filter_text: Option<String>,
+    pub insert_text: Option<String>,
+    pub insert_text_format: Option<usize>,
+    pub insert_text_mode: Option<usize>,
+    pub text_edit: Option<TextEditType>,
+    pub text_edit_text: Option<String>,
+    pub additional_text_edits: Option<Vec<TextEdit>>,
+    pub commit_characters: Option<Vec<String>>,
+    pub command: Option<Command>,
+    pub data: Option<Value>,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Hash, Eq, Clone)]
+pub struct CompletionItemLabelDetails {
+    detail: Option<String>,
+    description: Option<String>,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Hash, Eq, Clone)]
+pub enum DocumentationType {
+    String(String),
+    MarkupContent(MarkupContent),
+}
+
+#[derive(Debug, Deserialize, PartialEq, Hash, Eq, Clone)]
+pub struct MarkupContent {
+    pub kind: String,
+    pub value: String,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Hash, Eq, Clone)]
+pub enum TextEditType {
+    TextEdit(TextEdit),
+    InsertReplaceEdit(InsertReplaceEdit),
+}
+
+#[derive(Debug, Deserialize, PartialEq, Hash, Eq, Clone)]
+pub struct TextEdit {
+    pub range: LSPRange,
+    pub new_text: String,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Hash, Eq, Clone)]
+pub struct InsertReplaceEdit {
+    pub insert: LSPRange,
+    pub replace: LSPRange,
+    pub new_text: String,
+}
+
+#[derive(Debug, Deserialize, PartialEq,  Eq, Clone)]
+pub struct Command {
+    pub title: String,
+    pub command: String,
+    pub arguments: Option<Vec<Value>>,
+}
 
 pub fn process_json(json: Value) -> io::Result<LSPMessage> {
 
@@ -125,7 +201,21 @@ pub fn process_json(json: Value) -> io::Result<LSPMessage> {
                 }
             };
             Ok(LSPMessage::Diagnostics(diagnostics))
-        }
+        },
+        "textDocument/completion" => {
+            let obj = json["params"].clone();
+            eprintln!("completion");
+
+            let completion_list: CompletionList = match serde_json::from_value(obj) {
+                Ok(value) => value,
+                Err(e) => {
+                    eprintln!("Error: {:?}", e);
+                    return Ok(LSPMessage::None);
+                }
+            };
+            Ok(LSPMessage::Completions(completion_list))
+        },
+
         _ => {
             println!("Unknown method: {}", method);
             Ok(LSPMessage::None)

@@ -76,12 +76,38 @@ impl PopUpPane {
         }
     }
 
+    pub fn new_dropdown(settings: Rc<RefCell<Settings>>,
+                        prompt: Vec<String>,
+                        window_sender: Sender<Message>,
+                        pane_sender: Sender<PaneMessage>,
+                        pane_receiver: Receiver<PaneMessage>,
+                        buttons: PromptType,
+                        border: bool) -> PopUpPane {
+
+        let mode = Rc::new(RefCell::new(crate::mode::drop_down::DropDown::new(buttons)));
+
+        mode.borrow_mut().add_keybindings(settings.borrow().mode_keybindings.get("DropDown").unwrap().clone());
+
+        PopUpPane {
+            mode,
+            window_sender,
+            pane_sender,
+            pane_receiver,
+            prompt,
+            drawn_prompt: RefCell::new(0),
+            prompt_level: RefCell::new(0),
+            settings,
+            border
+        }
+        
+    }
+
 
     fn check_messages(&mut self, container: &PaneContainer) {
         match self.pane_receiver.try_recv() {
             Ok(message) => {
                 match message {
-                    PaneMessage::String(string) => {
+                    PaneMessage::String(_string) => {
                     },
                     PaneMessage::Close => self.run_command(&format!("close {}", container.get_uuid()), container),
                 }
@@ -95,7 +121,7 @@ impl PopUpPane {
 
 
 impl Pane for PopUpPane {
-    fn scroll_cursor(&mut self, container: &PaneContainer) {
+    fn scroll_cursor(&mut self, _container: &PaneContainer) {
 
     }
 

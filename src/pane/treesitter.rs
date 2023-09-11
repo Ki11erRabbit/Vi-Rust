@@ -185,6 +185,9 @@ impl TreesitterPane {
                                         )).unwrap();
                                     }
                                 },
+                                LspResponse::Completion(completions) => {
+
+                                },
                             }
 
                         },
@@ -1442,10 +1445,27 @@ impl Pane for TreesitterPane {
                 self.sender.send(Message::OpenNewTabWithPane).expect("Failed to send message");
             },
             "info" => {
-                
                 self.open_info(container);
+            },
+            "completion" => {
+                match &self.lsp_client {
+                    None => {},
+                    Some((sender, _)) => {
 
-            }
+                        let uri = self.generate_uri();
+
+                        let position = self.cursor.borrow().get_cursor();
+
+                        sender.send(ControllerMessage::Request(
+                            self.lang.clone().into(),
+                            LspRequest::RequestCompletion(uri.into(), position, "invoked".into())
+                        )).expect("Failed to send message");
+
+
+                    },
+                }
+                
+            },
 
             _ => {}
         }

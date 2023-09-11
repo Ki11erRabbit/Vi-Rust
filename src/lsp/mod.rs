@@ -6,7 +6,7 @@ use tokio::process::Command;
 
 use crate::lsp::lsp_utils::{process_json, LSPMessage};
 
-use self::{lsp_client::Client, lsp_utils::Diagnostics};
+use self::{lsp_client::Client, lsp_utils::{Diagnostics, CompletionList}};
 
 pub mod lsp_client;
 pub mod lsp_utils;
@@ -20,6 +20,8 @@ pub enum LspRequest {
     Exit,
     /// Requires a URI
     RequestDiagnostic(Box<str>),
+    /// Requires a URI, a position, and a way a completion was triggered
+    RequestCompletion(Box<str>, (usize, usize), Box<str>),
 
 }
 
@@ -27,6 +29,7 @@ unsafe impl Send for LspResponse {}
 
 pub enum LspResponse {
     PublishDiagnostics(Diagnostics),
+    Completion(CompletionList),
 
 }
 
@@ -158,7 +161,7 @@ impl LspController {
                 //json = future.await?;
             }
 
-            //eprintln!("Json for: {} \n{:#?}", language, json);
+            eprintln!("Json for: {} \n{:#?}", language, json);
 
             match process_json(json).expect("Failed to process json") {
                 LSPMessage::Diagnostics(diagnostics) => {
@@ -170,6 +173,16 @@ impl LspController {
                     );
 
                     sender.send(message).expect("Failed to send diagnostics");
+                },
+                LSPMessage::Completions(completion) => {
+                    //eprintln!("Got completion");
+                    let sender = self.server_channels.get(language).unwrap().0.clone();
+
+                    let message = ControllerMessage::Response(
+                        LspResponse::Completion(completion)
+                    );
+
+                    sender.send(message).expect("Failed to send completions");
                 },
                 LSPMessage::None => {
                     //eprintln!("Got none");
@@ -216,59 +229,15 @@ impl LspController {
             Some(client) => {
                 match notif {
                     LspNotification::ChangeText(uri, version, text) => {
-                        /*loop {
-                            match client.try_lock() {
-                                Ok(mut client) => {
-                                    client.did_change_text(uri.as_ref(), version, text.as_ref())?;
-                                    break;
-                                },
-                                Err(_) => {
-                                    continue;
-                                }
-                            }
-                        }*/
                         client.did_change_text(uri.as_ref(), version, text.as_ref())?;
                     },
                     LspNotification::Open(uri, text) => {
-                        /*loop {
-                            match client.try_lock() {
-                                Ok(mut client) => {
-                                    client.send_did_open(&lang.to_string(),uri.as_ref(), text.as_ref())?;
-                                    break;
-                                },
-                                Err(_) => {
-                                    continue;
-                                }
-                            }
-                        }*/
                         client.send_did_open(&lang.to_string(),uri.as_ref(), text.as_ref())?;
                     },
                     LspNotification::Close(uri) => {
-                        /*loop {
-                            match client.try_lock() {
-                                Ok(mut client) => {
-                                    client.did_close(uri.as_ref())?;
-                                    break;
-                                },
-                                Err(_) => {
-                                    continue;
-                                }
-                            }
-                        }*/
                         client.did_close(uri.as_ref())?;
                     },
                     LspNotification::Save(uri, text) => {
-                        /*loop {
-                            match client.try_lock() {
-                                Ok(mut client) => {
-                                    client.did_save_text(uri.as_ref(), text.as_ref())?;
-                                    break;
-                                },
-                                Err(_) => {
-                                    continue;
-                                }
-                            }
-                        }*/
                         client.did_save_text(uri.as_ref(), text.as_ref())?;
                     },
                     LspNotification::WillSave(uri, reason) => {
@@ -280,18 +249,6 @@ impl LspController {
                                 return Err(io::Error::new(io::ErrorKind::Other, "Invalid reason"));
                             }
                         };
-
-                        /*loop {
-                            match client.try_lock() {
-                                Ok(mut client) => {
-                                    client.will_save_text(uri.as_ref(), reason)?;
-                                    break;
-                                },
-                                Err(_) => {
-                                    continue;
-                                }
-                            }
-                        }*/
                         client.will_save_text(uri.as_ref(), reason)?;
                     },
                 }
@@ -316,6 +273,18 @@ impl LspController {
                     },
                     LspRequest::RequestDiagnostic(uri) => {
                         client.request_diagnostic(uri.as_ref())?;
+                    },
+                    LspRequest::RequestCompletion(uri, pos, trigger) => {
+                        let trigger = match trigger.as_ref() {
+                            "invoked" => 1,
+                            "triggerCharacter" => 2,
+                            "triggerForIncompleteCompletions" => 3,
+                            _ => {
+                                return Err(io::Error::new(io::ErrorKind::Other, "Invalid trigger"));
+                            }
+                        };
+
+                        client.request_completion(uri, pos, trigger)?;
                     },
                 }
             },

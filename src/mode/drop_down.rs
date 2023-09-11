@@ -16,18 +16,27 @@ pub struct DropDown {
     keybindings: Rc<RefCell<HashMap<Keys, String>>>,
 }
 
+impl DropDown {
+    pub fn new(buttons: PromptType) -> Self {
+        Self {
+            buttons: Rc::new(RefCell::new(buttons)),
+            keybindings: Rc::new(RefCell::new(HashMap::new())),
+        }
+    }
+}
+
 
 impl Promptable for DropDown {
     fn draw_prompt(&mut self, row: usize, container: &PaneContainer, output: &mut Vec<Option<StyledChar>>) {
-        let width = container.get_size().0;
+        //let width = container.get_size().0;
 
-        let buttons = self.buttons.borrow_mut();
+        let mut buttons = self.buttons.borrow_mut();
 
         let color_settings = container.settings.borrow().colors.popup.clone();
 
         let button_str = buttons.draw_button(row).expect("Buttons were not buttons");
 
-        match buttons {
+        match &mut*buttons {
             PromptType::Button(_, selected) => {
                 
                 let color_settings = if *selected == row {
@@ -38,7 +47,7 @@ impl Promptable for DropDown {
                 };
 
                 for c in button_str.chars() {
-                    output.push(Some(StyledChar::new(c, color_settings)));
+                    output.push(Some(StyledChar::new(c, color_settings.clone())));
                 }
             },
             _ => panic!("Buttons were not buttons"),
@@ -74,7 +83,9 @@ impl Mode for DropDown {
                 let key = Key::from(key_event);
                 let key = vec![key];
 
-                if let Some(command) = self.keybindings.borrow().get(&key) {
+                let keybindings = self.keybindings.clone();
+
+                if let Some(command) = keybindings.borrow().get(&key) {
                     self.execute_command(command, pane, container);
                 }
                 return Ok(true);
@@ -83,24 +94,21 @@ impl Mode for DropDown {
         }
     }
 
-    fn change_mode(&mut self, name: &str, pane: &mut dyn crate::pane::Pane, container: &mut PaneContainer) {
-        todo!()
+    fn change_mode(&mut self, _name: &str, _pane: &mut dyn crate::pane::Pane, _container: &mut PaneContainer) {
     }
 
-    fn update_status(&mut self, pane: &dyn crate::pane::Pane, container: &PaneContainer) -> (String, String, String) {
-        todo!()
+    fn update_status(&mut self, pane: &dyn crate::pane::Pane, _container: &PaneContainer) -> (String, String, String) {
+        (String::new(), String::new(), String::new())
     }
 
     fn add_keybindings(&mut self, bindings: HashMap<Keys, String>) {
         self.keybindings.borrow_mut().extend(bindings);
     }
 
-    fn set_key_timeout(&mut self, timeout: u64) {
-        todo!()
+    fn set_key_timeout(&mut self, _timeout: u64) {
     }
 
     fn flush_key_buffer(&mut self) {
-        todo!()
     }
 
     fn execute_command(&mut self, command: &str, pane: &mut dyn crate::pane::Pane, container: &mut PaneContainer) {
@@ -114,9 +122,9 @@ impl Mode for DropDown {
                 let buttons = self.buttons.clone();
                 let buttons = buttons.borrow();
 
-                match *buttons {
+                match &*buttons {
                     PromptType::Button(buttons, selected) => {
-                        command.push_str(&format!("button {}", buttons[selected].1(self)));
+                        command.push_str(&format!("button {}", buttons[*selected].1(self)));
 
                         pane.run_command(&command, container);
                     }
@@ -147,12 +155,12 @@ impl Mode for DropDown {
                     _ => panic!("Buttons were not buttons"),
                 }
             },
+            _ => {}
 
         }
     }
 
     fn refresh(&mut self) {
-        todo!()
     }
 
 }

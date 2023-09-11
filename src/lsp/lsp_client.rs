@@ -126,6 +126,45 @@ impl Client {
                     "diagnostics": {
                         "refreshSupport": true,
                     },
+                    "textDocument": {
+                        "completion": {
+                            "snippetSupport": true,
+                            "insertReplaceSupport": true,
+                            "documentationFormat": [
+                                "markdown",
+                                "plaintext",
+                            ],
+                            "completionItemKind": {
+                                "valueSet": [
+                                    1,
+                                    2,
+                                    3,
+                                    4,
+                                    5,
+                                    6,
+                                    7,
+                                    8,
+                                    9,
+                                    10,
+                                    11,
+                                    12,
+                                    13,
+                                    14,
+                                    15,
+                                    16,
+                                    17,
+                                    18,
+                                    19,
+                                    20,
+                                    21,
+                                    22,
+                                    23,
+                                    24,
+                                    25,
+                                ],
+                            },
+                        },
+                    },
                 },
             },
         });
@@ -223,6 +262,27 @@ impl Client {
             "method": "textDocument/diagnostic",
             "params": {
                 "textDocument": uri,
+            },
+        });
+        self.send_message(message)?;
+        Ok(())
+    }
+
+    pub fn request_completion(&mut self, uri: Box<str>, (x, y): (usize, usize), trigger: usize) -> io::Result<()> {
+        let message = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/completion",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                },
+                "position": {
+                    "line": y,
+                    "character": x,
+                },
+                "context": {
+                    "triggerKind": trigger,
+                },
             },
         });
         self.send_message(message)?;
