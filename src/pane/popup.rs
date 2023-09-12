@@ -182,7 +182,7 @@ impl Pane for PopUpPane {
 
                     *self.drawn_prompt.borrow_mut() += 1;
                 }
-                else if *self.drawn_prompt.borrow() == self.prompt.len() {
+                else if *self.drawn_prompt.borrow() == self.prompt.len() && self.prompt.len() > 0 {
                     for _ in 0..width - 2 {
                         output.push(Some(StyledChar::new(' ', color_settings.clone())));
                     }
@@ -230,7 +230,7 @@ impl Pane for PopUpPane {
 
                     *self.drawn_prompt.borrow_mut() += 1;
                 }
-                else if *self.drawn_prompt.borrow() == self.prompt.len() {
+                else if *self.drawn_prompt.borrow() == self.prompt.len() && self.prompt.len() > 0 {
                     for _ in 0..width {
                         output.push(Some(StyledChar::new(' ', color_settings.clone())));
                     }
