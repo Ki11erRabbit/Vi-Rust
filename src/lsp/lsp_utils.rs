@@ -3,6 +3,8 @@ use std::io;
 use serde::Deserialize;
 use serde_json::Value;
 
+use crate::mode::{Promptable, PromptType};
+
 
 #[derive(Debug, PartialEq)]
 pub enum LSPMessage {
@@ -107,6 +109,45 @@ pub struct CompletionList {
     pub items: Vec<CompletionItem>,
 }
 
+impl CompletionList {
+    pub fn generate_text(&self) -> Vec<(String, String)> {
+        let mut result = Vec::new();
+        for item in &self.items {
+            let (insert_text, info) = item.generate_text();
+            result.push((insert_text, info));
+        }
+        result
+    }
+
+    pub fn get_completion(&self, index: usize) -> Option<&CompletionItem> {
+        self.items.get(index)
+    }
+
+    /*pub fn generate_buttons(&self) -> Vec<Box<dyn FnOnce(&dyn Promptable) -> String>> {
+        let mut result = Vec::new();
+        for item in &self.items {
+            let button = item.generate_button();
+            result.push(button);
+        }
+        result
+    }*/
+
+    pub fn generate_buttons(&self, max_len: usize) -> PromptType {
+        let mut buttons = Vec::new();
+        for (i, item) in self.items.iter().enumerate() {
+            let (text, info) = item.generate_text();
+
+            let other_half = max_len - text.chars().count() - 1;
+            
+            let label = format!("{} {:>remain$}", text, info, remain=other_half);
+
+            buttons.push((label, item.generate_button(i)));
+        }
+
+        PromptType::Button(buttons, 0)
+    }
+}
+
 #[allow(non_snake_case)]
 #[derive(Debug, Deserialize, PartialEq,   Clone)]
 pub struct CompletionItem {
@@ -124,12 +165,91 @@ pub struct CompletionItem {
     pub insertText: Option<String>,
     pub insertTextFormat: Option<usize>,
     pub insertTextMode: Option<usize>,
-    pub textEdit: Option<TextEdit>,
+    pub textEdit: Option<Value>,
     pub textEditText: Option<String>,
     pub additionalTextEdits: Option<Vec<TextEdit>>,
-    pub commitCharacters: Option<Vec<String>>,/**/
+    pub commitCharacters: Option<Vec<String>>,
     pub command: Option<Command>,
     pub data: Option<Value>,
+}
+
+impl CompletionItem {
+    pub fn generate_text(&self) -> (String, String) {
+
+        let kind = match self.kind {
+            1 => "Text",
+            2 => "Method",
+            3 => "Function",
+            4 => "Constructor",
+            5 => "Field",
+            6 => "Variable",
+            7 => "Class",
+            8 => "Interface",
+            9 => "Module",
+            10 => "Property",
+            11 => "Unit",
+            12 => "Value",
+            13 => "Enum",
+            14 => "Keyword",
+            15 => "Snippet",
+            16 => "Color",
+            17 => "File",
+            18 => "Reference",
+            19 => "Folder",
+            20 => "EnumMember",
+            21 => "Constant",
+            22 => "Struct",
+            23 => "Event",
+            24 => "Operator",
+            25 => "TypeParameter",
+            _ => "Unknown",
+        };
+        
+        let info = format!("({}) {}", kind, self.label);
+
+
+        let mut insert_text = String::new();
+        if let Some(text_edit) = &self.textEdit {
+            let text_edit: TextEdit = serde_json::from_value(text_edit.clone()).unwrap();
+            insert_text = text_edit.newText.clone();
+        } else if let Some(text_edit) = &self.textEditText {
+            insert_text = text_edit.clone();
+        } else if let Some(text_edit) = &self.insertText {
+            insert_text = text_edit.clone();
+        }
+        (insert_text, info)
+    }
+
+    pub fn generate_button(&self, index: usize) -> Box<dyn Fn(&dyn Promptable) -> String> {
+        /*let mut insert_text = String::new();
+        if let Some(text_edit) = &self.textEdit {
+            let text_edit: TextEdit = serde_json::from_value(text_edit.clone()).unwrap();
+            insert_text = text_edit.newText.clone();
+        } else if let Some(text_edit) = &self.textEditText {
+            insert_text = text_edit.clone();
+        } else if let Some(text_edit) = &self.insertText {
+            insert_text = text_edit.clone();
+        }*/
+        Box::new(move |_| {
+            //insert_text
+            index.to_string()
+        })
+    }
+
+    pub fn get_edit_text(&self) -> Option<TextEditType> {
+        if let Some(text_edit) = &self.textEdit {
+            if let Ok(edit_text) = serde_json::from_value::<TextEdit>(text_edit.clone()) {
+                return Some(TextEditType::TextEdit(edit_text));
+            }
+            else if let Ok(edit_text) = serde_json::from_value::<InsertReplaceEdit>(text_edit.clone()) {
+                return Some(TextEditType::InsertReplaceEdit(edit_text));
+            }
+            else {
+                return None;
+            }
+        }
+        None
+    }
 }
 
 #[derive(Debug, Deserialize, PartialEq, Hash, Eq, Clone)]
@@ -156,10 +276,19 @@ pub enum TextEditType {
     InsertReplaceEdit(InsertReplaceEdit),
 }
 
+#[allow(non_snake_case)]
 #[derive(Debug, Deserialize, PartialEq, Hash, Eq, Clone)]
 pub struct TextEdit {
     pub range: LSPRange,
     pub newText: String,
+}
+
+impl TextEdit {
+    pub fn get_range(&self) -> ((usize, usize), (usize, usize)) {
+        let start = self.range.start;
+        let end = self.range.end;
+        ((start.character, start.line), (end.character, end.line))
+    }
 }
 
 #[derive(Debug, Deserialize, PartialEq, Hash, Eq, Clone)]

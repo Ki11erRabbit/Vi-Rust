@@ -86,7 +86,7 @@ impl PopUpPane {
 
         let mode = Rc::new(RefCell::new(crate::mode::drop_down::DropDown::new(buttons)));
 
-        mode.borrow_mut().add_keybindings(settings.borrow().mode_keybindings.get("DropDown").unwrap().clone());
+        mode.borrow_mut().add_keybindings(settings.borrow().mode_keybindings.get("Drop Down").unwrap().clone());
 
         PopUpPane {
             mode,

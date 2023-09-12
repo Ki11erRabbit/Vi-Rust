@@ -45,7 +45,12 @@ impl JumpTable {
     pub fn next_jump(&mut self) -> Option<Cursor> {
         if self.index < self.table.len() - 1 {
             self.index += 1;
-            Some(self.table[self.index])
+            if self.table.len() > self.index {
+                Some(self.table[self.index])
+            }
+            else {
+                None
+            }
         }
         else {
             None
@@ -97,6 +102,7 @@ impl JumpTable {
 pub enum Waiting {
     JumpTarget,
     JumpPosition,
+    Completion,
     None,
 }
 
@@ -201,6 +207,7 @@ impl TextPane {
                                         let command = format!("set_jump {}", string);
                                         self.run_command(&command, container);
                                     },
+                                    Waiting::Completion => {},
                                     Waiting::None => {
                                     },
                                 }

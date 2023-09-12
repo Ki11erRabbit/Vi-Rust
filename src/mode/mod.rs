@@ -162,4 +162,20 @@ impl PromptType {
         }
     }
 
+    pub fn button_len(&self) -> Option<usize> {
+        match self {
+            PromptType::Button(buttons, _) => {
+                let mut max = 0;
+                for button in buttons {
+                    if button.0.chars().count() > max {
+                        max = button.0.chars().count();
+                    }
+                }
+
+                Some(max)
+            },
+            _ => None
+        }
+    }
+
 }

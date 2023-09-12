@@ -28,13 +28,22 @@ impl DropDown {
 
 impl Promptable for DropDown {
     fn draw_prompt(&mut self, row: usize, container: &PaneContainer, output: &mut Vec<Option<StyledChar>>) {
-        //let width = container.get_size().0;
+        let width = container.get_size().0;
 
         let mut buttons = self.buttons.borrow_mut();
 
         let color_settings = container.settings.borrow().colors.popup.clone();
 
-        let button_str = buttons.draw_button(row).expect("Buttons were not buttons");
+        let button_str = match buttons.draw_button(row) {
+            Some(s) => s,
+            None =>  {
+                " ".repeat(width)
+                .chars()
+                .for_each(|c|
+                          output.push(Some(StyledChar::new(c, color_settings.clone()))));
+                return;
+            },
+        };
 
         match &mut*buttons {
             PromptType::Button(_, selected) => {
@@ -97,7 +106,7 @@ impl Mode for DropDown {
     fn change_mode(&mut self, _name: &str, _pane: &mut dyn crate::pane::Pane, _container: &mut PaneContainer) {
     }
 
-    fn update_status(&mut self, pane: &dyn crate::pane::Pane, _container: &PaneContainer) -> (String, String, String) {
+    fn update_status(&mut self, _pane: &dyn crate::pane::Pane, _container: &PaneContainer) -> (String, String, String) {
         (String::new(), String::new(), String::new())
     }
 

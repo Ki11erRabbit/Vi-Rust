@@ -4,7 +4,7 @@ use crop::RopeSlice;
 use crossterm::{event::KeyEvent, style::{Attribute, Color}};
 use tree_sitter::{Parser, Tree, Point, Language, InputEdit};
 
-use crate::{window::{Message, StyledChar}, cursor::{Cursor, Direction, CursorMove}, mode::{Mode, base::{Normal, Insert, Command},  PromptType}, buffer::Buffer, settings::{Settings, SyntaxHighlight, ColorScheme},  lsp::{ControllerMessage, LspNotification, lsp_utils::{Diagnostic, Diagnostics, CompletionList}, LspResponse, LspRequest}};
+use crate::{window::{Message, StyledChar}, cursor::{Cursor, Direction, CursorMove}, mode::{Mode, base::{Normal, Insert, Command},  PromptType}, buffer::Buffer, settings::{Settings, SyntaxHighlight, ColorScheme},  lsp::{ControllerMessage, LspNotification, lsp_utils::{Diagnostic, Diagnostics, CompletionList, TextEditType}, LspResponse, LspRequest}};
 
 use super::{text::{JumpTable, Waiting}, PaneMessage, Pane, PaneContainer, popup::PopUpPane};
 
@@ -138,6 +138,11 @@ impl TreesitterPane {
                                     Waiting::JumpPosition => {
                                         self.waiting = Waiting::None;
                                         let command = format!("set_jump {}", string);
+                                        self.run_command(&command, container);
+                                    },
+                                    Waiting::Completion => {
+                                        self.waiting = Waiting::None;
+                                        let command = format!("insert {}", string);
                                         self.run_command(&command, container);
                                     },
                                     Waiting::None => {
@@ -343,6 +348,55 @@ impl TreesitterPane {
             
         
     }
+
+    fn insert_str_at(&mut self, pos: (usize, usize), s: &str) {
+        self.set_changed(true);
+
+        let start_byte;
+        let new_end_byte;
+        
+        let byte_pos = self.get_byte_offset_pos(pos);
+        if self.contents.get_char_count() == 0 {
+            self.contents.insert(0, s);
+            start_byte = 0;
+            new_end_byte = self.contents.get_byte_count();
+        }
+        else {
+            let byte_pos = match byte_pos {
+                None => self.contents.get_byte_count(),
+                Some(byte_pos) => byte_pos,
+            };
+            self.contents.insert(byte_pos, s);
+            start_byte = byte_pos;
+            new_end_byte = self.contents.get_byte_count();
+        }
+
+        let (x, y) = pos;
+
+        let new_char_len = self.contents.get_char_count();
+
+        let insert_char_count = s.chars().count();
+
+
+        let edit = InputEdit {
+            start_byte,
+            old_end_byte: start_byte,
+            new_end_byte,
+            start_position: Point::new(y, x),
+            old_end_position: Point::new(y, x + insert_char_count),
+            new_end_position: Point::new(y, new_char_len),
+        };
+
+        self.tree.edit(&edit);
+        self.tree = self.parser.parse(&self.contents.to_string(), Some(&self.tree)).unwrap();
+        
+    }
+
+    fn get_byte_offset_pos(&self, (x, y): (usize, usize)) -> Option<usize> {
+
+        self.contents.get_byte_offset(x, y)
+    }
+
 
 }
 
@@ -1473,20 +1527,102 @@ impl Pane for TreesitterPane {
                             self.read_lsp_messages();
                         }
 
-                        let completion_items;
-
                         let completion_list = match self.lsp_completion.take() {
                             None => return,
                             Some(list) => list,
                         };
 
-                        completion_items = completion_list.items;
+                        let buttons = completion_list.generate_buttons(70);
 
-                        eprintln!("Completion items: {:?}", completion_items);
 
+                        
+                        let (send, recv) = std::sync::mpsc::channel();
+                        let (send2, recv2) = std::sync::mpsc::channel();
+
+                        self.popup_channels = Some((send2, recv));
+
+                        let prompt = Vec::new();
+
+                        let size = (70, buttons.button_len().expect("Buttons were not buttons") + 2);
+
+                        
+                        let pane = PopUpPane::new_dropdown(
+                            self.settings.clone(),
+                            prompt,
+                            self.sender.clone(),
+                            send,
+                            recv2,
+                            buttons,
+                            false,
+                        );
+
+                        let pane = Rc::new(RefCell::new(pane));
+
+                        let pos = self.cursor.borrow().get_real_cursor();
+                        
+
+                        let max_size = container.get_size();
+
+                        let mut container = PaneContainer::new(max_size, size, pane, self.settings.clone());
+
+
+                        container.set_position(pos);
+                        container.set_size(size);
+
+
+
+                        self.sender.send(Message::CreatePopup(container, true)).expect("Failed to send message");
+                        self.waiting = Waiting::Completion;
+
+                        self.contents.add_new_rope();
+
+                        self.lsp_completion = Some(completion_list);
                     },
                 }
                 
+            },
+            "insert" => {
+                if let Some(index) = command_args.next() {
+                    eprintln!("Inserting {}", index);
+
+                    if let Some(index) = index.parse::<usize>().ok() {
+                        match &self.lsp_client {
+                            None => {},
+                            Some((_, _)) => {
+                                match self.lsp_completion {
+                                    None => {},
+                                    Some(ref mut list) => {
+                                        eprintln!("Inserting {}", index);
+                                        if let Some(completion) = list.get_completion(index) {
+                                            eprintln!("Inserting {}", index);
+                                            if let Some(text_edit) = completion.get_edit_text() {
+                                                eprintln!("Inserting {}", index);
+                                                match text_edit {
+                                                    TextEditType::TextEdit(text_edit) => {
+                                                        let (pos, _) = text_edit.get_range();
+
+                                                        self.insert_str_at(pos, &text_edit.newText);
+                                                        eprintln!("Inserting {} at {:?}", &text_edit.newText, pos);
+                                                    },
+                                                    TextEditType::InsertReplaceEdit(text_edit) => {
+                                                        unimplemented!();
+                                                    },
+                                                }
+                                            }
+                                        }
+                                    },
+                                }
+
+                            },
+                        }
+
+                    }
+                    //TODO:
+                    // get index of completion
+                    // put completion in
+                }
+
+                self.lsp_completion = None;
             },
 
             _ => {}

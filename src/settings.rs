@@ -588,6 +588,29 @@ impl Settings {
         }], "right".to_string());
 
     }
+
+    fn generate_drop_down_keybindings(drop_down_keybindings: &mut HashMap<Keys, Command>) {
+        drop_down_keybindings.insert(vec![Key {
+            key: KeyCode::Esc,
+            modifier: KeyModifiers::NONE,
+        }], "cancel".to_string());
+        drop_down_keybindings.insert(vec![Key {
+            key: KeyCode::Enter,
+            modifier: KeyModifiers::NONE,
+        }], "submit".to_string());
+        drop_down_keybindings.insert(vec![Key {
+            key: KeyCode::Char(' '),
+            modifier: KeyModifiers::NONE,
+        }], "submit".to_string());
+        drop_down_keybindings.insert(vec![Key {
+            key: KeyCode::Up,
+            modifier: KeyModifiers::NONE,
+        }], "up".to_string());
+        drop_down_keybindings.insert(vec![Key {
+            key: KeyCode::Down,
+            modifier: KeyModifiers::NONE,
+        }], "down".to_string());
+    }
 }
 
 impl Default for Settings {
@@ -618,8 +641,13 @@ impl Default for Settings {
 
         Self::generate_prompt_keybindings(&mut prompt_keybindings);
 
-
         mode_keybindings.insert("Prompt".to_string(), prompt_keybindings);
+
+        let mut drop_down_keybindings = HashMap::new();
+
+        Self::generate_drop_down_keybindings(&mut drop_down_keybindings);
+
+        mode_keybindings.insert("Drop Down".to_string(), drop_down_keybindings);
 
         let colors = EditorColors::default();
         
