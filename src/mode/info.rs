@@ -28,14 +28,14 @@ impl Promptable for Info {
 
         let color_settings = container.settings.borrow().colors.popup.clone();
 
-        match self.body[row] {
-            None => {
+        match self.body.get(row) {
+            Some(None) => {
                 let gap = " ".repeat(width);
                 for chr in gap.chars() {
                     output.push(Some(StyledChar::new(chr, color_settings.clone())));
                 }
             },
-            Some(ref text) => {
+            Some(Some(ref text)) => {
                 for chr in text.chars() {
                     output.push(Some(StyledChar::new(chr, color_settings.clone())));
                 }
@@ -45,7 +45,8 @@ impl Promptable for Info {
                 for chr in gap.chars() {
                     output.push(Some(StyledChar::new(chr, color_settings.clone())));
                 }
-            }
+            },
+            None => {},
         }
     }
 

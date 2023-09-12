@@ -220,10 +220,15 @@ impl TreesitterPane {
     /// the diagnostics for the current cursor position.
     fn open_info(&mut self, container: &PaneContainer) {
 
+        if self.lsp_completion.is_some() {
+            return;
+        }
+
         match &self.popup_channels {
             Some((send,_)) => {
                 match self.waiting {
                     Waiting::None => {
+                        eprintln!("Sending close");
 
                         match send.send(PaneMessage::Close) {
                             Ok(_) => {},
@@ -237,6 +242,7 @@ impl TreesitterPane {
             },
             None => {},
         }
+
 
         
         let cursor = self.cursor.borrow().get_cursor();
@@ -329,6 +335,7 @@ impl TreesitterPane {
                     Some((send,_)) => {
                         match self.waiting {
                             Waiting::None => {
+                                eprintln!("Sending close");
 
                                 match send.send(PaneMessage::Close) {
                                     Ok(_) => {},
@@ -1513,12 +1520,23 @@ impl Pane for TreesitterPane {
                     None => {},
                     Some((sender, _)) => {
 
+                        match self.popup_channels.take() {
+                            None => {},
+                            Some((send, _)) => {
+                                match send.send(PaneMessage::Close) {
+                                    Ok(_) => {},
+                                    Err(_) => {},
+                                }
+                            }
+                        }
+
+
                         let uri = self.generate_uri();
 
                         let position = self.cursor.borrow().get_cursor();
 
                         sender.send(ControllerMessage::Request(
-                            self.lang.clone().into(),
+                             self.lang.clone().into(),
                             LspRequest::RequestCompletion(uri.into(), position, "invoked".into())
                         )).expect("Failed to send message");
 
@@ -1612,7 +1630,8 @@ impl Pane for TreesitterPane {
                                         }
                                     },
                                 }
-
+                                
+                                self.lsp_completion = None;
                             },
                         }
 
@@ -1686,6 +1705,24 @@ impl Pane for TreesitterPane {
         self.tree.edit(&edit);
         self.tree = self.parser.parse(&self.contents.to_string(), Some(&self.tree)).unwrap();
 
+        self.file_version += 1;
+
+        match &self.lsp_client {
+            None => {},
+            Some((sender, _)) => {
+                let message = ControllerMessage::Notification(
+                    self.lang.clone().into(),
+                    LspNotification::ChangeText(
+                        self.generate_uri().into(),
+                        self.file_version,
+                        self.contents.to_string().into(),
+                    )
+                );
+
+                sender.send(message).expect("Failed to send message");
+                        
+            },
+        }
 
     }
 
@@ -1729,6 +1766,25 @@ impl Pane for TreesitterPane {
 
         self.tree.edit(&edit);
         self.tree = self.parser.parse(&self.contents.to_string(), Some(&self.tree)).unwrap();
+
+        self.file_version += 1;
+        
+        match &self.lsp_client {
+            None => {},
+            Some((sender, _)) => {
+                let message = ControllerMessage::Notification(
+                    self.lang.clone().into(),
+                    LspNotification::ChangeText(
+                        self.generate_uri().into(),
+                        self.file_version,
+                        self.contents.to_string().into(),
+                    )
+                );
+
+                sender.send(message).expect("Failed to send message");
+                        
+            },
+        }
         
     }
 
@@ -1765,6 +1821,26 @@ impl Pane for TreesitterPane {
         self.tree.edit(&edit);
 
         self.tree = self.parser.parse(&self.contents.to_string(), Some(&self.tree)).unwrap();
+
+        self.file_version += 1;
+        
+        match &self.lsp_client {
+            None => {},
+            Some((sender, _)) => {
+                let message = ControllerMessage::Notification(
+                    self.lang.clone().into(),
+                    LspNotification::ChangeText(
+                        self.generate_uri().into(),
+                        self.file_version,
+                        self.contents.to_string().into(),
+                    )
+                );
+
+                sender.send(message).expect("Failed to send message");
+                        
+            },
+        }
+
     }
 
     ///TODO: add check to make sure we have a valid byte range
@@ -1818,6 +1894,26 @@ impl Pane for TreesitterPane {
         self.tree.edit(&edit);
 
         self.tree = self.parser.parse(&self.contents.to_string(), Some(&self.tree)).unwrap();
+
+        self.file_version += 1;
+        
+        match &self.lsp_client {
+            None => {},
+            Some((sender, _)) => {
+                let message = ControllerMessage::Notification(
+                    self.lang.clone().into(),
+                    LspNotification::ChangeText(
+                        self.generate_uri().into(),
+                        self.file_version,
+                        self.contents.to_string().into(),
+                    )
+                );
+
+                sender.send(message).expect("Failed to send message");
+                        
+            },
+        }
+
     }
 
     fn get_cursor(&self) -> Rc<RefCell<Cursor>> {

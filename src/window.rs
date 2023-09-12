@@ -961,7 +961,17 @@ impl Window {
 
         //self.panes[self.active_layer][self.active_panes[self.active_layer]].refresh();
 
-        self.panes[self.active_layer][self.active_panes[self.active_layer]].scroll_cursor();
+        match self.panes.get_mut(self.active_layer) {
+            None => {},
+            Some(layer) => {
+                match layer.get_mut(self.active_panes[self.active_layer]) {
+                    None => {},
+                    Some(pane) => {
+                        pane.refresh();
+                    }
+                }
+            }
+        }//[self.active_panes[self.active_layer]].scroll_cursor();
 
         queue!(
             self.contents,

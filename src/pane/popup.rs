@@ -247,7 +247,7 @@ impl Pane for PopUpPane {
         }
     }
 
-    fn run_command(&mut self, command: &str, container: &PaneContainer) {
+    fn run_command(&mut self, command: &str, _container: &PaneContainer) {
         let mut command_args = command.split(" ");
 
         let command = command_args.next().unwrap();
@@ -273,7 +273,12 @@ impl Pane for PopUpPane {
                     "button" => {
                         let value = command_args.next().unwrap();
                         self.window_sender.send(Message::ClosePane(true, None)).unwrap();
-                        self.pane_sender.send(PaneMessage::String(value.to_string())).unwrap();
+                        match self.pane_sender.send(PaneMessage::String(value.to_string())) {
+                            Ok(_) => {},
+                            Err(e) => {
+                                eprintln!("Error sending message: {}", e);
+                            }
+                        };
                     },
                     "checkbox" => {
                         let value = command_args.next().unwrap();
@@ -293,7 +298,7 @@ impl Pane for PopUpPane {
                     self.window_sender.send(Message::ClosePane(true, None)).unwrap();
                 }
             },
-            x => {}
+            _x => {}
         }
     }
         
@@ -302,11 +307,11 @@ impl Pane for PopUpPane {
         Ok(())
     }
 
-    fn open_file(&mut self, filename: &PathBuf) -> io::Result<()> {
+    fn open_file(&mut self, _filename: &PathBuf) -> io::Result<()> {
         Ok(())
     }
 
-    fn get_status(&self, container: &PaneContainer) -> (String, String, String) {
+    fn get_status(&self, _container: &PaneContainer) -> (String, String, String) {
         ("".to_string(), "".to_string(), "".to_string())
     }
 
@@ -316,9 +321,9 @@ impl Pane for PopUpPane {
 
     fn backspace_char(&mut self) {}
 
-    fn insert_char(&mut self, c: char) {}
+    fn insert_char(&mut self, _c: char) {}
 
-    fn insert_str(&mut self, s: &str) {}
+    fn insert_str(&mut self, _s: &str) {}
 
     fn get_cursor(&self) -> Rc<RefCell<Cursor>> {
         panic!("Cannot get cursor from popup pane")
@@ -332,7 +337,7 @@ impl Pane for PopUpPane {
         "".to_string()
     }
 
-    fn get_row_len(&self, row: usize) -> Option<usize> {
+    fn get_row_len(&self, _row: usize) -> Option<usize> {
         None
     }
 
@@ -340,9 +345,9 @@ impl Pane for PopUpPane {
         &None
     }
 
-    fn resize_cursor(&mut self, size: (usize, usize)) {}
+    fn resize_cursor(&mut self, _size: (usize, usize)) {}
 
-    fn set_cursor_size(&mut self, size: (usize, usize)) {}
+    fn set_cursor_size(&mut self, _size: (usize, usize)) {}
         
 
     fn backup_buffer(&mut self) {
@@ -361,7 +366,7 @@ impl Pane for PopUpPane {
     }
 
 
-    fn set_sender(&mut self, sender: Sender<Message>) {
+    fn set_sender(&mut self, _sender: Sender<Message>) {
         unimplemented!()
     }
 

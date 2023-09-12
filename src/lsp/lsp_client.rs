@@ -290,6 +290,7 @@ impl Client {
         Ok(())
     }
 
+
     pub fn send_inialized(&mut self) -> io::Result<()> {
         let message = serde_json::json!({
             "jsonrpc": "2.0",
