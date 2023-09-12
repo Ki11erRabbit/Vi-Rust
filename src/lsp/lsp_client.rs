@@ -290,6 +290,25 @@ impl Client {
         Ok(())
     }
 
+    pub fn goto_declaration(&mut self, uri: Box<str>, (x, y): (usize, usize)) -> io::Result<()> {
+        let message = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "textDocument/declaration",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                },
+                "position": {
+                    "line": y,
+                    "character": x,
+                },
+            },
+        });
+        self.send_message(message)?;
+        Ok(())
+    }
+
 
     pub fn send_inialized(&mut self) -> io::Result<()> {
         let message = serde_json::json!({

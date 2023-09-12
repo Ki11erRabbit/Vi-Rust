@@ -11,6 +11,7 @@ pub enum LSPMessage {
     None,
     Diagnostics(Diagnostics),
     Completions(CompletionList),
+    Location(LocationResponse),
     
 }
 
@@ -305,6 +306,29 @@ pub struct Command {
     pub arguments: Option<Vec<Value>>,
 }
 
+#[derive(Debug, Deserialize, PartialEq, Hash, Eq, Clone)]
+pub enum LocationResponse {
+    Location(Location),
+    LocationLink(LocationLink),
+    Locations(Vec<Location>),
+}
+
+#[allow(non_snake_case)]
+#[derive(Debug, Deserialize, PartialEq, Hash, Eq, Clone)]
+pub struct Location {
+    pub uri: String,
+    pub range: LSPRange,
+}
+
+#[allow(non_snake_case)]
+#[derive(Debug, Deserialize, PartialEq, Hash, Eq, Clone)]
+pub struct LocationLink {
+    pub originSelectionRange: Option<LSPRange>,
+    pub targetUri: String,
+    pub targetRange: LSPRange,
+    pub targetSelectionRange: LSPRange,
+}
+
 pub fn process_json(json: Value) -> io::Result<LSPMessage> {
 
 
@@ -353,6 +377,57 @@ pub fn process_json(json: Value) -> io::Result<LSPMessage> {
                     }
                 };
                 Ok(LSPMessage::Completions(completion_list))
+            },
+            3 => {
+                let obj = json["result"].clone();
+
+                if obj.is_array() {
+                    let locations: Vec<Location> = match serde_json::from_value(obj) {
+                        Ok(value) => value,
+                        Err(e) => {
+                            eprintln!("Location Error: {:?}", e);
+                            return Ok(LSPMessage::None);
+                        }
+                    };
+
+                    let locations = LocationResponse::Locations(locations);
+
+                    Ok(LSPMessage::Location(locations))
+                }
+                else if obj.is_object() {
+                    if json.get("uri").is_some() {
+                        let location: Location = match serde_json::from_value(obj) {
+                            Ok(value) => value,
+                            Err(e) => {
+                                eprintln!("Location Error: {:?}", e);
+                                return Ok(LSPMessage::None);
+                            }
+                        };
+
+                        let location = LocationResponse::Location(location);
+
+                        Ok(LSPMessage::Location(location))
+                    }
+                    else {
+                        let location_link: LocationLink = match serde_json::from_value(obj) {
+                            Ok(value) => value,
+                            Err(e) => {
+                                eprintln!("Location Error: {:?}", e);
+                                return Ok(LSPMessage::None);
+                            }
+                        };
+
+                        let location = LocationResponse::LocationLink(location_link);
+
+                        Ok(LSPMessage::Location(location))
+                    }
+
+                }
+                else {
+                    Ok(LSPMessage::None)
+                }
+                
+                
             },
             _ => {
                 eprintln!("Unknown id: {}", id);

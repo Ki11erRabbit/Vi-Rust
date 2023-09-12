@@ -22,6 +22,8 @@ pub enum LspRequest {
     RequestDiagnostic(Box<str>),
     /// Requires a URI, a position, and a way a completion was triggered
     RequestCompletion(Box<str>, (usize, usize), Box<str>),
+    /// Requires a URI and a position
+    GotoDeclaration(Box<str>, (usize, usize)),
 
 }
 
@@ -184,6 +186,9 @@ impl LspController {
 
                     sender.send(message).expect("Failed to send completions");
                 },
+                LSPMessage::Location(location) => {
+                    eprintln!("Got location");
+                },
                 LSPMessage::None => {
                     //eprintln!("Got none");
                     continue;
@@ -285,6 +290,9 @@ impl LspController {
                         };
 
                         client.request_completion(uri, pos, trigger)?;
+                    },
+                    LspRequest::GotoDeclaration(uri, pos) => {
+                        client.goto_declaration(uri, pos)?;
                     },
                 }
             },
