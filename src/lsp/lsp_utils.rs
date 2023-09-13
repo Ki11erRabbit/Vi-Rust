@@ -97,6 +97,14 @@ pub struct LSPRange {
     pub end: Position,
 }
 
+impl LSPRange {
+    pub fn get_positions(&self) -> ((usize, usize), (usize, usize)) {
+        let start = (self.start.character, self.start.line);
+        let end = (self.end.character, self.end.line);
+        (start, end)
+    }
+}
+
 #[derive(Debug, Deserialize, PartialEq, Hash, Eq, Clone, Copy)]
 pub struct Position {
     pub line: usize,
@@ -311,6 +319,7 @@ pub enum LocationResponse {
     Location(Location),
     LocationLink(LocationLink),
     Locations(Vec<Location>),
+    Null,
 }
 
 #[allow(non_snake_case)]
@@ -378,7 +387,7 @@ pub fn process_json(json: Value) -> io::Result<LSPMessage> {
                 };
                 Ok(LSPMessage::Completions(completion_list))
             },
-            3 => {
+            3 | 4 | 5 | 6 => {
                 let obj = json["result"].clone();
 
                 if obj.is_array() {
@@ -408,7 +417,7 @@ pub fn process_json(json: Value) -> io::Result<LSPMessage> {
 
                         Ok(LSPMessage::Location(location))
                     }
-                    else {
+                    else if json.get("targetUri").is_some() {
                         let location_link: LocationLink = match serde_json::from_value(obj) {
                             Ok(value) => value,
                             Err(e) => {
@@ -418,6 +427,11 @@ pub fn process_json(json: Value) -> io::Result<LSPMessage> {
                         };
 
                         let location = LocationResponse::LocationLink(location_link);
+
+                        Ok(LSPMessage::Location(location))
+                    }
+                    else {
+                        let location = LocationResponse::Null;
 
                         Ok(LSPMessage::Location(location))
                     }

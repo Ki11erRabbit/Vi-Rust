@@ -6,7 +6,7 @@ use tokio::process::Command;
 
 use crate::lsp::lsp_utils::{process_json, LSPMessage};
 
-use self::{lsp_client::Client, lsp_utils::{Diagnostics, CompletionList}};
+use self::{lsp_client::Client, lsp_utils::{Diagnostics, CompletionList, LocationResponse}};
 
 pub mod lsp_client;
 pub mod lsp_utils;
@@ -24,6 +24,12 @@ pub enum LspRequest {
     RequestCompletion(Box<str>, (usize, usize), Box<str>),
     /// Requires a URI and a position
     GotoDeclaration(Box<str>, (usize, usize)),
+    /// Requires a URI and a position
+    GotoDefinition(Box<str>, (usize, usize)),
+    /// Requires a URI and a position
+    GotoTypeDefinition(Box<str>, (usize, usize)),
+    /// Requires a URI and a position
+    GotoImplementation(Box<str>, (usize, usize)),
 
 }
 
@@ -32,6 +38,7 @@ unsafe impl Send for LspResponse {}
 pub enum LspResponse {
     PublishDiagnostics(Diagnostics),
     Completion(CompletionList),
+    Location(LocationResponse),
 
 }
 
@@ -188,6 +195,14 @@ impl LspController {
                 },
                 LSPMessage::Location(location) => {
                     eprintln!("Got location");
+
+                    let sender = self.server_channels.get(language).unwrap().0.clone();
+
+                    let message = ControllerMessage::Response(
+                        LspResponse::Location(location)
+                    );
+
+                    sender.send(message).expect("Failed to send location");
                 },
                 LSPMessage::None => {
                     //eprintln!("Got none");
@@ -293,6 +308,15 @@ impl LspController {
                     },
                     LspRequest::GotoDeclaration(uri, pos) => {
                         client.goto_declaration(uri, pos)?;
+                    },
+                    LspRequest::GotoDefinition(uri, pos) => {
+                        client.goto_definition(uri, pos)?;
+                    },
+                    LspRequest::GotoTypeDefinition(uri, pos) => {
+                        client.goto_type_definition(uri, pos)?;
+                    },
+                    LspRequest::GotoImplementation(uri, pos) => {
+                        client.goto_implementation(uri, pos)?;
                     },
                 }
             },

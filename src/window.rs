@@ -968,6 +968,7 @@ impl Window {
                     None => {},
                     Some(pane) => {
                         pane.refresh();
+                        pane.scroll_cursor();
                     }
                 }
             }

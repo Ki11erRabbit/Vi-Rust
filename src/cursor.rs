@@ -145,6 +145,11 @@ impl Cursor {
             self.row_offset = self.y;
             //eprintln!("2row offset: {}, 2y: {}, 2pane y: {}", self.row_offset, self.y, pane_y);
         }
+        /*else {
+            let new_offset = self.y - pane_y + 1;
+            self.row_offset = new_offset;
+            eprintln!("3row offset: {}, 3y: {}, 3pane y: {}", self.row_offset, self.y, pane_y);
+        }*/
 
     }
 

@@ -4,7 +4,7 @@ use crop::RopeSlice;
 use crossterm::{event::KeyEvent, style::{Attribute, Color}};
 use tree_sitter::{Parser, Tree, Point, Language, InputEdit};
 
-use crate::{window::{Message, StyledChar}, cursor::{Cursor, Direction, CursorMove}, mode::{Mode, base::{Normal, Insert, Command},  PromptType}, buffer::Buffer, settings::{Settings, SyntaxHighlight, ColorScheme},  lsp::{ControllerMessage, LspNotification, lsp_utils::{Diagnostic, Diagnostics, CompletionList, TextEditType}, LspResponse, LspRequest}};
+use crate::{window::{Message, StyledChar}, cursor::{Cursor, Direction, CursorMove}, mode::{Mode, base::{Normal, Insert, Command},  PromptType}, buffer::Buffer, settings::{Settings, SyntaxHighlight, ColorScheme},  lsp::{ControllerMessage, LspNotification, lsp_utils::{Diagnostic, Diagnostics, CompletionList, TextEditType, LocationResponse}, LspResponse, LspRequest}};
 
 use super::{text::{JumpTable, Waiting}, PaneMessage, Pane, PaneContainer, popup::PopUpPane};
 
@@ -19,6 +19,7 @@ pub struct TreesitterPane {
     lsp_diagnostics: Diagnostics,
     sent_diagnostics: HashSet<Diagnostic>,
     lsp_completion: Option<CompletionList>,
+    lsp_location: Option<LocationResponse>,
 
     cursor: Rc<RefCell<Cursor>>,
     file_name: Option<PathBuf>,
@@ -74,6 +75,7 @@ impl TreesitterPane {
             lsp_diagnostics: Diagnostics::new(),
             sent_diagnostics: HashSet::new(),
             lsp_completion: None,
+            lsp_location: None,
             lang: lang_string.to_string(),
             cursor: Rc::new(RefCell::new(Cursor::new((0,0)))),
             file_name: None,
@@ -199,6 +201,9 @@ impl TreesitterPane {
                                 },
                                 LspResponse::Completion(completions) => {
                                     self.lsp_completion = Some(completions);
+                                },
+                                LspResponse::Location(location) => {
+                                    self.lsp_location = Some(location);
                                 },
                             }
 
@@ -1636,13 +1641,93 @@ impl Pane for TreesitterPane {
                         }
 
                     }
-                    //TODO:
-                    // get index of completion
-                    // put completion in
                 }
 
                 self.lsp_completion = None;
             },
+            "goto_declaration" | "goto_definition" |
+            "goto_type_definition" | "goto_implementation" => {
+                match &self.lsp_client {
+                    None => {},
+                    Some((sender, _)) => {
+                        let uri = self.generate_uri();
+
+                        let position = self.cursor.borrow().get_cursor();
+
+                        let request = match command {
+                            "goto_declaration" => LspRequest::GotoDeclaration(uri.clone().into(), position),
+                            "goto_definition" => LspRequest::GotoDefinition(uri.clone().into(), position),
+                            "goto_type_definition" => LspRequest::GotoTypeDefinition(uri.clone().into(), position),
+                            "goto_implementation" => LspRequest::GotoImplementation(uri.clone().into(), position),
+                            _ => unreachable!(),
+                        };
+
+
+                        sender.send(ControllerMessage::Request(
+                             self.lang.clone().into(),
+                            request
+                        )).expect("Failed to send message");
+
+                        while self.lsp_location.is_none() {
+                            self.read_lsp_messages();
+                        }
+
+                        let lsp_location = self.lsp_location.take().expect("LSP location was none");
+
+                        match lsp_location {
+                            LocationResponse::Location(location) => {
+                                eprintln!("Got location {:?}", location);
+                                
+                                if location.uri.as_str() == uri.as_str() {
+                                    eprintln!("Jumping to {:?}", location.range);
+                                    self.jump_table.add(*self.cursor.borrow());
+
+                                    let ((x, y), _) = location.range.get_positions();
+
+                                    let mut cursor = self.cursor.borrow_mut();
+
+                                    cursor.set_cursor(CursorMove::Amount(x), CursorMove::Amount(y), self, (0,0));
+                                }
+                                else {
+                                    //TODO: Open a new pane and set its cursor to the location
+                                }
+                            },
+                            LocationResponse::Locations(locations) => {
+
+                                if locations.len() == 1 {
+                                    
+                                    if locations[0].uri.as_str() == uri.as_str() {
+                                        eprintln!("Jumping to {:?}", locations[0].range);
+                                        self.jump_table.add(*self.cursor.borrow());
+
+                                        let ((x, y), _) = locations[0].range.get_positions();
+
+                                        let mut cursor = self.cursor.borrow_mut();
+
+                                        cursor.set_cursor(CursorMove::Amount(x), CursorMove::Amount(y), self, (0,0));
+                                    }
+                                    else {
+                                        //TODO: Open a new pane and set its cursor to the location
+                                    }
+                                }
+
+                            },
+                            LocationResponse::LocationLink(location_link) => {
+                                eprintln!("Got location link {:?}", location_link);
+
+                            },
+                            LocationResponse::Null => {},
+                            
+                            
+                        }
+                        
+
+                    }
+                }
+
+
+            },
+                
 
             _ => {}
         }

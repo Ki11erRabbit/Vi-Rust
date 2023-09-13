@@ -427,6 +427,59 @@ impl Settings {
             key: KeyCode::Char('i'),
             modifier: KeyModifiers::NONE,
         }], "info".to_string());
+
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('\\'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('g'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('t'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('d'),
+            modifier: KeyModifiers::NONE,
+        }], "goto_definition".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('\\'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('g'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('t'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('D'),
+            modifier: KeyModifiers::NONE,
+        }], "goto_declaration".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('\\'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('g'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('t'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('t'),
+            modifier: KeyModifiers::NONE,
+        }], "goto_type_definition".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('\\'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('g'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('t'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('i'),
+            modifier: KeyModifiers::NONE,
+        }], "goto_implementation".to_string());
             
                                        
 
