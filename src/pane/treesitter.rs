@@ -410,6 +410,18 @@ impl TreesitterPane {
     }
 
 
+    fn get_file_path(uri: &str) -> String {
+        
+        let chars = uri.chars();
+        // Here we skip the `file://` part of the uri
+        let chars = chars.skip(7);
+        // We will need to skip the port number if there is one
+        //TODO: Handle port numbers
+
+        chars.collect()
+    }
+
+
 }
 
 
@@ -1385,7 +1397,7 @@ impl Pane for TreesitterPane {
             },
             "e" => {
                 if let Some(file_name) = command_args.next() {
-                    self.sender.send(Message::OpenFile(file_name.to_string())).expect("Failed to send message");
+                    self.sender.send(Message::OpenFile(file_name.to_string(), None)).expect("Failed to send message");
                 }
                 self.contents.add_new_rope();
             },
@@ -1689,7 +1701,15 @@ impl Pane for TreesitterPane {
                                     cursor.set_cursor(CursorMove::Amount(x), CursorMove::Amount(y), self, (0,0));
                                 }
                                 else {
-                                    //TODO: Open a new pane and set its cursor to the location
+
+                                    let file_name = Self::get_file_path(&location.uri);
+                                    let (pos, _) = location.range.get_positions();
+
+                                    let message = Message::OpenFile(file_name, Some(pos));
+
+                                    self.sender.send(message).expect("Failed to send message");
+
+                                    self.contents.add_new_rope();
                                 }
                             },
                             LocationResponse::Locations(locations) => {
@@ -1707,7 +1727,15 @@ impl Pane for TreesitterPane {
                                         cursor.set_cursor(CursorMove::Amount(x), CursorMove::Amount(y), self, (0,0));
                                     }
                                     else {
-                                        //TODO: Open a new pane and set its cursor to the location
+
+                                        let file_name = Self::get_file_path(&locations[0].uri);
+                                        let (pos, _) = locations[0].range.get_positions();
+
+                                        let message = Message::OpenFile(file_name, Some(pos));
+
+                                        self.sender.send(message).expect("Failed to send message");
+                                        
+                                        self.contents.add_new_rope();
                                     }
                                 }
 

@@ -31,7 +31,7 @@ pub enum Message {
     PaneDown,
     PaneLeft,
     PaneRight,
-    OpenFile(String),
+    OpenFile(String, Option<(usize, usize)>),
     /// go down a layer
     ClosePane(bool, Option<Uuid>),
     CreatePopup(PaneContainer, bool),
@@ -210,7 +210,8 @@ impl Window {
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
-            "c" => {
+            //todo: move h to C++ since there is no easy way of knowing which lang it is
+            "c" | "h" => {
 
                 self.lsp_responder.send(ControllerMessage::CreateClient("c".to_string().into())).unwrap();
 
@@ -243,7 +244,7 @@ impl Window {
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
             }
-            "cpp" | "hpp" | "h" => {
+            "cpp" | "hpp" /*| "h"*/ => {
 
                 self.lsp_responder.send(ControllerMessage::CreateClient("cpp".to_string().into())).unwrap();
 
@@ -376,7 +377,7 @@ impl Window {
         Ok(self.panes[self.active_layer].len() - 1)
     }
 
-    fn switch_pane(&mut self, filename: String) -> io::Result<()> {
+    fn switch_pane(&mut self, filename: String, pos: Option<(usize, usize)>) -> io::Result<()> {
         let filename = PathBuf::from(filename);
         //eprintln!("switching to pane: {:?}", filename);
         let mut pane_index = None;
@@ -401,6 +402,18 @@ impl Window {
         self.panes[self.active_layer][new_active_pane_index].change_pane(active_pane);
 
         self.panes[self.active_layer][self.active_panes[self.active_layer]].get_pane().borrow_mut().set_cursor_size(self.panes[self.active_layer][self.active_panes[self.active_layer]].get_size());
+
+        if let Some((x, y)) = pos {
+            let pane = self.panes[self.active_layer][self.active_panes[self.active_layer]].get_pane().clone();
+            
+            pane.borrow()
+                .get_cursor()
+                .borrow_mut()
+                .set_cursor(crate::cursor::CursorMove::Amount(x),
+                            crate::cursor::CursorMove::Amount(y),
+                            &*pane.borrow(),
+                            (0, 0));
+        }
 
         Ok(())
     }
@@ -690,8 +703,8 @@ impl Window {
                         self.pane_right();
                         Ok(())
                     },
-                    Message::OpenFile(path) => {
-                        self.switch_pane(path)
+                    Message::OpenFile(path, pos) => {
+                        self.switch_pane(path, pos)
                     }
                     Message::ClosePane(go_down, uuid) => {
                         match uuid {

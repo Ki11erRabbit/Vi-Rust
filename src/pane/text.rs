@@ -561,7 +561,7 @@ impl Pane for TextPane {
             },
             "e" => {
                 if let Some(file_name) = command_args.next() {
-                    self.sender.send(Message::OpenFile(file_name.to_string())).expect("Failed to send message");
+                    self.sender.send(Message::OpenFile(file_name.to_string(), None)).expect("Failed to send message");
                 }
                 self.contents.add_new_rope();
             },
