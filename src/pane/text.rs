@@ -103,6 +103,7 @@ pub enum Waiting {
     JumpTarget,
     JumpPosition,
     Completion,
+    Goto,
     None,
 }
 
@@ -208,6 +209,7 @@ impl TextPane {
                                         self.run_command(&command, container);
                                     },
                                     Waiting::Completion => {},
+                                    Waiting::Goto => {},
                                     Waiting::None => {
                                     },
                                 }

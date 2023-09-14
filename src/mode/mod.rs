@@ -38,7 +38,7 @@ pub trait Mode {
 }
 
 pub trait Promptable: Mode {
-    fn draw_prompt(&mut self, row: usize, container: &PaneContainer, output: &mut Vec<Option<StyledChar>>);
+    fn draw_prompt(&mut self, row: usize, container: &PaneContainer) -> Vec<Option<StyledChar>>;
 
     fn max_width(&self) -> usize;
 }

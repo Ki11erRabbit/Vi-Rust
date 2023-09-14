@@ -21,8 +21,9 @@ impl Info {
 
 impl Promptable for Info {
 
-    fn draw_prompt(&mut self, row: usize, container: &PaneContainer, output: &mut Vec<Option<StyledChar>>) {
-
+    fn draw_prompt(&mut self, row: usize, container: &PaneContainer) -> Vec<Option<StyledChar>> {
+        let mut output = Vec::new();
+    
         let width = container.get_size().0;
 
 
@@ -48,6 +49,8 @@ impl Promptable for Info {
             },
             None => {},
         }
+
+        output
     }
 
     fn max_width(&self) -> usize {

@@ -27,7 +27,8 @@ impl DropDown {
 
 
 impl Promptable for DropDown {
-    fn draw_prompt(&mut self, row: usize, container: &PaneContainer, output: &mut Vec<Option<StyledChar>>) {
+    fn draw_prompt(&mut self, row: usize, container: &PaneContainer) -> Vec<Option<StyledChar>> {
+        let mut output = Vec::new();
         let width = container.get_size().0;
 
         let mut buttons = self.buttons.borrow_mut();
@@ -41,7 +42,7 @@ impl Promptable for DropDown {
                 .chars()
                 .for_each(|c|
                           output.push(Some(StyledChar::new(c, color_settings.clone()))));
-                return;
+                return output;
             },
         };
 
@@ -61,7 +62,8 @@ impl Promptable for DropDown {
             },
             _ => panic!("Buttons were not buttons"),
         }
-        
+
+        output
     }
 
     fn max_width(&self) -> usize {

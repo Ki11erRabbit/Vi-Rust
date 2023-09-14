@@ -415,6 +415,9 @@ impl Window {
                             (0, 0));
         }
 
+        self.panes[self.active_layer][self.active_panes[self.active_layer]].scroll_cursor();
+        self.force_refresh_screen()?;
+        
         Ok(())
     }
 
@@ -704,9 +707,13 @@ impl Window {
                         Ok(())
                     },
                     Message::OpenFile(path, pos) => {
-                        self.switch_pane(path, pos)
+                        self.switch_pane(path, pos)?;
+                        self.force_refresh_screen()?;
+                        Ok(())
                     }
                     Message::ClosePane(go_down, uuid) => {
+
+                        self.contents.set_change(true);
                         match uuid {
                             None => {
                                 //self.panes[self.active_layer].remove(self.active_panes[self.active_layer]);
@@ -962,13 +969,14 @@ impl Window {
     pub fn refresh_screen(&mut self) -> io::Result<()> {
         
 
-        if !self.contents.will_change() {
+        /*if !self.contents.will_change() {
             return Ok(());
-        }
+        }*/
 
         for layer in self.panes.iter_mut() {
             for pane in layer.iter_mut() {
                 pane.refresh();
+                pane.scroll_cursor();
             }
         }
 

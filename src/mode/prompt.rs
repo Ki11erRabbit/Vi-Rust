@@ -35,7 +35,9 @@ impl Prompt {
 
 
 impl Promptable for Prompt {
-    fn draw_prompt(&mut self, row: usize, container: &PaneContainer, output: &mut Vec<Option<StyledChar>>) {
+    fn draw_prompt(&mut self, row: usize, container: &PaneContainer) -> Vec<Option<StyledChar>> {
+
+        let mut output = Vec::new();
 
         let width = container.get_size().0 - 2;// - 2 for the border
         
@@ -163,16 +165,19 @@ impl Promptable for Prompt {
                         output.push(Some(StyledChar::new(c, radio_color.clone())));
                     }
 
-                   for _ in 0..(width - radio.chars().count() / radio_count) {
+                    for _ in 0..(width - radio.chars().count() / radio_count) {
                         output.push(Some(StyledChar::new(' ', color_settings.clone())));
-                   }
+                    }
 
                 }
             },
             
-
+            
         }
+        output
     }
+    
+    
 
     fn max_width(&self) -> usize {
         let mut max = 0;

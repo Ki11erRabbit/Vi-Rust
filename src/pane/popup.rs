@@ -179,6 +179,9 @@ impl Pane for PopUpPane {
                     for _ in 0..side_len {
                         output.push(Some(StyledChar::new(' ', color_settings.clone())));
                     }
+                    if side_len * 2 + self.prompt[prompt].chars().count() < width {
+                        output.push(Some(StyledChar::new(' ', color_settings.clone())));
+                    }
 
                     *self.drawn_prompt.borrow_mut() += 1;
                 }
@@ -191,7 +194,25 @@ impl Pane for PopUpPane {
                 else {
                     let row_offset = *self.prompt_level.borrow();
                     let mode = self.mode.clone();
-                    mode.borrow_mut().draw_prompt(index - index + row_offset, container, output);
+                    
+                    let row_output = mode.borrow_mut().draw_prompt(index - index + row_offset, container);
+
+                    let len = row_output.len();
+
+                    let side_len = width.saturating_sub(2 + len);
+                    let side_len = side_len / 2;
+                    for _ in 0..side_len {
+                        output.push(Some(StyledChar::new(' ', color_settings.clone())));
+                    }
+
+                    output.extend(row_output);
+
+                    for _ in 0..side_len {
+                        output.push(Some(StyledChar::new(' ', color_settings.clone())));
+                    }
+                    if side_len * 2 + len < (width - 2) {
+                        output.push(Some(StyledChar::new(' ', color_settings.clone())));
+                    }
 
                     *self.prompt_level.borrow_mut() += 1;
                 }
@@ -239,7 +260,25 @@ impl Pane for PopUpPane {
                 else {
                     let row_offset = *self.prompt_level.borrow();
                     let mode = self.mode.clone();
-                    mode.borrow_mut().draw_prompt(index - index + row_offset, container, output);
+                    
+                    let row_output = mode.borrow_mut().draw_prompt(index - index + row_offset, container);
+
+                    let len = row_output.len();
+
+                    let side_len = width.saturating_sub(len);
+                    let side_len = side_len / 2;
+                    for _ in 0..side_len {
+                        output.push(Some(StyledChar::new(' ', color_settings.clone())));
+                    }
+
+                    output.extend(row_output);
+
+                    for _ in 0..side_len {
+                        output.push(Some(StyledChar::new(' ', color_settings.clone())));
+                    }
+                    if side_len * 2 + len < width {
+                        output.push(Some(StyledChar::new(' ', color_settings.clone())));
+                    }
 
                     *self.prompt_level.borrow_mut() += 1;
                 }
@@ -271,7 +310,7 @@ impl Pane for PopUpPane {
                         self.pane_sender.send(PaneMessage::String(value.to_string())).unwrap();
                     },
                     "button" => {
-                        let value = command_args.next().unwrap();
+                        let value = command_args.collect::<Vec<&str>>().join(" ");
                         self.window_sender.send(Message::ClosePane(true, None)).unwrap();
                         match self.pane_sender.send(PaneMessage::String(value.to_string())) {
                             Ok(_) => {},

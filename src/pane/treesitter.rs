@@ -4,7 +4,7 @@ use crop::RopeSlice;
 use crossterm::{event::KeyEvent, style::{Attribute, Color}};
 use tree_sitter::{Parser, Tree, Point, Language, InputEdit};
 
-use crate::{window::{Message, StyledChar}, cursor::{Cursor, Direction, CursorMove}, mode::{Mode, base::{Normal, Insert, Command},  PromptType}, buffer::Buffer, settings::{Settings, SyntaxHighlight, ColorScheme},  lsp::{ControllerMessage, LspNotification, lsp_utils::{Diagnostic, Diagnostics, CompletionList, TextEditType, LocationResponse}, LspResponse, LspRequest}};
+use crate::{window::{Message, StyledChar}, cursor::{Cursor, Direction, CursorMove}, mode::{Mode, base::{Normal, Insert, Command},  PromptType, Promptable}, buffer::Buffer, settings::{Settings, SyntaxHighlight, ColorScheme},  lsp::{ControllerMessage, LspNotification, lsp_utils::{Diagnostic, Diagnostics, CompletionList, TextEditType, LocationResponse}, LspResponse, LspRequest}};
 
 use super::{text::{JumpTable, Waiting}, PaneMessage, Pane, PaneContainer, popup::PopUpPane};
 
@@ -145,6 +145,11 @@ impl TreesitterPane {
                                     Waiting::Completion => {
                                         self.waiting = Waiting::None;
                                         let command = format!("insert {}", string);
+                                        self.run_command(&command, container);
+                                    },
+                                    Waiting::Goto => {
+                                        self.waiting = Waiting::None;
+                                        let command = format!("goto {}", string);
                                         self.run_command(&command, container);
                                     },
                                     Waiting::None => {
@@ -1738,6 +1743,67 @@ impl Pane for TreesitterPane {
                                         self.contents.add_new_rope();
                                     }
                                 }
+                                else {
+                                    let (send, recv) = std::sync::mpsc::channel();
+                                    let (send2, recv2) = std::sync::mpsc::channel();
+
+                                    self.popup_channels = Some((send2, recv));
+
+                                    let mut buttons = Vec::new();
+                                    
+                                    for location in locations.iter() {
+                                        let pathbuf = PathBuf::from(location.uri.clone());
+                                        let file_name = pathbuf.file_name().expect("Failed to get file name").to_str().expect("Failed to convert to str").to_string();
+                                        let location = location.clone();
+                                        
+                                        let function: Box<dyn Fn(&dyn Promptable) -> String> = Box::new(move |_| {
+                                            format!("{} {},{}", Self::get_file_path(&location.uri), location.range.start.character, location.range.start.line)
+                                        });
+                                        
+                                        buttons.push((file_name, function));
+                                        
+
+                                    }
+
+                                    let buttons = PromptType::Button(buttons, 0);
+                                    let prompt = vec!["Locations".to_string()];
+
+                                    let pane = PopUpPane::new_dropdown(
+                                        self.settings.clone(),
+                                        prompt,
+                                        self.sender.clone(),
+                                        send,
+                                        recv2,
+                                        buttons,
+                                        true
+                                    );
+
+                                    let pane = Rc::new(RefCell::new(pane));
+
+                                    let (_, (x2, y2)) = container.get_corners();
+                                    let (x, y) = container.get_size();
+
+                                    let (x, y) = (x / 2, y / 2);
+
+                                    let pos = (x2 - 20 - x, y2 - (locations.len() + 3) - y);
+
+
+                                    let max_size = container.get_size();
+                                    
+                                    let mut container = PaneContainer::new(max_size, (20, locations.len() + 3), pane, self.settings.clone());
+
+
+                                    container.set_position(pos);
+                                    container.set_size((20, locations.len() + 3));
+
+
+
+                                    self.sender.send(Message::CreatePopup(container, true)).expect("Failed to send message");
+                                    self.waiting = Waiting::Goto;
+
+                                    self.contents.add_new_rope();
+                                    
+                                }
 
                             },
                             LocationResponse::LocationLink(location_link) => {
@@ -1755,6 +1821,24 @@ impl Pane for TreesitterPane {
 
 
             },
+            "goto" => {
+                if let Some(path) = command_args.next() {
+                    let pos = if let Some(pos) = command_args.next() {
+                        let split = pos.split(",").collect::<Vec<_>>();
+                        let x = split[0].parse::<usize>().expect("Failed to parse x");
+                        let y = split[1].parse::<usize>().expect("Failed to parse y");
+                        Some((x, y))
+                    }
+                    else {
+                        None
+                    };
+
+                    let message = Message::OpenFile(path.to_string(), pos);
+
+                    self.sender.send(message).expect("Failed to send message");
+                    
+                }
+            }
                 
 
             _ => {}
