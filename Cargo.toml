@@ -13,6 +13,9 @@ crossterm = "0.27.0"
 crop = "0.3.0"
 toml = "0.7.6"
 serde = { version = "1.0.185", features = ["derive"] }
+serde_json = "1.0.105"
+tokio = { version = "1.32.0", features = ["io-util", "process", "rt", "rt-multi-thread", "macros"] }
+futures = { version = "0.3.28", features = ["executor", "thread-pool"] }
 tree-sitter = "0.20.10"
 tree-sitter-rust = "0.20.4"
 tree-sitter-c = "0.20.6"
@@ -25,6 +28,15 @@ tree-sitter-go = "0.20.0"
 tree-sitter-bash = "0.20.3"
 tree-sitter-javascript = "0.20.1"
 tree-sitter-c-sharp = "0.20.0"
+
+[dependencies.uuid]
+version = "1.4.1"
+features = [
+    "v4",                # Lets you generate random UUIDs
+    "fast-rng",          # Use a faster (but still sufficiently random) RNG
+    "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs
+]
+
 
 [build-dependencies]
 cc = "*"

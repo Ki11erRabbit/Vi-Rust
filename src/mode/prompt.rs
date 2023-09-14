@@ -8,131 +8,11 @@ use crate::settings::{ColorScheme, Key};
 use crate::{mode::Mode, pane::Pane, settings::Keys};
 use crate::window::StyledChar;
 
-
-pub trait Promptable: Mode {
-    fn draw_prompt(&mut self, row: usize, container: &PaneContainer, output: &mut Vec<Option<StyledChar>>);
-
-    fn max_width(&self) -> usize;
-}
+use super::{Promptable, PromptType};
 
 
-pub enum PromptType {
-    /// A prompt that takes a single line of text
-    /// The optional usize is the maximum length of the input, none means no limit
-    /// The bool is whether or not to hide the input
-    Text(String, Option<usize>,bool),
-    /// A button that has a label and a function to call when pressed
-    /// The usize is the index of the currently selected button
-    Button(Vec<(String, Box<dyn Fn(&Prompt) -> String>)>, usize),
-    /// A checkbox that has a label and a bool indicating whether or not it is checked
-    /// The usize is the index of the currently selected checkbox
-    Checkbox(Vec<(String, bool)>, usize),
-    /// A radio button has a label and the optional usize indicating which option is currently active
-    /// The usize is the index of the currently selected radio button
-    Radio(Vec<String>, Option<usize>, usize),
-}
 
-impl PromptType {
-    pub fn is_text(&self) -> bool {
-        match self {
-            PromptType::Text(_, _, _) => true,
-            _ => false
-        }
-    }
-    pub fn is_button(&self) -> bool {
-        match self {
-            PromptType::Button(_, _) => true,
-            _ => false
-        }
-    }
-    pub fn is_checkbox(&self) -> bool {
-        match self {
-            PromptType::Checkbox(_, _) => true,
-            _ => false
-        }
-    }
-    pub fn is_radio(&self) -> bool {
-        match self {
-            PromptType::Radio(_, _, _) => true,
-            _ => false
-        }
-    }
-    
-    pub fn draw_text(&self) -> Option<String> {
-        match self {
-            PromptType::Text(text, len, hide) => {
-                let count = text.chars().count();
-                let mut output = if *hide {
-                    format!("{}", "*".repeat(count))
-                } else {
-                    format!("{}", text)
-                };
-                if let Some(len) = len {
-                    output.push_str("_".repeat(len - count).as_str());
-                }
 
-                Some(output)
-                
-            },
-            _ => None
-            
-        }
-    }
-
-    pub fn draw_button(&self, index: usize) -> Option<String> {
-        match self {
-            PromptType::Button(buttons, _) => {
-                if index >= buttons.len() {
-                    return None;
-                }
-
-                let output = buttons[index].0.clone();
-
-                Some(output)
-            },
-            _ => None
-        }
-    }
-
-    pub fn draw_checkbox(&self, index: usize) -> Option<String> {
-        match self {
-            PromptType::Checkbox(checkboxes, selected) => {
-                if index >= checkboxes.len() {
-                    return None;
-                }
-
-                let output = if index == *selected {
-                    format!("[x] {}", checkboxes[index].0)
-                } else {
-                    format!("[ ] {}", checkboxes[index].0)
-                };
-
-                Some(output)
-            },
-            _ => None
-        }
-    }
-
-    pub fn draw_radio(&self, index: usize) -> Option<String> {
-        match self {
-            PromptType::Radio(radios, selected, pos) => {
-                if index >= radios.len() {
-                    return None;
-                }
-
-                let output = if index == selected.unwrap_or(*pos) {
-                    format!("(*) {}", radios[index])
-                } else {
-                    format!("( ) {}", radios[index])
-                };
-
-                Some(output)
-            },
-            _ => None
-        }
-    }
-
-}
 
 
 
@@ -155,7 +35,9 @@ impl Prompt {
 
 
 impl Promptable for Prompt {
-    fn draw_prompt(&mut self, row: usize, container: &PaneContainer, output: &mut Vec<Option<StyledChar>>) {
+    fn draw_prompt(&mut self, row: usize, container: &PaneContainer) -> Vec<Option<StyledChar>> {
+
+        let mut output = Vec::new();
 
         let width = container.get_size().0 - 2;// - 2 for the border
         
@@ -283,16 +165,19 @@ impl Promptable for Prompt {
                         output.push(Some(StyledChar::new(c, radio_color.clone())));
                     }
 
-                   for _ in 0..(width - radio.chars().count() / radio_count) {
+                    for _ in 0..(width - radio.chars().count() / radio_count) {
                         output.push(Some(StyledChar::new(' ', color_settings.clone())));
-                   }
+                    }
 
                 }
             },
             
-
+            
         }
+        output
     }
+    
+    
 
     fn max_width(&self) -> usize {
         let mut max = 0;

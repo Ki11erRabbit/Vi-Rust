@@ -183,6 +183,10 @@ impl Buffer {
         }
     }
 
+    pub fn get_version_count(&self) -> usize {
+        self.buffers.len()
+    }
+
 }
 
 impl std::fmt::Display for Buffer {

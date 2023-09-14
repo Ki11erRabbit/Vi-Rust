@@ -1,8 +1,8 @@
-use std::{io, sync::mpsc::{Receiver, Sender}, cell::RefCell, rc::Rc};
+use std::{io, sync::mpsc::{Receiver, Sender}, cell::RefCell, rc::Rc, thread};
 
 use crossterm::{terminal, execute, cursor::{SetCursorStyle, MoveTo}};
 
-use crate::{window::Window, pane::Pane};
+use crate::{window::Window, pane::Pane, lsp::{ControllerMessage, LspController}};
 
 
 
@@ -22,22 +22,31 @@ pub struct Editor {
     active_window: usize,
     reciever: Receiver<EditorMessage>,
     sender: Sender<EditorMessage>,
+    lsp_listener: Rc<Receiver<ControllerMessage>>,
+    lsp_responder: Sender<ControllerMessage>,
 }
 
 
 impl Editor {
-    pub fn new() -> Self {
+    pub fn new(lsp_sender: Sender<ControllerMessage>, lsp_listener: Rc<Receiver<ControllerMessage>>) -> Self {
         terminal::enable_raw_mode().expect("Failed to enable raw mode");
         execute!(std::io::stdout(), terminal::EnterAlternateScreen).expect("Failed to enter alternate screen");
         execute!(io::stdout(), SetCursorStyle::BlinkingBlock).expect("Could not set cursor style");
 
+
         let (sender, reciever) = std::sync::mpsc::channel();
+
+
+        //eprintln!("Editor created");
+        //let lsp_listener = Rc::new(lsp_controller_reciever);
         
         Self {
-            windows: vec![Window::new(sender.clone())],
+            windows: vec![Window::new(sender.clone(), lsp_sender.clone(), lsp_listener.clone())],
             active_window: 0,
             reciever,
             sender,
+            lsp_listener,
+            lsp_responder: lsp_sender,
         }
     }
 
@@ -60,24 +69,24 @@ impl Editor {
                         Ok(())
                     },
                     EditorMessage::NewWindow(pane) => {
-                        self.windows.push(Window::new(self.sender.clone()));
+                        self.windows.push(Window::new(self.sender.clone(), self.lsp_responder.clone(), self.lsp_listener.clone()));
                         self.active_window = self.windows.len() - 1;
                         if let Some(pane) = pane {
                             self.windows[self.active_window].replace_pane(0, pane);
-                            eprintln!("New window with pane");
+                            //eprintln!("New window with pane");
                         }
                         self.windows[self.active_window].force_refresh_screen()?;
-                        eprintln!("New window");
+                        //eprintln!("New window");
                         Ok(())
                     },
                     EditorMessage::CloseWindow => {
-                        eprintln!("Close window");
+                        //eprintln!("Close window");
                         self.windows.remove(self.active_window);
                         self.active_window = self.active_window.saturating_sub(1);
                         Ok(())
                    },
                     EditorMessage::Quit => {
-                        eprintln!("Quit");
+                        //eprintln!("Quit");
                         self.windows.clear();
                         Ok(())
                     },
@@ -98,7 +107,7 @@ impl Editor {
         self.check_messages()?;
 
         if self.windows.is_empty() {
-            eprintln!("No windows left, quitting");
+            //eprintln!("No windows left, quitting");
             return Ok(false);
         }
         

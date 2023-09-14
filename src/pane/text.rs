@@ -1,3 +1,4 @@
+use crate::mode::PromptType;
 use crate::{pane::Pane, window::StyledChar, cursor::CursorMove, buffer::Buffer};
 use std::{io::Write, sync::mpsc::Receiver};
 
@@ -9,7 +10,6 @@ use crossterm::event::KeyEvent;
 use crate::{cursor::{Cursor, Direction}, mode::{Mode, base::{Normal, Insert, Command}}, settings::Settings, window::Message};
 
 use super::{PaneContainer, PaneMessage, popup::PopUpPane};
-use crate::mode::prompt::PromptType;
 
 
 #[derive(Debug, Clone)]
@@ -45,7 +45,12 @@ impl JumpTable {
     pub fn next_jump(&mut self) -> Option<Cursor> {
         if self.index < self.table.len() - 1 {
             self.index += 1;
-            Some(self.table[self.index])
+            if self.table.len() > self.index {
+                Some(self.table[self.index])
+            }
+            else {
+                None
+            }
         }
         else {
             None
@@ -97,6 +102,8 @@ impl JumpTable {
 pub enum Waiting {
     JumpTarget,
     JumpPosition,
+    Completion,
+    Goto,
     None,
 }
 
@@ -112,7 +119,7 @@ pub struct TextPane {
     settings: Rc<RefCell<Settings>>,
     jump_table: JumpTable,
     sender: Sender<Message>,
-    receiver: Option<Receiver<PaneMessage>>,
+    popup_channels: Option<(Sender<PaneMessage>, Receiver<PaneMessage>)>,
     waiting: Waiting,
 }
 
@@ -146,7 +153,7 @@ impl TextPane {
             settings,
             jump_table: JumpTable::new(),
             sender,
-            receiver: None,
+            popup_channels: None,
             waiting: Waiting::None,
         }
     }
@@ -182,9 +189,9 @@ impl TextPane {
     }
 
     fn check_messages(&mut self, container: &PaneContainer) {
-        match self.receiver.as_ref() {
+        match self.popup_channels.as_ref() {
             None => {},
-            Some(receiver) => {
+            Some((_, receiver)) => {
                 match receiver.try_recv() {
                     Ok(message) => {
                         match message {
@@ -201,10 +208,13 @@ impl TextPane {
                                         let command = format!("set_jump {}", string);
                                         self.run_command(&command, container);
                                     },
+                                    Waiting::Completion => {},
+                                    Waiting::Goto => {},
                                     Waiting::None => {
                                     },
                                 }
                             },
+                            PaneMessage::Close => self.run_command("q!", container),
                         }
                     },
                     Err(_) => {},
@@ -419,7 +429,7 @@ impl Pane for TextPane {
             "q" => {
                 if self.changed {
                 } else {
-                    self.sender.send(Message::ClosePane(false)).unwrap();
+                    self.sender.send(Message::ClosePane(false, None)).unwrap();
                 }
             },
             "w" => {
@@ -440,10 +450,10 @@ impl Pane for TextPane {
             },
             "wq" => {
                 self.save_buffer().expect("Failed to save file");
-                self.sender.send(Message::ClosePane(false)).unwrap();
+                self.sender.send(Message::ClosePane(false, None)).unwrap();
             },
             "q!" => {
-                self.sender.send(Message::ClosePane(false)).unwrap();
+                self.sender.send(Message::ClosePane(false, None)).unwrap();
             },
             "move" => {
                 let direction = command_args.next();
@@ -553,19 +563,28 @@ impl Pane for TextPane {
             },
             "e" => {
                 if let Some(file_name) = command_args.next() {
-                    self.sender.send(Message::OpenFile(file_name.to_string())).expect("Failed to send message");
+                    self.sender.send(Message::OpenFile(file_name.to_string(), None)).expect("Failed to send message");
                 }
                 self.contents.add_new_rope();
             },
             "prompt_jump" => {
                 let (send, recv) = std::sync::mpsc::channel();
+                let (send2, recv2) = std::sync::mpsc::channel();
 
-                self.receiver = Some(recv);
+                self.popup_channels = Some((send2, recv));
 
                 let txt_prompt = PromptType::Text(String::new(), None, false);
                 let prompt = vec!["Enter Jump".to_string(), "Target".to_string()];
 
-                let pane = PopUpPane::new(self.settings.clone(), prompt, self.sender.clone(), send, vec![txt_prompt]);
+                let pane = PopUpPane::new_prompt(
+                    self.settings.clone(),
+                    prompt,
+                    self.sender.clone(),
+                    send,
+                    recv2,
+                    vec![txt_prompt],
+                    true
+                );
 
                 let pane = Rc::new(RefCell::new(pane));
 
@@ -594,13 +613,22 @@ impl Pane for TextPane {
             },
             "prompt_set_jump" => {
                 let (send, recv) = std::sync::mpsc::channel();
+                let (send2, recv2) = std::sync::mpsc::channel();
 
-                self.receiver = Some(recv);
+                self.popup_channels = Some((send2, recv));
 
                 let txt_prompt = PromptType::Text(String::new(), None, false);
                 let prompt = vec!["Name the".to_string(), "Target".to_string()];
 
-                let pane = PopUpPane::new(self.settings.clone(), prompt, self.sender.clone(), send, vec![txt_prompt]);
+                let pane = PopUpPane::new_prompt(
+                    self.settings.clone(),
+                    prompt,
+                    self.sender.clone(),
+                    send,
+                    recv2,
+                    vec![txt_prompt],
+                    true
+                );
 
                 let pane = Rc::new(RefCell::new(pane));
 

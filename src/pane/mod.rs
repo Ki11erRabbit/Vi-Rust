@@ -6,12 +6,14 @@ pub mod treesitter;
 use std::{rc::Rc, cell::RefCell, path::PathBuf, io, cmp, fmt::Debug, sync::mpsc::Sender};
 
 use crossterm::event::KeyEvent;
+use uuid::Uuid;
 
 use crate::{settings::Settings, window::{StyledChar, Message}, cursor::Cursor, buffer::Buffer};
 
 
 pub enum PaneMessage {
     String(String),
+    Close,
 }
 
 
@@ -25,6 +27,7 @@ impl Clone for PaneContainer {
             position: self.position,
             settings: self.settings.clone(),
             close: false,
+            identifier: Uuid::new_v4(),
         }
     }
 }
@@ -44,6 +47,7 @@ pub struct PaneContainer {
     position: (usize, usize),
     pub settings: Rc<RefCell<Settings>>,
     close: bool,
+    identifier: Uuid,
 }
 
 impl PaneContainer {
@@ -56,6 +60,7 @@ impl PaneContainer {
             position: (0, 0),
             settings,
             close: false,
+            identifier: Uuid::new_v4(),
         };
 
         container.shrink();
@@ -79,6 +84,10 @@ impl PaneContainer {
             (_, (_, end_y)) = self.get_corners();
         }
 
+    }
+
+    pub fn get_uuid(&self) -> Uuid {
+        self.identifier
     }
 
     pub fn set_sender(&mut self, sender: Sender<Message>) {

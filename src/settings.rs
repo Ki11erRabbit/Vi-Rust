@@ -419,6 +419,68 @@ impl Settings {
             key: KeyCode::Char('T'),
             modifier: KeyModifiers::NONE,
         }], "open_tab_with_pane".to_string());
+
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('\\'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('i'),
+            modifier: KeyModifiers::NONE,
+        }], "info".to_string());
+
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('\\'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('g'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('t'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('d'),
+            modifier: KeyModifiers::NONE,
+        }], "goto_definition".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('\\'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('g'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('t'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('D'),
+            modifier: KeyModifiers::NONE,
+        }], "goto_declaration".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('\\'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('g'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('t'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('t'),
+            modifier: KeyModifiers::NONE,
+        }], "goto_type_definition".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('\\'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('g'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('t'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('i'),
+            modifier: KeyModifiers::NONE,
+        }], "goto_implementation".to_string());
+            
                                        
 
     }
@@ -524,6 +586,11 @@ impl Settings {
             modifier: KeyModifiers::NONE,
         }], "open_tab_with_pane".to_string());
 
+        insert_keybindings.insert(vec![Key {
+            key: KeyCode::Char('n'),
+            modifier: KeyModifiers::CONTROL,
+        }], "completion".to_string());
+
 
     }
 
@@ -574,6 +641,29 @@ impl Settings {
         }], "right".to_string());
 
     }
+
+    fn generate_drop_down_keybindings(drop_down_keybindings: &mut HashMap<Keys, Command>) {
+        drop_down_keybindings.insert(vec![Key {
+            key: KeyCode::Esc,
+            modifier: KeyModifiers::NONE,
+        }], "cancel".to_string());
+        drop_down_keybindings.insert(vec![Key {
+            key: KeyCode::Enter,
+            modifier: KeyModifiers::NONE,
+        }], "submit".to_string());
+        drop_down_keybindings.insert(vec![Key {
+            key: KeyCode::Char(' '),
+            modifier: KeyModifiers::NONE,
+        }], "submit".to_string());
+        drop_down_keybindings.insert(vec![Key {
+            key: KeyCode::Up,
+            modifier: KeyModifiers::NONE,
+        }], "up".to_string());
+        drop_down_keybindings.insert(vec![Key {
+            key: KeyCode::Down,
+            modifier: KeyModifiers::NONE,
+        }], "down".to_string());
+    }
 }
 
 impl Default for Settings {
@@ -604,8 +694,13 @@ impl Default for Settings {
 
         Self::generate_prompt_keybindings(&mut prompt_keybindings);
 
-
         mode_keybindings.insert("Prompt".to_string(), prompt_keybindings);
+
+        let mut drop_down_keybindings = HashMap::new();
+
+        Self::generate_drop_down_keybindings(&mut drop_down_keybindings);
+
+        mode_keybindings.insert("Drop Down".to_string(), drop_down_keybindings);
 
         let colors = EditorColors::default();
         
