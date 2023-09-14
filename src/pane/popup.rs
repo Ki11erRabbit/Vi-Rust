@@ -179,7 +179,7 @@ impl Pane for PopUpPane {
                     for _ in 0..side_len {
                         output.push(Some(StyledChar::new(' ', color_settings.clone())));
                     }
-                    if side_len * 2 + self.prompt[prompt].chars().count() < width {
+                    if side_len * 2 + self.prompt[prompt].chars().count() + 2 < width {
                         output.push(Some(StyledChar::new(' ', color_settings.clone())));
                     }
 

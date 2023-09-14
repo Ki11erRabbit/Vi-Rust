@@ -28,6 +28,7 @@ impl Clone for PaneContainer {
             settings: self.settings.clone(),
             close: false,
             identifier: Uuid::new_v4(),
+            move_not_resize: self.move_not_resize,
         }
     }
 }
@@ -48,6 +49,7 @@ pub struct PaneContainer {
     pub settings: Rc<RefCell<Settings>>,
     close: bool,
     identifier: Uuid,
+    pub move_not_resize: bool,
 }
 
 impl PaneContainer {
@@ -61,6 +63,7 @@ impl PaneContainer {
             settings,
             close: false,
             identifier: Uuid::new_v4(),
+            move_not_resize: false,
         };
 
         container.shrink();
@@ -84,6 +87,10 @@ impl PaneContainer {
             (_, (_, end_y)) = self.get_corners();
         }
 
+    }
+
+    pub fn set_move_not_resize(&mut self, move_not_resize: bool) {
+        self.move_not_resize = move_not_resize;
     }
 
     pub fn get_uuid(&self) -> Uuid {
@@ -222,29 +229,37 @@ impl PaneContainer {
         let new_end_y = (size.1 * end_y) as f64 / self.max_size.1 as f64;
 
         let new_width = if self.position.0 == 0 {
+            //new_start_x += 1.0;
+            
             cmp::max((new_end_x - new_start_x) as usize, self.settings.borrow().editor_settings.minimum_width)
         }
         else {
+            //new_start_x += 1.0;
             (new_end_x - new_start_x) as usize
         };
         let new_height = if self.position.1 == 0 {
+            //new_start_y += 1.0;
             cmp::max((new_end_y - new_start_y) as usize, self.settings.borrow().editor_settings.minimum_height)
         }
         else {
+            //new_start_y += 1.0;
             (new_end_y - new_start_y) as usize
         };
 
         self.position.0 = new_start_x as usize;
         self.position.1 = new_start_y as usize;
 
-        self.size.0 = new_width;
-        self.size.1 = new_height;
+        if !self.move_not_resize {
+            self.size.0 = new_width;
+            self.size.1 = new_height;
 
-        self.max_size = size;
+            self.max_size = size;
 
-        self.pane.borrow_mut().resize_cursor(self.size);
+            self.pane.borrow_mut().resize_cursor(self.size);
 
-        self.shrink();
+            self.shrink();
+        }
+
     }
 
     pub fn set_position(&mut self, position: (usize, usize)) {
