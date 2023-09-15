@@ -43,7 +43,7 @@ impl Diagnostics {
     }
 
     pub fn get_diagnostic(&self, line: usize, character: usize) -> Option<&Diagnostic> {
-        //eprintln!("{:?}", self.diagnostics);
+        ////eprintln!("{:?}", self.diagnostics);
         for diagnostic in &self.diagnostics {
             let start_line = diagnostic.range.start.line;
             let end_line = diagnostic.range.end.line;
@@ -347,12 +347,12 @@ pub fn process_json(json: Value) -> io::Result<LSPMessage> {
         match method {
             "textDocument/publishDiagnostics" => {
                 let obj = json["params"].clone();
-                eprintln!("diagnostics");
+                //eprintln!("diagnostics");
 
                 let diagnostics: Diagnostics = match serde_json::from_value(obj) {
                     Ok(value) => value,
                     Err(e) => {
-                        eprintln!("Error: {:?}", e);
+                        //eprintln!("Error: {:?}", e);
                         return Ok(LSPMessage::None);
                     }
                 };
@@ -369,19 +369,19 @@ pub fn process_json(json: Value) -> io::Result<LSPMessage> {
         let id: usize = match serde_json::from_value(json["id"].clone()) {
             Ok(value) => value,
             Err(e) => {
-                eprintln!("Id Error: {:?}", e);
+                //eprintln!("Id Error: {:?}", e);
                 return Ok(LSPMessage::None);
             }
         };
         match id {
             2 => {
                 let obj = json["result"].clone();
-                eprintln!("completion");
+                //eprintln!("completion");
 
                 let completion_list: CompletionList = match serde_json::from_value(obj) {
                     Ok(value) => value,
                     Err(e) => {
-                        eprintln!("Completion Error: {:?}", e);
+                        //eprintln!("Completion Error: {:?}", e);
                         return Ok(LSPMessage::None);
                     }
                 };
@@ -394,7 +394,7 @@ pub fn process_json(json: Value) -> io::Result<LSPMessage> {
                     let locations: Vec<Location> = match serde_json::from_value(obj) {
                         Ok(value) => value,
                         Err(e) => {
-                            eprintln!("Location Error: {:?}", e);
+                            //eprintln!("Location Error: {:?}", e);
                             return Ok(LSPMessage::None);
                         }
                     };
@@ -408,7 +408,7 @@ pub fn process_json(json: Value) -> io::Result<LSPMessage> {
                         let location: Location = match serde_json::from_value(obj) {
                             Ok(value) => value,
                             Err(e) => {
-                                eprintln!("Location Error: {:?}", e);
+                                //eprintln!("Location Error: {:?}", e);
                                 return Ok(LSPMessage::None);
                             }
                         };
@@ -421,7 +421,7 @@ pub fn process_json(json: Value) -> io::Result<LSPMessage> {
                         let location_link: LocationLink = match serde_json::from_value(obj) {
                             Ok(value) => value,
                             Err(e) => {
-                                eprintln!("Location Error: {:?}", e);
+                                //eprintln!("Location Error: {:?}", e);
                                 return Ok(LSPMessage::None);
                             }
                         };
@@ -444,14 +444,14 @@ pub fn process_json(json: Value) -> io::Result<LSPMessage> {
                 
             },
             _ => {
-                eprintln!("Unknown id: {}", id);
+                //eprintln!("Unknown id: {}", id);
                 Ok(LSPMessage::None)
             }
         }
         
     }
     else {
-        eprintln!("Error: no method or result");
+        //eprintln!("Error: no method or result");
         Ok(LSPMessage::None)
     }
     

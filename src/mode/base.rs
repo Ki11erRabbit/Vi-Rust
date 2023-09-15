@@ -295,17 +295,21 @@ impl Insert {
 
     fn insert_newline(&self, pane: &mut dyn Pane) -> io::Result<bool> {
         pane.insert_newline();
+        pane.changed();
         Ok(true)
     }
     fn delete_char(&self, pane: &mut dyn Pane) -> io::Result<bool> {
         pane.delete_char();
+        pane.changed();
         Ok(true)
     }
     fn backspace(&self, pane: &mut dyn Pane) -> io::Result<bool> {
         pane.backspace_char();
+        pane.changed();
         Ok(true)
     }
     fn insert_char(&self, pane: &mut dyn Pane, c: char) -> io::Result<bool> {
+        pane.changed();
         if pane.get_settings().borrow().editor_settings.use_spaces && c == '\t' {
             pane.insert_str(&" ".repeat(pane.get_settings().borrow().editor_settings.tab_size));
         } else {

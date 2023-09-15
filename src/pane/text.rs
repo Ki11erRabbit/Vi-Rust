@@ -1,4 +1,5 @@
 use crate::mode::PromptType;
+use crate::window::TextRow;
 use crate::{pane::Pane, window::StyledChar, cursor::CursorMove, buffer::Buffer};
 use std::{io::Write, sync::mpsc::Receiver};
 
@@ -226,10 +227,18 @@ impl TextPane {
 }
 impl Pane for TextPane {
 
+    fn changed(&mut self) {
+        self.cursor.borrow_mut().set_moved();
+    }
 
-    fn draw_row(&self, mut index: usize, container: &PaneContainer, output: &mut Vec<Option<StyledChar>>) {
+    fn reset(&mut self) {
+        self.cursor.borrow_mut().reset_move();
+    }
+
+    fn draw_row(&self, mut index: usize, container: &PaneContainer, output: &mut TextRow) {
         //let rows = container.get_size().1;
-        let mut cols = container.get_size().0;
+        let cols = container.get_size().0;
+
 
         let ((x1, y1), _) = container.get_corners();
 
@@ -238,27 +247,41 @@ impl Pane for TextPane {
             let color_settings = &self.settings.borrow().colors.ui;
             
             if index == 0 && y1 != 0 {
+
+                if !self.cursor.borrow().get_moved() {
+                    //eprintln!("Not Changed");
+                    for _ in 0..cols {
+                        output.push(None);
+                    }
+                    return;
+                }
+
+                
                 let string = "-".repeat(cols);
 
                 for c in string.chars() {
-                    output.push(Some(StyledChar::new(c, color_settings.clone())));
+                    output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                 }
                 
                 //output.push_str(apply_colors!("-".repeat(cols), color_settings));
                 return;
             }
             else {
-                index = index;
+                let ((_, y), _) = container.get_corners();
+
+                if y != 0 {
+                    index = index.saturating_sub(1);
+                }
             }
 
             if x1 != 0 {
                 let string = "|".to_string();
 
                 for c in string.chars() {
-                    output.push(Some(StyledChar::new(c, color_settings.clone())));
+                    output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                 }
                 
-                cols = cols.saturating_sub(1);
+                //cols = cols.saturating_sub(1);
             }
         }
 
@@ -284,10 +307,19 @@ impl Pane for TextPane {
                 }
 
                 if real_row + 1 <= number_of_lines {
-                    let string = format!("{:width$}", real_row + 1, width = num_width);
+                    if !self.cursor.borrow().get_scrolled() {
+                        for _ in 0..num_width {
+                            output.push(None);
+                        }
+                    }
+                    else {
+                        
 
-                    for c in string.chars() {
-                        output.push(Some(StyledChar::new(c, color_settings.clone())));
+                        let string = format!("{:width$}", real_row + 1, width = num_width);
+
+                        for c in string.chars() {
+                            output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
+                        }
                     }
                 }
 
@@ -304,7 +336,7 @@ impl Pane for TextPane {
                     let string = format!("{:<width$}", real_row + 1 , width = num_width);
 
                     for c in string.chars() {
-                        output.push(Some(StyledChar::new(c, color_settings.clone())));
+                        output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                     }
                 }
                 else if real_row + 1 <= number_of_lines {
@@ -313,7 +345,7 @@ impl Pane for TextPane {
                                             width = num_width);
 
                     for c in string.chars() {
-                        output.push(Some(StyledChar::new(c, color_settings.clone())));
+                        output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                     }
                 }
             }
@@ -326,6 +358,13 @@ impl Pane for TextPane {
 
 
         
+        if !self.cursor.borrow().get_scrolled() {
+            //eprintln!("Not Changed");
+            for _ in 0..(cols - num_width) {
+                output.push(None);
+            }
+            return;
+        }
 
         if let Some(row) = self.get_row(real_row, col_offset, cols) {
             let mut count = 0;
@@ -338,14 +377,14 @@ impl Pane for TextPane {
                         count += self.settings.borrow().editor_settings.tab_size;
 
                         for c in string.chars() {
-                            output.push(Some(StyledChar::new(c, color_settings.clone())));
+                            output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                         }
                     },
                     '\n' => {
                         let string = " ".to_string();
 
                         for c in string.chars() {
-                            output.push(Some(StyledChar::new(c, color_settings.clone())));
+                            output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                         }
                     },
                     c => {
@@ -353,7 +392,7 @@ impl Pane for TextPane {
                         let string = c.to_string();
 
                         for c in string.chars() {
-                            output.push(Some(StyledChar::new(c, color_settings.clone())));
+                            output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                         }
                     },
                 }
@@ -364,21 +403,21 @@ impl Pane for TextPane {
             let string = " ".repeat(cols.saturating_sub(count + num_width));
 
             for c in string.chars() {
-                output.push(Some(StyledChar::new(c, color_settings.clone())));
+                output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
             }
         }
         else if real_row >= number_of_lines {
             let string = " ".repeat(cols);
 
             for c in string.chars() {
-                output.push(Some(StyledChar::new(c, color_settings.clone())));
+                output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
             }
         }
         else {
             let string = " ".repeat(cols.saturating_sub(num_width));
 
             for c in string.chars() {
-                output.push(Some(StyledChar::new(c, color_settings.clone())));
+                output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
             }
         }
     }

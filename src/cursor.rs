@@ -41,6 +41,8 @@ pub struct Cursor {
     pub ignore_offset: bool,
     pub hide: bool,
     pub jumped: bool,
+    moved: bool,
+    scrolled: bool,
 }
 
 impl Cursor {
@@ -60,6 +62,8 @@ impl Cursor {
             ignore_offset: false,
             hide: false,
             jumped: false,
+            moved: true,
+            scrolled: true,
         }
     }
 
@@ -91,6 +95,8 @@ impl Cursor {
 
         //self.x = new_x as usize;
         //self.y = new_y as usize;
+
+        self.moved = true;
     }
 
     pub fn set_size(&mut self, win_size: (usize, usize)) {
@@ -119,36 +125,72 @@ impl Cursor {
         (x, y)
     }
 
+    pub fn reset_move(&mut self) {
+        self.moved = false;
+    }
+
+    pub fn set_moved(&mut self) {
+        self.moved = true;
+    }
+
+    pub fn get_moved(&self) -> bool {
+        self.moved
+    }
+
+    pub fn get_scrolled(&self) -> bool {
+        self.scrolled
+    }
+
     pub fn scroll(&mut self, pane: &PaneContainer) {
+
+        //eprintln!("PaneContainer: {:?}", pane.get_size());
+        
         self.jumped = false;
         let (pane_x, pane_y) = pane.get_size();
 
-        if self.x >= pane_x && self.went_right {
+
+        if self.went_right && pane_x != 0 && (self.x - self.col_offset) >= pane_x {
+            self.col_offset = self.x.saturating_sub(pane_x) + 1;
+            self.scrolled = true;
+        }
+        else if !self.went_right && (self.x.saturating_sub(self.col_offset)) == 0 {
+            self.col_offset = self.x;
+            self.scrolled = true;
+        }
+
+        /*if self.x >= pane_x && self.went_right {
             self.col_offset = self.x - pane_x + 1;
         }
         else if self.x < self.col_offset && !self.went_right {
             self.x = self.col_offset.saturating_sub(1);
             self.col_offset = self.col_offset.saturating_sub(1);
-        }
+        }*/
 
         //eprintln!("row offset: {}, y: {}, pane y: {}", self.row_offset, self.y, pane_y);
 
-        if self.went_down && (self.y - self.row_offset) >= pane_y {
+        if self.went_down && pane_y != 0 && (self.y - self.row_offset) >= pane_y {
             
-            let new_offset = self.y - pane_y + 1;
-
+            let new_offset = self.y.saturating_sub(pane_y) + 1;
             self.row_offset = new_offset;
 
+            self.scrolled = true;
             //eprintln!("1row offset: {}, 1y: {}, 1pane y: {}", self.row_offset, self.y, pane_y);
         }
         else if !self.went_down && (self.y.saturating_sub(self.row_offset)) == 0 {
             self.row_offset = self.y;
+            self.scrolled = true;
             //eprintln!("2row offset: {}, 2y: {}, 2pane y: {}", self.row_offset, self.y, pane_y);
         }
         /*else {
             let new_offset = self.y - pane_y + 1;
             self.row_offset = new_offset;
             eprintln!("3row offset: {}, 3y: {}, 3pane y: {}", self.row_offset, self.y, pane_y);
+    }*/
+
+        /*let ((_, y), _) = pane.get_corners();
+
+        if y > 0 {
+            self.row_offset += 1;
         }*/
 
     }
@@ -196,7 +238,7 @@ impl Cursor {
                 self.draw_y = self.y;
             },
             CursorMove::ToEnd => {
-                self.y = self.rows.min(number_of_lines);
+                self.y = self.rows.min(number_of_lines - 1);
                 self.went_down = true;
                 self.draw_y = self.y;
             },
@@ -211,11 +253,17 @@ impl Cursor {
             },
             CursorMove::Nothing => {},
         }
+
+        self.moved = true;
     }
 
     pub fn move_cursor(&mut self, direction: Direction, mut n: usize, pane: &dyn Pane) {
+
+        //eprintln!("{:?}", self);
         self.jumped = false;
         let number_of_lines = pane.get_line_count();
+        //eprintln!("number of lines: {}", number_of_lines);
+        //eprintln!("N: {}", n);
 
         let number_of_cols = if let Some(cols) = pane.get_row_len(self.y) {
             cols
@@ -320,8 +368,8 @@ impl Cursor {
                 self.draw_y = self.y;
             },
         }
-        
 
+        self.moved = true;
     }
 
 }

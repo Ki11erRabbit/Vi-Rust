@@ -8,7 +8,7 @@ use std::{rc::Rc, cell::RefCell, path::PathBuf, io, cmp, fmt::Debug, sync::mpsc:
 use crossterm::event::KeyEvent;
 use uuid::Uuid;
 
-use crate::{settings::Settings, window::{StyledChar, Message}, cursor::Cursor, buffer::Buffer};
+use crate::{settings::Settings, window::{StyledChar, Message, TextRow}, cursor::Cursor, buffer::Buffer};
 
 
 pub enum PaneMessage {
@@ -70,6 +70,9 @@ impl PaneContainer {
         container
     }
     fn shrink(&mut self) {
+        //eprintln!("Max Size: {:?}", self.max_size);
+        //eprintln!("Before Shrink: {:?}", self.get_corners());
+        
         let (_, (mut end_x, _)) = self.get_corners();
         while end_x > self.max_size.0 {
             if self.size.0 == 0 {
@@ -87,6 +90,42 @@ impl PaneContainer {
             (_, (_, end_y)) = self.get_corners();
         }
 
+        //eprintln!("After Shrink: {:?}", self.get_corners());
+
+    }
+
+    fn grow(&mut self) {
+        //eprintln!("Max Size: {:?}", self.max_size);
+        //eprintln!("Before Shrink: {:?}", self.get_corners());
+        
+        let (_, (mut end_x, _)) = self.get_corners();
+        while end_x < self.max_size.0 {
+            if self.size.0 == self.max_size.0 {
+                break;
+            }
+            self.size.0 = self.size.0.saturating_add(1);
+            (_, (end_x, _)) = self.get_corners();
+        }
+        let (_, (_, mut end_y)) = self.get_corners();
+        while  end_y < self.max_size.1 - 1 {
+            if self.size.1 == self.max_size.1 - 1 {
+                break;
+            }
+            self.size.1 = self.size.1.saturating_add(1);
+            (_, (_, end_y)) = self.get_corners();
+        }
+
+        //eprintln!("After Shrink: {:?}", self.get_corners());
+
+    }
+
+    pub fn changed(&mut self) {
+        self.pane.borrow_mut().changed();
+    }
+
+
+    pub fn reset(&mut self) {
+        self.pane.borrow_mut().reset();
     }
 
     pub fn set_move_not_resize(&mut self, move_not_resize: bool) {
@@ -208,7 +247,13 @@ impl PaneContainer {
     }
 
 
-    pub fn resize(&mut self, size: (usize, usize)) {
+    pub fn resize(&mut self, max_size: (usize, usize)) {
+
+        //eprintln!("Old Size: {:?}", self.size);
+        //eprintln!("Max Size: {:?}", self.max_size);
+        //eprintln!("New Max Size: {:?}", max_size);
+
+        self.pane.borrow_mut().changed();
         //eprintln!("Old Max Size: {:?}", self.max_size);
         //eprintln!("Old Size: {:?}", self.size);
         //eprintln!("New Max Size: {:?}", size);
@@ -222,11 +267,11 @@ impl PaneContainer {
         //self.size.0 = new_width.ceil() as usize;
         //self.size.1 = new_height.ceil() as usize;
 
-        let new_start_x = (size.0 * start_x) as f64 / self.max_size.0 as f64;
-        let new_start_y = (size.1 * start_y) as f64 / self.max_size.1 as f64;
+        let new_start_x = (max_size.0 * start_x) as f64 / self.max_size.0 as f64;
+        let new_start_y = (max_size.1 * start_y) as f64 / self.max_size.1 as f64;
 
-        let new_end_x = (size.0 * end_x) as f64 / self.max_size.0 as f64;
-        let new_end_y = (size.1 * end_y) as f64 / self.max_size.1 as f64;
+        let new_end_x = (max_size.0 * end_x) as f64 / self.max_size.0 as f64;
+        let new_end_y = (max_size.1 * end_y) as f64 / self.max_size.1 as f64;
 
         let new_width = if self.position.0 == 0 {
             //new_start_x += 1.0;
@@ -249,17 +294,21 @@ impl PaneContainer {
         self.position.0 = new_start_x as usize;
         self.position.1 = new_start_y as usize;
 
+        //eprintln!("New Position: {:?}", self.position);
+
         if !self.move_not_resize {
             self.size.0 = new_width;
-            self.size.1 = new_height;
+            self.size.1 = new_height - 1;
 
-            self.max_size = size;
+            self.max_size = max_size;
 
-            self.pane.borrow_mut().resize_cursor(self.size);
-
+            self.grow();
             self.shrink();
         }
+        self.pane.borrow_mut().resize_cursor(self.size);
 
+        //eprintln!("New Size: {:?}", self.size);
+        
     }
 
     pub fn set_position(&mut self, position: (usize, usize)) {
@@ -287,7 +336,7 @@ impl PaneContainer {
         pane.refresh(self);
     }
 
-    pub fn draw_row(&self, index: usize, contents: &mut Vec<Option<StyledChar>>) {
+    pub fn draw_row(&self, index: usize, contents: &mut TextRow) {
         self.pane.borrow().draw_row(index, self, contents);
     }
 
@@ -317,7 +366,7 @@ impl PaneContainer {
 }
 
 pub trait Pane {
-    fn draw_row(&self, index: usize, container: &PaneContainer, contents: &mut Vec<Option<StyledChar>>);
+    fn draw_row(&self, index: usize, container: &PaneContainer, contents: &mut TextRow);
 
     fn refresh(&mut self, container: &mut PaneContainer);
 
@@ -363,5 +412,12 @@ pub trait Pane {
     fn borrow_mut_buffer(&mut self) -> &mut Buffer;
 
     fn set_sender(&mut self, sender: Sender<Message>);
+
+    /// This function is called after we redraw the screen
+    /// For most panes it should tell the cursor that it hasn't moved yet
+    fn reset(&mut self);
+
+    /// This gets called whenever we do an action that would cause a redraw of the screen.
+    fn changed(&mut self);
 
 }

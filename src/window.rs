@@ -1,6 +1,9 @@
+use core::fmt;
 use std::cell::RefCell;
 use std::cmp;
 use std::collections::{HashSet, HashMap};
+use std::fmt::{Debug, Formatter};
+use std::ops::Index;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::io;
@@ -51,7 +54,7 @@ pub struct Window{
     panes: Vec<Vec<PaneContainer>>,
     id_to_pane: HashMap<Uuid, (usize, usize)>,
     buffers: Vec<TextBuffer>,
-    final_buffer: FinalTextBuffer,
+    compositor: Compositor,
     known_file_types: HashSet<String>,
     settings: Rc<RefCell<Settings>>,
     duration: Duration,
@@ -97,7 +100,7 @@ impl Window {
             panes,
             id_to_pane,
             buffers,
-            final_buffer: FinalTextBuffer::new(),
+            compositor: Compositor::new(win_size),
             known_file_types,
             duration,
             settings,
@@ -139,34 +142,34 @@ impl Window {
 
         
         if self.panes.len() - 1 == self.active_layer {
-            eprintln!("Creating new layer");
+            //eprintln!("Creating new layer");
             self.panes.push(vec![pane]);
         }
         else {
-            eprintln!("Adding to existing layer");
+            //eprintln!("Adding to existing layer");
             self.panes[self.active_layer + 1].push(pane);
         }
         if self.buffers.len() - 1 == self.active_layer {
-            eprintln!("Creating new buffer");
+            //eprintln!("Creating new buffer");
             self.buffers.push(TextBuffer::new());
         }
         if self.active_panes.len() - 1 == self.active_layer {
-            eprintln!("Creating new active pane");
+            //eprintln!("Creating new active pane");
             self.active_panes.push(self.panes[self.active_layer].len() - 1);
         }
         else {
-            eprintln!("Adding to existing active pane");
+            //eprintln!("Adding to existing active pane");
             self.active_panes[self.active_layer + 1] = self.panes[self.active_layer].len() - 1;
         }
         if make_active {
-            eprintln!("Making new pane active");
+            //eprintln!("Making new pane active");
             self.active_layer = self.panes.len() - 1;
 
         }
     }
 
     fn file_opener(&mut self, filename: PathBuf) -> io::Result<Rc<RefCell<dyn Pane>>> {
-        eprintln!("Opening file: {:?}", filename);
+        //eprintln!("Opening file: {:?}", filename);
         let file_type = filename.extension().and_then(|s| s.to_str()).unwrap_or("txt").to_string();
 
         let pane: Rc<RefCell<dyn Pane>> = match file_type.as_str() {
@@ -397,6 +400,8 @@ impl Window {
 
         let active_pane = self.panes[self.active_layer][self.active_panes[self.active_layer]].get_pane().clone();
         let new_active_pane = self.panes[self.active_layer][new_active_pane_index].get_pane().clone();
+
+        active_pane.borrow_mut().reset();
 
         self.panes[self.active_layer][self.active_panes[self.active_layer]].change_pane(new_active_pane);
         self.panes[self.active_layer][new_active_pane_index].change_pane(active_pane);
@@ -713,7 +718,6 @@ impl Window {
                     }
                     Message::ClosePane(go_down, uuid) => {
 
-                        self.contents.set_change(true);
                         match uuid {
                             None => {
                                 //self.panes[self.active_layer].remove(self.active_panes[self.active_layer]);
@@ -734,6 +738,10 @@ impl Window {
                                 }
                                 self.force_refresh_screen()?;
                             }
+                        }
+
+                        for buffer in self.buffers.iter_mut() {
+                            buffer.hard_clear();
                         }
                         
                         Ok(())
@@ -783,7 +791,7 @@ impl Window {
     }
 
     fn process_event(&mut self) -> io::Result<Event> {
-        self.refresh_screen()?;
+        //self.refresh_screen()?;
         loop {
             if event::poll(self.duration)? {
                 return event::read();
@@ -793,6 +801,8 @@ impl Window {
 
 
     pub fn run(&mut self) -> io::Result<bool> {
+        //eprintln!("Running");
+        
         //self.refresh_screen()?;
         self.read_messages()?;
         self.remove_panes();
@@ -806,7 +816,7 @@ impl Window {
         let ((x1, y1), (x2, y2)) = self.panes[0][self.active_panes[0]].get_corners();
 
         if x1 == x2 || y1 == y2 {
-            //eprintln!("Pane is too small");
+            eprintln!("Pane is too small");
             //eprintln!("x1: {}, x2: {}, y1: {}, y2: {}", x1, x2, y1, y2);
             self.editor_sender.send(EditorMessage::CloseWindow).unwrap();
             return Ok(false);
@@ -816,21 +826,24 @@ impl Window {
             self.skip = false;
             return Ok(true);
         }
+
         
+        self.panes[self.active_layer][self.active_panes[self.active_layer]].reset();
         
+        //eprintln!("Getting Event");
         let event = self.process_event()?;
         match event {
             Event::Key(key) => {
-                self.contents.set_change(true);
                 self.process_keypress(key)
             },
             Event::Resize(width, height) => {
-                self.contents.set_change(true);
                 self.resize(width, height);
+
+                self.refresh_screen()?;
+                
                 Ok(true)
             }
             _ => {
-                self.contents.set_change(true);
                 Ok(true)},
         }
     }
@@ -840,6 +853,10 @@ impl Window {
         for pane in self.panes[self.active_layer].iter_mut() {
             pane.resize((width as usize, height as usize));
         }
+        for buffer in self.buffers.iter_mut() {
+            buffer.resize((width as usize, height as usize - 1));
+        }
+        self.compositor.resize((width as usize, height as usize - 1));
     }
 
     pub fn clear_screen() -> io::Result<()> {
@@ -869,11 +886,11 @@ impl Window {
 
 
                     if self.buffers[l].contents.len() <= i {
-                        self.buffers[l].contents.push(Vec::new());
+                        self.buffers[l].contents.push(TextRow::new());
                     }
 
                     while window_index <= start_x {
-                        self.buffers[l].contents[i].push(None);
+                        self.buffers[l].contents[i].push(Some(None));
                         window_index += 1;
                     }
                     
@@ -894,35 +911,42 @@ impl Window {
                     }
                     else {
                         if self.buffers[l].contents.len() <= i {
-                            self.buffers[l].contents.push(vec![None; cols]);
+                            let mut text_row = TextRow::new();
+                            text_row.extend(vec![None; cols]);
+                            self.buffers[l].contents.push(text_row);
                         }
                     }
                     pane_index += 1;
                 }
 
                 while self.buffers[l].contents.len() <= i {
-                    self.buffers[l].contents.push(Vec::new());
+                    self.buffers[l].contents.push(TextRow::new());
                 }
 
                 while self.buffers[l].contents[i].len() < cols {
-                    self.buffers[l].contents[i].push(None);
+                    self.buffers[l].contents[i].push(Some(None));
                 }
 
                 let color_settings = &self.settings.borrow().colors.pane;
 
-                self.buffers[l].contents[i].push(Some(StyledChar::new('\r', color_settings.clone())));
-                self.buffers[l].contents[i].push(Some(StyledChar::new('\n', color_settings.clone())));
+                if l == 0 {
+                    self.buffers[l].contents[i].push(Some(Some(StyledChar::new('\r', color_settings.clone()))));
+                    self.buffers[l].contents[i].push(Some(Some(StyledChar::new('\n', color_settings.clone()))));
+
+
+                }
+
 
             }
 
 
         }
 
-        self.final_buffer.merge(&mut self.buffers);
+        self.compositor.merge(&mut self.buffers);
 
-        self.final_buffer.draw(&mut self.contents);
+        self.compositor.draw(&mut self.contents);
 
-        self.final_buffer.clear();
+        self.compositor.clear();
         for buffer in self.buffers.iter_mut() {
             buffer.clear();
         }
@@ -963,7 +987,11 @@ impl Window {
 
     pub fn force_refresh_screen(&mut self) -> io::Result<()> {
         //Self::clear_screen()?;
-        self.contents.set_change(true);
+        for layer in self.panes.iter_mut() {
+            for pane in layer.iter_mut() {
+                pane.changed();
+            }
+        }
         self.refresh_screen()
     }
 
@@ -1002,7 +1030,9 @@ impl Window {
             cursor::MoveTo(0, 0),
         )?;
 
+        //eprintln!("drawing rows");
         self.draw_rows();
+        //eprintln!("drawing status bar");
         self.draw_status_bar();
 
         let cursor = self.panes[0][self.active_panes[self.active_layer]].get_cursor();
@@ -1030,6 +1060,9 @@ impl Window {
             cursor::Show,
         )?;
 
+
+        
+
         self.contents.flush()
     }
 
@@ -1048,10 +1081,17 @@ impl Window {
 
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, PartialEq)]
 pub struct StyledChar {
     pub chr: char,
     pub color: ColorScheme,
+    pub changed: bool,
+}
+
+impl Debug for StyledChar {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}",self.chr)
+    }
 }
 
 impl StyledChar {
@@ -1059,6 +1099,7 @@ impl StyledChar {
         Self {
             chr,
             color,
+            changed: true,
         }
     }
 
@@ -1067,9 +1108,109 @@ impl StyledChar {
     }
 }
 
+#[derive(Clone)]
+pub struct TextRow {
+    pub contents: Vec<Rc<RefCell<Option<StyledChar>>>>,
+    pub index: usize,
+    pub changed: bool,
+}
+
+impl Debug for TextRow {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self.contents)
+    }
+}
+
+impl TextRow {
+    pub fn new() -> TextRow {
+        TextRow {
+            contents: Vec::new(),
+            index: 0,
+            changed: false,
+        }
+    }
+
+    pub fn clear(&mut self) {
+
+        self.index = 0;
+        self.changed = false;
+    }
+
+    pub fn push(&mut self, chr: Option<Option<StyledChar>>) {
+        if self.index >= self.contents.len() {
+            match chr {
+                None => panic!("Tried to push None on first draw"),
+                Some(chr) => self.contents.push(Rc::new(RefCell::new(chr))),
+            }
+            self.changed = true;
+        }
+        else {
+            match chr {
+                None => {
+                    self.contents[self.index].borrow_mut().as_mut().unwrap().changed = false;
+                },
+                Some(chr) => {
+                    self.changed = true;
+                    self.contents[self.index] = Rc::new(RefCell::new(chr));
+                },
+            }
+        }
+        self.index += 1;
+    }
+
+    pub fn extend(&mut self, mut other: Vec<Option<StyledChar>>) {
+        let mut index = 0;
+        while index < self.contents.len() {
+            if self.index == self.contents.len() {
+                if index >= other.len() {
+                    break;
+                }
+                self.contents.push(Rc::new(RefCell::new(other[index].take())));
+            }
+            else {
+                if index >= other.len() {
+                    break;
+                }
+                self.contents[self.index] = Rc::new(RefCell::new(other[index].take()));
+            }
+            self.index += 1;
+            index += 1;
+        }
+        //self.contents.extend(other[index..].iter().cloned().map(Rc::new));
+
+        //self.index += other[index..].len();
+        self.changed = true;
+    }
+
+    pub fn len(&self) -> usize {
+        self.contents.len()
+    }
+
+    pub fn resize(&mut self, cols: usize) {
+        self.contents.truncate(cols);
+        self.index = 0;
+        self.changed = true;
+    }
+
+    pub fn hard_clear(&mut self) {
+        self.contents.clear();
+        self.index = 0;
+        self.changed = true;
+    }
+    
+}
+
+impl Index<usize> for TextRow {
+    type Output = Rc<RefCell<Option<StyledChar>>>;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.contents[index]
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct TextBuffer {
-    pub contents: Vec<Vec<Option<StyledChar>>>,
+    pub contents: Vec<TextRow>,
 }
 
 impl TextBuffer {
@@ -1080,25 +1221,126 @@ impl TextBuffer {
     }
 
     pub fn clear(&mut self) {
-        self.contents.clear();
+        //eprintln!("Clearing");
+        //eprintln!("{:#?}", self.contents);
+        for row in self.contents.iter_mut() {
+            row.clear();
+        }
     }
-    
+
+    pub fn resize(&mut self, (cols, rows): (usize, usize)) {
+        self.contents.truncate(rows);
+        for row in self.contents.iter_mut() {
+            row.resize(cols);
+        }
+    }
+
+    pub fn hard_clear(&mut self) {
+        for row in self.contents.iter_mut() {
+            row.hard_clear();
+        }
+    }
+
 }
 
-
-pub struct FinalTextBuffer {
-    pub contents: Vec<Vec<StyledChar>>,
+pub struct CompositorRow {
+    pub contents: Vec<StyledChar>,
+    pub index: usize,
+    pub changed: bool,
 }
 
-impl FinalTextBuffer {
+impl Debug for CompositorRow {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self.contents)
+    }
+}
+
+impl CompositorRow {
     pub fn new() -> Self {
         Self {
             contents: Vec::new(),
+            index: 0,
+            changed: false,
         }
     }
 
     pub fn clear(&mut self) {
-        self.contents.clear();
+        self.index = 0;
+        self.changed = false;
+    }
+
+    pub fn push(&mut self, chr: Option<StyledChar>) {
+        if self.index >= self.contents.len() {
+            match chr {
+                None => panic!("Tried to push None on first draw"),
+                Some(chr) => self.contents.push(chr),
+            }
+            self.changed = true;
+        }
+        else {
+            match chr {
+                None => {},
+                Some(chr) => {
+                    self.changed = true;
+                    self.contents[self.index] = chr;
+                },
+            }
+        }
+        self.index += 1;
+    }
+
+
+    pub fn len(&self) -> usize {
+        self.contents.len()
+    }
+
+    pub fn resize(&mut self, cols: usize) {
+        // in the future we may want to only get rid of what has been cut off
+        self.contents.truncate(cols);
+        self.index = 0;
+        self.changed = true;
+    }
+    
+}
+
+impl Index<usize> for CompositorRow {
+    type Output = StyledChar;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.contents[index]
+    }
+}
+
+
+pub struct Compositor {
+    pub contents: Vec<CompositorRow>,
+    row: usize,
+    cols: usize,
+    rows: usize,
+}
+
+impl Debug for Compositor {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{:#?}", self.contents)
+    }
+}
+
+impl Compositor {
+    pub fn new((cols, rows): (usize,usize)) -> Self {
+        Self {
+            contents: Vec::new(),
+            row: 0,
+            cols,
+            rows,
+            
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.row = 0;
+        for row in self.contents.iter_mut() {
+            row.clear();
+        }
     }
 
     pub fn merge(&mut self, layers: &mut Vec<TextBuffer>) {
@@ -1113,18 +1355,41 @@ impl FinalTextBuffer {
             for x in 0..min_x {
 
                 let mut curr_layer = top_layer;
+
                 
-                while layers[curr_layer].contents[y].len() == 0 || layers[curr_layer].contents[y][x].is_none() && curr_layer > 0 {
+                while layers[curr_layer].contents[y].len() == 0 || layers[curr_layer].contents[y][x].borrow().is_none() && curr_layer > 0 {
                     curr_layer -= 1;
                 }
 
-                if let Some(chr) = layers[curr_layer].contents[y][x].take() {
-                    self.contents.push(Vec::new());
-                    self.contents[y].push(chr);
+                if !layers[curr_layer].contents[y].changed {
+                    continue;
+                }
+
+                //let chr_ref = layers[curr_layer].contents[y][x].clone().borrow().clone();
+                
+                if layers[curr_layer].contents[y][x].clone().borrow().is_some() {
+                    //self.contents.push(CompositorRow::new());
+
+                    let chr = layers[curr_layer].contents[y][x].clone();
+                    let mut chr = chr.borrow_mut();
+
+                    let chr = chr.as_mut().unwrap();
+                    
+                    if chr.changed {
+                        self.contents[y].push(Some(chr.clone()));
+                        chr.changed = false;
+                    }
+                    else {
+                        self.contents[y].push(None);
+                        chr.changed = false;
+                        //layers[curr_layer].contents[y][x].borrow_mut().as_mut().unwrap().changed = false;
+                    }
+                    //self.contents[y].push(Some(chr));
+                    //layers[curr_layer].contents[y].changed = false;
                 }
                 else {
                     if self.contents.len() <= y {
-                        self.contents.push(Vec::new());
+                        self.contents.push(CompositorRow::new());
                     }
                     //self.contents[y].push(StyledChar::new(' ', ColorScheme::default()));
                 }
@@ -1133,11 +1398,25 @@ impl FinalTextBuffer {
     }
 
     pub fn draw(&self, output: &mut WindowContents) {
-        for y in 0..self.contents.len() {
-            for x in 0..self.contents[y].len() {
+
+        let rows = cmp::min(self.rows, self.contents.len());
+        let cols = cmp::min(self.cols, self.contents[0].len());
+        
+        for y in 0..rows {
+            for x in 0..cols {
                 output.push_str(self.contents[y][x].style());
             }
         }
+        //eprintln!("Cols: {}, Rows: {}", cols, rows);
+        //eprintln!("{:#?}", self);
+    }
+
+    pub fn resize(&mut self, (cols, rows): (usize, usize)) {
+        for row in self.contents.iter_mut() {
+            row.resize(cols);
+        }
+        self.cols = cols;
+        self.rows = rows;
     }
 }
 
@@ -1150,69 +1429,52 @@ pub trait WindowContentsUtils<T> {
 
 pub struct WindowContents {
     content: String,
-    change: bool,
 }
 
 impl WindowContents {
     pub fn new() -> Self {
         Self {
             content: String::new(),
-            change: true,
         }
     }
 
     fn push(&mut self, c: char) {
         self.content.push(c);
-        self.change = true;
     }
 
     fn merge(&mut self, other: &mut Self) {
         self.content.push_str(other.content.as_str());
         other.content.clear();
-        self.change = true;
-    }
-
-    fn set_change(&mut self, change: bool) {
-        self.change = change;
-    }
-
-    fn will_change(&self) -> bool {
-        self.change
     }
 }
 
 impl WindowContentsUtils<&str> for WindowContents {
     fn push_str(&mut self, s: &str) {
         self.content.push_str(s);
-        self.change = true;
     }
 }
 
 impl WindowContentsUtils<String> for WindowContents {
     fn push_str(&mut self, s: String) {
         self.content.push_str(s.as_str());
-        self.change = true;
     }
 }
 
 impl WindowContentsUtils<&String> for WindowContents {
     fn push_str(&mut self, s: &String) {
         self.content.push_str(s.as_str());
-        self.change = true;
     }
 }
 
 impl WindowContentsUtils<StyledContent<&str>> for WindowContents {
     fn push_str(&mut self, s: StyledContent<&str>) {
         self.content.push_str(&format!("{}", s));
-        self.change = true;
     }
 }
 
 impl WindowContentsUtils<StyledContent<String>> for WindowContents {
     fn push_str(&mut self, s: StyledContent<String>) {
         self.content.push_str(&format!("{}", s));
-        self.change = true;
     }
 }
 
@@ -1229,13 +1491,9 @@ impl io::Write for WindowContents {
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        if !self.change {
-            return Ok(());
-        }
         let out = write!(std::io::stdout(), "{}", self.content);
         std::io::stdout().flush()?;
         self.content.clear();
-        self.change = true;
         out
     }
 }
