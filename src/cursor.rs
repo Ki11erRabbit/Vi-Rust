@@ -149,8 +149,8 @@ impl Cursor {
         let (pane_x, pane_y) = pane.get_size();
 
 
-        if self.went_right && pane_x != 0 && (self.x - self.col_offset) >= pane_x {
-            self.col_offset = self.x.saturating_sub(pane_x) + 1;
+        if self.went_right && pane_x != 0 && ((self.number_line_size + self.x) - self.col_offset) >= pane_x {
+            self.col_offset = (self.number_line_size + self.x).saturating_sub(pane_x) + 1;
             self.scrolled = true;
         }
         else if !self.went_right && (self.x.saturating_sub(self.col_offset)) == 0 {

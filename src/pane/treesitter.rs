@@ -495,7 +495,7 @@ impl Pane for TreesitterPane {
 
         let real_row = self.cursor.borrow().row_offset + index;
         let col_offset = self.cursor.borrow().col_offset;
-        eprintln!("Col offset: {}", col_offset);
+        //eprintln!("Col offset: {}", col_offset);
 
         let number_of_lines = self.contents.get_line_count();
 

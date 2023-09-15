@@ -70,26 +70,20 @@ impl Buffer {
         }
         let line = self.buffers[self.current].line(row);
 
-        eprintln!("line: {}", line);
-
-        let len = cmp::min(cols + col_offset, line.bytes().count());
-
-        let offset = if col_offset > len {
-            len
+        let len = if cols + col_offset > line.chars().count() {
+            line.bytes().count()
+        } else if cols + col_offset == line.chars().count() {
+            line.bytes().count() - 1
         } else {
-            col_offset
+            cols + col_offset
         };
-        eprintln!("Row: {}", row);
-        eprintln!("cols: {}, col_offset: {}, len: {}", cols, col_offset, len);
-        if len == 0 {
+            
+        //cmp::min(cols + col_offset, line.bytes().count());
+
+        if col_offset > len {
             return None;
         }
-
-        if col_offset != 0 {
-            eprintln!("row: {}", line.byte_slice(offset..len));
-        }
-        
-        Some(line.byte_slice(offset..len))
+        Some(line.byte_slice(col_offset..len))
     }
 
     pub fn get_byte_offset(&self, x: usize, y: usize) -> Option<usize> {
