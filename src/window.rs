@@ -1362,16 +1362,24 @@ impl Compositor {
                     continue;
                 }
 
-                let chr_ref = layers[curr_layer].contents[y][x].clone().borrow().clone();
+                //let chr_ref = layers[curr_layer].contents[y][x].clone().borrow().clone();
                 
-                if let Some(chr) = chr_ref {
+                if layers[curr_layer].contents[y][x].clone().borrow().is_some() {
                     //self.contents.push(CompositorRow::new());
+
+                    let chr = layers[curr_layer].contents[y][x].clone();
+                    let mut chr = chr.borrow_mut();
+
+                    let chr = chr.as_mut().unwrap();
+                    
                     if chr.changed {
-                        self.contents[y].push(Some(chr));
+                        self.contents[y].push(Some(chr.clone()));
+                        chr.changed = false;
                     }
                     else {
                         self.contents[y].push(None);
-                        layers[curr_layer].contents[y][x].borrow_mut().as_mut().unwrap().changed = false;
+                        chr.changed = false;
+                        //layers[curr_layer].contents[y][x].borrow_mut().as_mut().unwrap().changed = false;
                     }
                     //self.contents[y].push(Some(chr));
                     //layers[curr_layer].contents[y].changed = false;
