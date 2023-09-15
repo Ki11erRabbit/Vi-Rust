@@ -786,7 +786,7 @@ impl Window {
     }
 
     fn process_event(&mut self) -> io::Result<Event> {
-        self.refresh_screen()?;
+        //self.refresh_screen()?;
         loop {
             if event::poll(self.duration)? {
                 return event::read();
@@ -865,13 +865,10 @@ impl Window {
         //let panes = self.panes.len();
 
         for l in 0..self.panes.len() {
-            eprintln!("Layer: {}", l);
             for i in 0..rows {
-                eprintln!("Row: {}", i);
                 let mut pane_index = 0;
                 let mut window_index = 0;
                 while window_index < self.size.0 {
-                    eprintln!("Window Index: {}", window_index);
                     if pane_index >= self.panes[l].len() {
                         break;
                     }
@@ -879,12 +876,10 @@ impl Window {
 
 
                     if self.buffers[l].contents.len() <= i {
-                        eprintln!("Pushing TextRow");
                         self.buffers[l].contents.push(TextRow::new());
                     }
 
                     while window_index <= start_x {
-                        eprintln!("Pushing None");
                         self.buffers[l].contents[i].push(Some(None));
                         window_index += 1;
                     }
@@ -915,13 +910,10 @@ impl Window {
                 }
 
                 while self.buffers[l].contents.len() <= i {
-                    eprintln!("Pushing row");
                     self.buffers[l].contents.push(TextRow::new());
                 }
 
                 while self.buffers[l].contents[i].len() < cols {
-                    eprintln!("Pushing char");
-                    eprintln!("{}", self.buffers[l].contents[i].len());
                     self.buffers[l].contents[i].push(Some(None));
                 }
 
@@ -1093,6 +1085,7 @@ impl StyledChar {
 pub struct TextRow {
     pub contents: Vec<Rc<Option<StyledChar>>>,
     pub index: usize,
+    pub changed: bool,
 }
 
 impl TextRow {
@@ -1100,11 +1093,13 @@ impl TextRow {
         TextRow {
             contents: Vec::new(),
             index: 0,
+            changed: false,
         }
     }
 
     pub fn clear(&mut self) {
         self.index = 0;
+        self.changed = false;
     }
 
     pub fn push(&mut self, chr: Option<Option<StyledChar>>) {
@@ -1113,11 +1108,15 @@ impl TextRow {
                 None => panic!("Tried to push None on first draw"),
                 Some(chr) => self.contents.push(Rc::new(chr)),
             }
+            self.changed = true;
         }
         else {
             match chr {
-                None => self.contents[self.index] = Rc::new(None),
-                Some(chr) => self.contents[self.index] = Rc::new(chr),
+                None => {},
+                Some(chr) => {
+                    self.changed = true;
+                    self.contents[self.index] = Rc::new(chr);
+                },
             }
         }
         self.index += 1;
@@ -1132,6 +1131,7 @@ impl TextRow {
         self.contents.extend(other[index..].iter().cloned().map(Rc::new));
 
         self.index += other.len();
+        self.changed = true;
     }
 
     pub fn len(&self) -> usize {
@@ -1142,6 +1142,7 @@ impl TextRow {
         // in the future we may want to only get rid of what has been cut off
         self.contents.clear();
         self.index = 0;
+        self.changed = true;
     }
     
 }
@@ -1174,20 +1175,87 @@ impl TextBuffer {
     
 }
 
+pub struct CompositorRow {
+    pub contents: Vec<StyledChar>,
+    pub index: usize,
+    pub changed: bool,
+}
+
+impl CompositorRow {
+    pub fn new() -> Self {
+        Self {
+            contents: Vec::new(),
+            index: 0,
+            changed: false,
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.index = 0;
+        self.changed = false;
+    }
+
+    pub fn push(&mut self, chr: Option<StyledChar>) {
+        if self.index >= self.contents.len() {
+            match chr {
+                None => panic!("Tried to push None on first draw"),
+                Some(chr) => self.contents.push(chr),
+            }
+            self.changed = true;
+        }
+        else {
+            match chr {
+                None => {},
+                Some(chr) => {
+                    self.changed = true;
+                    self.contents[self.index] = chr;
+                },
+            }
+        }
+        self.index += 1;
+    }
+
+
+    pub fn len(&self) -> usize {
+        self.contents.len()
+    }
+
+    pub fn resize(&mut self) {
+        // in the future we may want to only get rid of what has been cut off
+        self.contents.clear();
+        self.index = 0;
+        self.changed = true;
+    }
+    
+}
+
+impl Index<usize> for CompositorRow {
+    type Output = StyledChar;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.contents[index]
+    }
+}
+
 
 pub struct Compositor {
-    pub contents: Vec<Vec<StyledChar>>,
+    pub contents: Vec<CompositorRow>,
+    row: usize,
 }
 
 impl Compositor {
     pub fn new() -> Self {
         Self {
             contents: Vec::new(),
+            row: 0,
         }
     }
 
     pub fn clear(&mut self) {
-        self.contents.clear();
+        self.row = 0;
+        for row in self.contents.iter_mut() {
+            row.clear();
+        }
     }
 
     pub fn merge(&mut self, layers: &mut Vec<TextBuffer>) {
@@ -1202,18 +1270,23 @@ impl Compositor {
             for x in 0..min_x {
 
                 let mut curr_layer = top_layer;
+
                 
                 while layers[curr_layer].contents[y].len() == 0 || layers[curr_layer].contents[y][x].is_none() && curr_layer > 0 {
                     curr_layer -= 1;
                 }
 
+                if !layers[curr_layer].contents[y].changed {
+                    continue;
+                }
+
                 if let Some(chr) = layers[curr_layer].contents[y][x].clone() {
-                    self.contents.push(Vec::new());
-                    self.contents[y].push(chr);
+                    self.contents.push(CompositorRow::new());
+                    self.contents[y].push(Some(chr));
                 }
                 else {
                     if self.contents.len() <= y {
-                        self.contents.push(Vec::new());
+                        self.contents.push(CompositorRow::new());
                     }
                     //self.contents[y].push(StyledChar::new(' ', ColorScheme::default()));
                 }

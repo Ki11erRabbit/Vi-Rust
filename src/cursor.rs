@@ -161,7 +161,6 @@ impl Cursor {
             eprintln!("3row offset: {}, 3y: {}, 3pane y: {}", self.row_offset, self.y, pane_y);
         }*/
 
-        self.moved = true;
     }
 
     pub fn set_cursor(&mut self, x: CursorMove, y: CursorMove, pane: &dyn Pane, (x_offset, y_offset): (usize, usize)) {
@@ -223,6 +222,7 @@ impl Cursor {
             CursorMove::Nothing => {},
         }
 
+        self.moved = true;
     }
 
     pub fn move_cursor(&mut self, direction: Direction, mut n: usize, pane: &dyn Pane) {
@@ -333,6 +333,7 @@ impl Cursor {
             },
         }
 
+        self.moved = true;
     }
 
 }
