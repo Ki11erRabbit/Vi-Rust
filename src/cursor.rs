@@ -142,12 +142,15 @@ impl Cursor {
     }
 
     pub fn scroll(&mut self, pane: &PaneContainer) {
+
+        //eprintln!("PaneContainer: {:?}", pane.get_size());
+        
         self.jumped = false;
         let (pane_x, pane_y) = pane.get_size();
 
 
-        if self.went_right && (self.x - self.col_offset) >= pane_x {
-            self.col_offset = self.x - pane_x + 1;
+        if self.went_right && pane_x != 0 && (self.x - self.col_offset) >= pane_x {
+            self.col_offset = self.x.saturating_sub(pane_x) + 1;
             self.scrolled = true;
         }
         else if !self.went_right && (self.x.saturating_sub(self.col_offset)) == 0 {
@@ -165,10 +168,9 @@ impl Cursor {
 
         //eprintln!("row offset: {}, y: {}, pane y: {}", self.row_offset, self.y, pane_y);
 
-        if self.went_down && (self.y - self.row_offset) >= pane_y {
+        if self.went_down && pane_y != 0 && (self.y - self.row_offset) >= pane_y {
             
-            let new_offset = self.y - pane_y + 1;
-
+            let new_offset = self.y.saturating_sub(pane_y) + 1;
             self.row_offset = new_offset;
 
             self.scrolled = true;
@@ -256,8 +258,12 @@ impl Cursor {
     }
 
     pub fn move_cursor(&mut self, direction: Direction, mut n: usize, pane: &dyn Pane) {
+
+        //eprintln!("{:?}", self);
         self.jumped = false;
         let number_of_lines = pane.get_line_count();
+        //eprintln!("number of lines: {}", number_of_lines);
+        //eprintln!("N: {}", n);
 
         let number_of_cols = if let Some(cols) = pane.get_row_len(self.y) {
             cols

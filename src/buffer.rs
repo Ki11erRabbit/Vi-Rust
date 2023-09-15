@@ -64,16 +64,32 @@ impl Buffer {
         self.buffers[self.current].bytes().count()
     }
 
-    pub fn get_row(&self, row: usize, offset: usize, col: usize) -> Option<RopeSlice> {
+    pub fn get_row(&self, row: usize, col_offset: usize, cols: usize) -> Option<RopeSlice> {
         if row >= self.buffers[self.current].line_len() {
             return None;
         }
         let line = self.buffers[self.current].line(row);
-        let len = cmp::min(col + offset, line.line_len().saturating_sub(offset));
+
+        eprintln!("line: {}", line);
+
+        let len = cmp::min(cols + col_offset, line.bytes().count());
+
+        let offset = if col_offset > len {
+            len
+        } else {
+            col_offset
+        };
+        eprintln!("Row: {}", row);
+        eprintln!("cols: {}, col_offset: {}, len: {}", cols, col_offset, len);
         if len == 0 {
             return None;
         }
-        Some(line.line_slice(offset..len))
+
+        if col_offset != 0 {
+            eprintln!("row: {}", line.byte_slice(offset..len));
+        }
+        
+        Some(line.byte_slice(offset..len))
     }
 
     pub fn get_byte_offset(&self, x: usize, y: usize) -> Option<usize> {

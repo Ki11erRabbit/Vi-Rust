@@ -495,6 +495,7 @@ impl Pane for TreesitterPane {
 
         let real_row = self.cursor.borrow().row_offset + index;
         let col_offset = self.cursor.borrow().col_offset;
+        eprintln!("Col offset: {}", col_offset);
 
         let number_of_lines = self.contents.get_line_count();
 
@@ -586,7 +587,8 @@ impl Pane for TreesitterPane {
         }
         else {
 
-            if let Some(row) = self.get_row(real_row, col_offset, cols) {
+            if let Some(row) = self.get_row(real_row, col_offset, cols - num_width) {
+                //eprintln!("Row: {}", row);
                 let mut count = 0;
 
                 row.chars().for_each(|c| if count != (cols - num_width) {
