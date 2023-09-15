@@ -52,7 +52,7 @@ pub struct Window{
     panes: Vec<Vec<PaneContainer>>,
     id_to_pane: HashMap<Uuid, (usize, usize)>,
     buffers: Vec<TextBuffer>,
-    final_buffer: Compositor,
+    compositor: Compositor,
     known_file_types: HashSet<String>,
     settings: Rc<RefCell<Settings>>,
     duration: Duration,
@@ -98,7 +98,7 @@ impl Window {
             panes,
             id_to_pane,
             buffers,
-            final_buffer: Compositor::new(),
+            compositor: Compositor::new(),
             known_file_types,
             duration,
             settings,
@@ -140,34 +140,34 @@ impl Window {
 
         
         if self.panes.len() - 1 == self.active_layer {
-            eprintln!("Creating new layer");
+            //eprintln!("Creating new layer");
             self.panes.push(vec![pane]);
         }
         else {
-            eprintln!("Adding to existing layer");
+            //eprintln!("Adding to existing layer");
             self.panes[self.active_layer + 1].push(pane);
         }
         if self.buffers.len() - 1 == self.active_layer {
-            eprintln!("Creating new buffer");
+            //eprintln!("Creating new buffer");
             self.buffers.push(TextBuffer::new());
         }
         if self.active_panes.len() - 1 == self.active_layer {
-            eprintln!("Creating new active pane");
+            //eprintln!("Creating new active pane");
             self.active_panes.push(self.panes[self.active_layer].len() - 1);
         }
         else {
-            eprintln!("Adding to existing active pane");
+            //eprintln!("Adding to existing active pane");
             self.active_panes[self.active_layer + 1] = self.panes[self.active_layer].len() - 1;
         }
         if make_active {
-            eprintln!("Making new pane active");
+            //eprintln!("Making new pane active");
             self.active_layer = self.panes.len() - 1;
 
         }
     }
 
     fn file_opener(&mut self, filename: PathBuf) -> io::Result<Rc<RefCell<dyn Pane>>> {
-        eprintln!("Opening file: {:?}", filename);
+        //eprintln!("Opening file: {:?}", filename);
         let file_type = filename.extension().and_then(|s| s.to_str()).unwrap_or("txt").to_string();
 
         let pane: Rc<RefCell<dyn Pane>> = match file_type.as_str() {
@@ -824,7 +824,7 @@ impl Window {
         self.panes[self.active_layer][self.active_panes[self.active_layer]].reset();
         
         
-        eprintln!("Getting Event");
+        //eprintln!("Getting Event");
         let event = self.process_event()?;
         match event {
             Event::Key(key) => {
@@ -847,6 +847,10 @@ impl Window {
         for pane in self.panes[self.active_layer].iter_mut() {
             pane.resize((width as usize, height as usize));
         }
+        for buffer in self.buffers.iter_mut() {
+            buffer.resize();
+        }
+        self.compositor.resize();
     }
 
     pub fn clear_screen() -> io::Result<()> {
@@ -927,11 +931,11 @@ impl Window {
 
         }
 
-        self.final_buffer.merge(&mut self.buffers);
+        self.compositor.merge(&mut self.buffers);
 
-        self.final_buffer.draw(&mut self.contents);
+        self.compositor.draw(&mut self.contents);
 
-        self.final_buffer.clear();
+        self.compositor.clear();
         for buffer in self.buffers.iter_mut() {
             buffer.clear();
         }
@@ -1011,9 +1015,9 @@ impl Window {
             cursor::MoveTo(0, 0),
         )?;
 
-        eprintln!("drawing rows");
+        //eprintln!("drawing rows");
         self.draw_rows();
-        eprintln!("drawing status bar");
+        //eprintln!("drawing status bar");
         self.draw_status_bar();
 
         let cursor = self.panes[0][self.active_panes[self.active_layer]].get_cursor();
@@ -1125,12 +1129,19 @@ impl TextRow {
     pub fn extend(&mut self, mut other: Vec<Option<StyledChar>>) {
         let mut index = 0;
         while self.index < self.contents.len() {
+            if index >= self.contents.len() {
+                self.contents.push(Rc::new(other[index].take()));
+                self.index += 1;
+                index += 1;
+                continue;
+            }
             self.contents[self.index] = Rc::new(other[index].take());
+            self.index += 1;
             index += 1;
         }
         self.contents.extend(other[index..].iter().cloned().map(Rc::new));
 
-        self.index += other.len();
+        self.index += other[index..].len();
         self.changed = true;
     }
 
@@ -1172,7 +1183,12 @@ impl TextBuffer {
             row.clear();
         }
     }
-    
+
+    pub fn resize(&mut self) {
+        for row in self.contents.iter_mut() {
+            row.resize();
+        }
+    }
 }
 
 pub struct CompositorRow {
@@ -1299,6 +1315,12 @@ impl Compositor {
             for x in 0..self.contents[y].len() {
                 output.push_str(self.contents[y][x].style());
             }
+        }
+    }
+
+    pub fn resize(&mut self) {
+        for row in self.contents.iter_mut() {
+            row.resize();
         }
     }
 }

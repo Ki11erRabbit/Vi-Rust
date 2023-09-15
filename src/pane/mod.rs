@@ -372,4 +372,7 @@ pub trait Pane {
     /// For most panes it should tell the cursor that it hasn't moved yet
     fn reset(&mut self);
 
+    /// This gets called whenever we do an action that would cause a redraw of the screen.
+    fn changed(&mut self);
+
 }

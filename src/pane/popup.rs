@@ -122,6 +122,7 @@ impl PopUpPane {
 
 impl Pane for PopUpPane {
 
+    fn changed(&mut self) {}
     
     fn reset(&mut self) {
     }

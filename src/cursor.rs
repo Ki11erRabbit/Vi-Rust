@@ -93,6 +93,8 @@ impl Cursor {
 
         //self.x = new_x as usize;
         //self.y = new_y as usize;
+
+        self.moved = true;
     }
 
     pub fn set_size(&mut self, win_size: (usize, usize)) {
@@ -123,6 +125,10 @@ impl Cursor {
 
     pub fn reset_move(&mut self) {
         self.moved = false;
+    }
+
+    pub fn set_moved(&mut self) {
+        self.moved = true;
     }
 
     pub fn get_moved(&self) -> bool {

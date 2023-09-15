@@ -227,6 +227,10 @@ impl TextPane {
 }
 impl Pane for TextPane {
 
+    fn changed(&mut self) {
+        self.cursor.borrow_mut().set_moved();
+    }
+
     fn reset(&mut self) {
         self.cursor.borrow_mut().reset_move();
     }
@@ -236,7 +240,10 @@ impl Pane for TextPane {
         let mut cols = container.get_size().0;
 
         if !self.cursor.borrow().get_moved() {
-            output.push(None);
+            for _ in 0..cols {
+                output.push(None);
+            }
+            return;
         }
 
         let ((x1, y1), _) = container.get_corners();
