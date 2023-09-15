@@ -1128,20 +1128,25 @@ impl TextRow {
 
     pub fn extend(&mut self, mut other: Vec<Option<StyledChar>>) {
         let mut index = 0;
-        while self.index < self.contents.len() {
-            if index >= self.contents.len() {
+        while index < self.contents.len() {
+            if self.index == self.contents.len() {
+                if index >= other.len() {
+                    break;
+                }
                 self.contents.push(Rc::new(other[index].take()));
-                self.index += 1;
-                index += 1;
-                continue;
             }
-            self.contents[self.index] = Rc::new(other[index].take());
+            else {
+                if index >= other.len() {
+                    break;
+                }
+                self.contents[self.index] = Rc::new(other[index].take());
+            }
             self.index += 1;
             index += 1;
         }
-        self.contents.extend(other[index..].iter().cloned().map(Rc::new));
+        //self.contents.extend(other[index..].iter().cloned().map(Rc::new));
 
-        self.index += other[index..].len();
+        //self.index += other[index..].len();
         self.changed = true;
     }
 
