@@ -1,6 +1,8 @@
+use core::fmt;
 use std::cell::RefCell;
 use std::cmp;
 use std::collections::{HashSet, HashMap};
+use std::fmt::{Debug, Formatter};
 use std::ops::Index;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -1066,10 +1068,16 @@ impl Window {
 
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, PartialEq)]
 pub struct StyledChar {
     pub chr: char,
     pub color: ColorScheme,
+}
+
+impl Debug for StyledChar {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}",self.chr)
+    }
 }
 
 impl StyledChar {
@@ -1085,11 +1093,17 @@ impl StyledChar {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct TextRow {
     pub contents: Vec<Rc<Option<StyledChar>>>,
     pub index: usize,
     pub changed: bool,
+}
+
+impl Debug for TextRow {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self.contents)
+    }
 }
 
 impl TextRow {
@@ -1102,6 +1116,7 @@ impl TextRow {
     }
 
     pub fn clear(&mut self) {
+
         self.index = 0;
         self.changed = false;
     }
@@ -1184,6 +1199,8 @@ impl TextBuffer {
     }
 
     pub fn clear(&mut self) {
+        eprintln!("Clearing");
+        eprintln!("{:#?}", self.contents);
         for row in self.contents.iter_mut() {
             row.clear();
         }

@@ -165,6 +165,12 @@ impl Cursor {
             let new_offset = self.y - pane_y + 1;
             self.row_offset = new_offset;
             eprintln!("3row offset: {}, 3y: {}, 3pane y: {}", self.row_offset, self.y, pane_y);
+    }*/
+
+        /*let ((_, y), _) = pane.get_corners();
+
+        if y > 0 {
+            self.row_offset += 1;
         }*/
 
     }

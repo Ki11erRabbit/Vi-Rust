@@ -479,7 +479,7 @@ impl Pane for TreesitterPane {
                     output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                 }
                 
-                cols = cols.saturating_sub(1);
+                //cols = cols.saturating_sub(1);
             }
         }
 

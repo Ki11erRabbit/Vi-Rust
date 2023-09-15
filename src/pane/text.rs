@@ -263,7 +263,7 @@ impl Pane for TextPane {
                 return;
             }
             else {
-                index = index;
+                index = index.saturating_sub(1);
             }
 
             if x1 != 0 {
@@ -273,7 +273,7 @@ impl Pane for TextPane {
                     output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                 }
                 
-                cols = cols.saturating_sub(1);
+                //cols = cols.saturating_sub(1);
             }
         }
 
