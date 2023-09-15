@@ -442,14 +442,16 @@ impl Pane for TreesitterPane {
     
     fn draw_row(&self, mut index: usize, container: &PaneContainer, output: &mut TextRow) {
 
-        let mut cols = container.get_size().0;
+        let cols = container.get_size().0;
 
         if !self.cursor.borrow().get_moved() {
+            //eprintln!("Not Changed");
             for _ in 0..cols {
                 output.push(None);
             }
             return;
         }
+        //eprintln!("Changed");
 
         let ((x1, y1), _) = container.get_corners();
 

@@ -100,7 +100,7 @@ impl Window {
             panes,
             id_to_pane,
             buffers,
-            compositor: Compositor::new(),
+            compositor: Compositor::new(win_size),
             known_file_types,
             duration,
             settings,
@@ -718,6 +718,7 @@ impl Window {
                     }
                     Message::ClosePane(go_down, uuid) => {
 
+                        self.buffers[self.active_layer].hard_clear();
                         self.contents.set_change(true);
                         match uuid {
                             None => {
@@ -852,7 +853,7 @@ impl Window {
         for buffer in self.buffers.iter_mut() {
             buffer.resize();
         }
-        self.compositor.resize();
+        self.compositor.resize((width as usize, height as usize - 1));
     }
 
     pub fn clear_screen() -> io::Result<()> {
@@ -925,8 +926,13 @@ impl Window {
 
                 let color_settings = &self.settings.borrow().colors.pane;
 
-                self.buffers[l].contents[i].push(Some(Some(StyledChar::new('\r', color_settings.clone()))));
-                self.buffers[l].contents[i].push(Some(Some(StyledChar::new('\n', color_settings.clone()))));
+                if l == 0 {
+                    self.buffers[l].contents[i].push(Some(Some(StyledChar::new('\r', color_settings.clone()))));
+                    self.buffers[l].contents[i].push(Some(Some(StyledChar::new('\n', color_settings.clone()))));
+
+
+                }
+
 
             }
 
@@ -1175,6 +1181,12 @@ impl TextRow {
         self.index = 0;
         self.changed = true;
     }
+
+    pub fn hard_clear(&mut self) {
+        self.contents.clear();
+        self.index = 0;
+        self.changed = true;
+    }
     
 }
 
@@ -1199,8 +1211,8 @@ impl TextBuffer {
     }
 
     pub fn clear(&mut self) {
-        eprintln!("Clearing");
-        eprintln!("{:#?}", self.contents);
+        //eprintln!("Clearing");
+        //eprintln!("{:#?}", self.contents);
         for row in self.contents.iter_mut() {
             row.clear();
         }
@@ -1211,12 +1223,25 @@ impl TextBuffer {
             row.resize();
         }
     }
+
+    pub fn hard_clear(&mut self) {
+        for row in self.contents.iter_mut() {
+            row.hard_clear();
+        }
+    }
+
 }
 
 pub struct CompositorRow {
     pub contents: Vec<StyledChar>,
     pub index: usize,
     pub changed: bool,
+}
+
+impl Debug for CompositorRow {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self.contents)
+    }
 }
 
 impl CompositorRow {
@@ -1279,13 +1304,24 @@ impl Index<usize> for CompositorRow {
 pub struct Compositor {
     pub contents: Vec<CompositorRow>,
     row: usize,
+    cols: usize,
+    rows: usize,
+}
+
+impl Debug for Compositor {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{:#?}", self.contents)
+    }
 }
 
 impl Compositor {
-    pub fn new() -> Self {
+    pub fn new((cols, rows): (usize,usize)) -> Self {
         Self {
             contents: Vec::new(),
             row: 0,
+            cols,
+            rows,
+            
         }
     }
 
@@ -1333,17 +1369,24 @@ impl Compositor {
     }
 
     pub fn draw(&self, output: &mut WindowContents) {
-        for y in 0..self.contents.len() {
-            for x in 0..self.contents[y].len() {
+
+        let rows = cmp::min(self.rows, self.contents.len());
+        let cols = cmp::min(self.cols, self.contents[0].len());
+        
+        for y in 0..rows {
+            for x in 0..cols {
                 output.push_str(self.contents[y][x].style());
             }
         }
+        //eprintln!("{:#?}", self);
     }
 
-    pub fn resize(&mut self) {
+    pub fn resize(&mut self, (cols, rows): (usize, usize)) {
         for row in self.contents.iter_mut() {
             row.resize();
         }
+        self.cols = cols;
+        self.rows = rows;
     }
 }
 

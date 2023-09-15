@@ -237,7 +237,7 @@ impl Pane for TextPane {
 
     fn draw_row(&self, mut index: usize, container: &PaneContainer, output: &mut TextRow) {
         //let rows = container.get_size().1;
-        let mut cols = container.get_size().0;
+        let cols = container.get_size().0;
 
         if !self.cursor.borrow().get_moved() {
             for _ in 0..cols {
@@ -263,7 +263,11 @@ impl Pane for TextPane {
                 return;
             }
             else {
-                index = index.saturating_sub(1);
+                let ((_, y), _) = container.get_corners();
+
+                if y != 0 {
+                    index = index.saturating_sub(1);
+                }
             }
 
             if x1 != 0 {

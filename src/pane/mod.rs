@@ -263,7 +263,6 @@ impl PaneContainer {
 
             self.shrink();
         }
-
     }
 
     pub fn set_position(&mut self, position: (usize, usize)) {
