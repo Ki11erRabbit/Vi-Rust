@@ -738,7 +738,8 @@ impl Window {
                         
                         Ok(())
                     },
-                    Message::CreatePopup(container, make_active) => {
+                    Message::CreatePopup(mut container, make_active) => {
+                        container.set_move_not_resize(true);
                         self.create_popup(container, make_active);
                         self.force_refresh_screen()?;
                         Ok(())
