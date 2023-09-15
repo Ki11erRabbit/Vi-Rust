@@ -518,7 +518,6 @@ impl Pane for TreesitterPane {
 
 
                     if !self.cursor.borrow().get_scrolled() {
-                        //eprintln!("Not Changed");
                         for _ in 0..num_width {
                             output.push(None);
                         }

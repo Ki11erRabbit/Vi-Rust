@@ -718,7 +718,6 @@ impl Window {
                     }
                     Message::ClosePane(go_down, uuid) => {
 
-                        self.buffers[self.active_layer].hard_clear();
                         match uuid {
                             None => {
                                 //self.panes[self.active_layer].remove(self.active_panes[self.active_layer]);
@@ -739,6 +738,10 @@ impl Window {
                                 }
                                 self.force_refresh_screen()?;
                             }
+                        }
+
+                        for buffer in self.buffers.iter_mut() {
+                            buffer.hard_clear();
                         }
                         
                         Ok(())

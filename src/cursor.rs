@@ -89,7 +89,7 @@ impl Cursor {
         //let new_x = (self.x * win_size.0) as f64 / self.cols as f64;
         //let new_y = (self.y * win_size.1) as f64 / self.rows as f64;
 
-        self.rows = win_size.1 - 1;
+        self.rows = win_size.1;
         self.cols = win_size.0;
 
 
@@ -145,13 +145,23 @@ impl Cursor {
         self.jumped = false;
         let (pane_x, pane_y) = pane.get_size();
 
-        if self.x >= pane_x && self.went_right {
+
+        if self.went_right && (self.x - self.col_offset) >= pane_x {
+            self.col_offset = self.x - pane_x + 1;
+            self.scrolled = true;
+        }
+        else if !self.went_right && (self.x.saturating_sub(self.col_offset)) == 0 {
+            self.col_offset = self.x;
+            self.scrolled = true;
+        }
+
+        /*if self.x >= pane_x && self.went_right {
             self.col_offset = self.x - pane_x + 1;
         }
         else if self.x < self.col_offset && !self.went_right {
             self.x = self.col_offset.saturating_sub(1);
             self.col_offset = self.col_offset.saturating_sub(1);
-        }
+        }*/
 
         //eprintln!("row offset: {}, y: {}, pane y: {}", self.row_offset, self.y, pane_y);
 

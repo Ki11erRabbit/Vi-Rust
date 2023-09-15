@@ -239,12 +239,6 @@ impl Pane for TextPane {
         //let rows = container.get_size().1;
         let cols = container.get_size().0;
 
-        if !self.cursor.borrow().get_moved() {
-            for _ in 0..cols {
-                output.push(None);
-            }
-            return;
-        }
 
         let ((x1, y1), _) = container.get_corners();
 
@@ -253,6 +247,16 @@ impl Pane for TextPane {
             let color_settings = &self.settings.borrow().colors.ui;
             
             if index == 0 && y1 != 0 {
+
+                if !self.cursor.borrow().get_moved() {
+                    //eprintln!("Not Changed");
+                    for _ in 0..cols {
+                        output.push(None);
+                    }
+                    return;
+                }
+
+                
                 let string = "-".repeat(cols);
 
                 for c in string.chars() {
@@ -303,10 +307,19 @@ impl Pane for TextPane {
                 }
 
                 if real_row + 1 <= number_of_lines {
-                    let string = format!("{:width$}", real_row + 1, width = num_width);
+                    if !self.cursor.borrow().get_scrolled() {
+                        for _ in 0..num_width {
+                            output.push(None);
+                        }
+                    }
+                    else {
+                        
 
-                    for c in string.chars() {
-                        output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
+                        let string = format!("{:width$}", real_row + 1, width = num_width);
+
+                        for c in string.chars() {
+                            output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
+                        }
                     }
                 }
 
@@ -345,6 +358,13 @@ impl Pane for TextPane {
 
 
         
+        if !self.cursor.borrow().get_scrolled() {
+            //eprintln!("Not Changed");
+            for _ in 0..(cols - num_width) {
+                output.push(None);
+            }
+            return;
+        }
 
         if let Some(row) = self.get_row(real_row, col_offset, cols) {
             let mut count = 0;
