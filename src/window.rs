@@ -799,6 +799,8 @@ impl Window {
 
 
     pub fn run(&mut self) -> io::Result<bool> {
+        //eprintln!("Running");
+        
         //self.refresh_screen()?;
         self.read_messages()?;
         self.remove_panes();
@@ -812,7 +814,7 @@ impl Window {
         let ((x1, y1), (x2, y2)) = self.panes[0][self.active_panes[0]].get_corners();
 
         if x1 == x2 || y1 == y2 {
-            //eprintln!("Pane is too small");
+            eprintln!("Pane is too small");
             //eprintln!("x1: {}, x2: {}, y1: {}, y2: {}", x1, x2, y1, y2);
             self.editor_sender.send(EditorMessage::CloseWindow).unwrap();
             return Ok(false);
@@ -823,24 +825,30 @@ impl Window {
             return Ok(true);
         }
 
-
-        self.panes[self.active_layer][self.active_panes[self.active_layer]].reset();
         
+        self.panes[self.active_layer][self.active_panes[self.active_layer]].reset();
         
         //eprintln!("Getting Event");
         let event = self.process_event()?;
         match event {
             Event::Key(key) => {
                 self.contents.set_change(true);
-                self.process_keypress(key)
+                self.process_keypress(key)?;
+                
+                Ok(true)
             },
             Event::Resize(width, height) => {
                 self.contents.set_change(true);
                 self.resize(width, height);
+
+                //self.refresh_screen()?;
+                
                 Ok(true)
             }
             _ => {
                 self.contents.set_change(true);
+
+                self.panes[self.active_layer][self.active_panes[self.active_layer]].reset();
                 Ok(true)},
         }
     }

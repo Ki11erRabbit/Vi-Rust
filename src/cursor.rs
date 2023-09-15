@@ -87,7 +87,7 @@ impl Cursor {
         //let new_x = (self.x * win_size.0) as f64 / self.cols as f64;
         //let new_y = (self.y * win_size.1) as f64 / self.rows as f64;
 
-        self.rows = win_size.1;
+        self.rows = win_size.1 - 1;
         self.cols = win_size.0;
 
 
@@ -218,7 +218,7 @@ impl Cursor {
                 self.draw_y = self.y;
             },
             CursorMove::ToEnd => {
-                self.y = self.rows.min(number_of_lines);
+                self.y = self.rows.min(number_of_lines - 1);
                 self.went_down = true;
                 self.draw_y = self.y;
             },

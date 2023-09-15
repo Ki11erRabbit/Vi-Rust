@@ -70,6 +70,9 @@ impl PaneContainer {
         container
     }
     fn shrink(&mut self) {
+        //eprintln!("Max Size: {:?}", self.max_size);
+        //eprintln!("Before Shrink: {:?}", self.get_corners());
+        
         let (_, (mut end_x, _)) = self.get_corners();
         while end_x > self.max_size.0 {
             if self.size.0 == 0 {
@@ -87,7 +90,35 @@ impl PaneContainer {
             (_, (_, end_y)) = self.get_corners();
         }
 
+        //eprintln!("After Shrink: {:?}", self.get_corners());
+
     }
+
+    fn grow(&mut self) {
+        //eprintln!("Max Size: {:?}", self.max_size);
+        //eprintln!("Before Shrink: {:?}", self.get_corners());
+        
+        let (_, (mut end_x, _)) = self.get_corners();
+        while end_x < self.max_size.0 {
+            if self.size.0 == self.max_size.0 {
+                break;
+            }
+            self.size.0 = self.size.0.saturating_add(1);
+            (_, (end_x, _)) = self.get_corners();
+        }
+        let (_, (_, mut end_y)) = self.get_corners();
+        while  end_y < self.max_size.1 - 1 {
+            if self.size.1 == self.max_size.1 - 1 {
+                break;
+            }
+            self.size.1 = self.size.1.saturating_add(1);
+            (_, (_, end_y)) = self.get_corners();
+        }
+
+        //eprintln!("After Shrink: {:?}", self.get_corners());
+
+    }
+
 
     pub fn reset(&mut self) {
         self.pane.borrow_mut().reset();
@@ -213,6 +244,10 @@ impl PaneContainer {
 
 
     pub fn resize(&mut self, size: (usize, usize)) {
+
+        eprintln!("Old Size: {:?}", size);
+
+        self.pane.borrow_mut().changed();
         //eprintln!("Old Max Size: {:?}", self.max_size);
         //eprintln!("Old Size: {:?}", self.size);
         //eprintln!("New Max Size: {:?}", size);
@@ -255,14 +290,19 @@ impl PaneContainer {
 
         if !self.move_not_resize {
             self.size.0 = new_width;
-            self.size.1 = new_height;
+            self.size.1 = new_height - 1;
 
             self.max_size = size;
 
+            self.shrink();
+            self.grow();
+
             self.pane.borrow_mut().resize_cursor(self.size);
 
-            self.shrink();
         }
+
+        eprintln!("New Size: {:?}", self.size);
+        
     }
 
     pub fn set_position(&mut self, position: (usize, usize)) {
