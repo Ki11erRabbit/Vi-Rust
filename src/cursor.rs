@@ -42,6 +42,7 @@ pub struct Cursor {
     pub hide: bool,
     pub jumped: bool,
     moved: bool,
+    scrolled: bool,
 }
 
 impl Cursor {
@@ -62,6 +63,7 @@ impl Cursor {
             hide: false,
             jumped: false,
             moved: true,
+            scrolled: true,
         }
     }
 
@@ -135,6 +137,10 @@ impl Cursor {
         self.moved
     }
 
+    pub fn get_scrolled(&self) -> bool {
+        self.scrolled
+    }
+
     pub fn scroll(&mut self, pane: &PaneContainer) {
         self.jumped = false;
         let (pane_x, pane_y) = pane.get_size();
@@ -155,10 +161,12 @@ impl Cursor {
 
             self.row_offset = new_offset;
 
+            self.scrolled = true;
             //eprintln!("1row offset: {}, 1y: {}, 1pane y: {}", self.row_offset, self.y, pane_y);
         }
         else if !self.went_down && (self.y.saturating_sub(self.row_offset)) == 0 {
             self.row_offset = self.y;
+            self.scrolled = true;
             //eprintln!("2row offset: {}, 2y: {}, 2pane y: {}", self.row_offset, self.y, pane_y);
         }
         /*else {

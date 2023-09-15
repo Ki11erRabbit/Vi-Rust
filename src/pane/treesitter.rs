@@ -443,14 +443,8 @@ impl Pane for TreesitterPane {
     fn draw_row(&self, mut index: usize, container: &PaneContainer, output: &mut TextRow) {
 
         let cols = container.get_size().0;
+        //eprintln!("Cols: {}", cols);
 
-        if !self.cursor.borrow().get_moved() {
-            //eprintln!("Not Changed");
-            for _ in 0..cols {
-                output.push(None);
-            }
-            return;
-        }
         //eprintln!("Changed");
 
         let ((x1, y1), _) = container.get_corners();
@@ -461,6 +455,16 @@ impl Pane for TreesitterPane {
             let color_settings = &self.settings.borrow().colors.ui;
             
             if index == 0 && y1 != 0 {
+
+                if !self.cursor.borrow().get_moved() {
+                    //eprintln!("Not Changed");
+                    for _ in 0..cols {
+                        output.push(None);
+                    }
+                    return;
+                }
+
+                
                 let string = "-".repeat(cols);
 
                 for c in string.chars() {
@@ -471,7 +475,11 @@ impl Pane for TreesitterPane {
                 return;
             }
             else {
-                index = index;
+                let ((_, y), _) = container.get_corners();
+
+                if y != 0 {
+                    index = index.saturating_sub(1);
+                }
             }
 
             if x1 != 0 {
@@ -507,10 +515,22 @@ impl Pane for TreesitterPane {
                 }
 
                 if real_row + 1 <= number_of_lines {
-                    let string = format!("{:width$}", real_row + 1, width = num_width);
 
-                    for c in string.chars() {
-                        output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
+
+                    if !self.cursor.borrow().get_scrolled() {
+                        //eprintln!("Not Changed");
+                        for _ in 0..num_width {
+                            output.push(None);
+                        }
+                    }
+                    else {
+                        
+
+                        let string = format!("{:width$}", real_row + 1, width = num_width);
+
+                        for c in string.chars() {
+                            output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
+                        }
                     }
                 }
 
@@ -523,6 +543,7 @@ impl Pane for TreesitterPane {
                     places *= 10;
                     num_width += 1;
                 }
+                
                 if real_row == self.cursor.borrow().get_cursor().1 && real_row + 1 <= number_of_lines {
                     let string = format!("{:<width$}", real_row + 1 , width = num_width);
 
@@ -550,118 +571,98 @@ impl Pane for TreesitterPane {
         let default = HashMap::new();
         let syntax_highlighting = syntax_highlighting.get(&self.lang).unwrap_or(&default);
 
+        if !self.cursor.borrow().get_scrolled() {
+            //eprintln!("Not Changed");
+            for _ in 0..num_width {
+                output.push(None);
+            }
+        }
 
-        if let Some(row) = self.get_row(real_row, col_offset, cols) {
-            let mut count = 0;
-            
-            row.chars().for_each(|c| if count != (cols - num_width) {
-                let point1 = Point::new(real_row, count);
-                let point2 = Point::new(real_row, count + 1);
-                let node = self.tree.root_node().descendant_for_point_range(point1, point2).unwrap();
-                let parent_node = node.parent();
-                
-                match c {
-                    '\t' => {
-                        let string = " ".repeat(self.settings.borrow().editor_settings.tab_size);
-                        
-                        count += self.settings.borrow().editor_settings.tab_size;
 
-                        for c in string.chars() {
-                            output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
-                        }
-                    },
-                    '\n' => {
-                        count += 1;
-                        let string = " ".to_string();
+        if !self.cursor.borrow().get_scrolled() {
+            //eprintln!("Not Changed");
+            for _ in 0..(cols - num_width) {
+                output.push(None);
+            }
+        }
+        else {
 
-                        for c in string.chars() {
-                            output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
-                        }
-                    },
-                    ' ' => {
-                        count += 1;
-                        let string = " ".to_string();
+            if let Some(row) = self.get_row(real_row, col_offset, cols) {
+                let mut count = 0;
 
-                        for c in string.chars() {
-                            output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
-                        }
-                    },
-                    c => {
-                        count += 1;
-                        let string = c.to_string();
+                row.chars().for_each(|c| if count != (cols - num_width) {
+                    let point1 = Point::new(real_row, count);
+                    let point2 = Point::new(real_row, count + 1);
+                    let node = self.tree.root_node().descendant_for_point_range(point1, point2).unwrap();
+                    let parent_node = node.parent();
 
-                        for c in string.chars() {
+                    match c {
+                        '\t' => {
+                            let string = " ".repeat(self.settings.borrow().editor_settings.tab_size);
 
-                            let color_settings = if let Some(settings) = syntax_highlighting.get(&node.kind().to_string()) {
-                                match settings {
-                                    SyntaxHighlight::Child(settings) => {
-                                        settings
-                                    }
-                                    SyntaxHighlight::ChildExclude(settings, exclude) => {
-                                        if exclude.contains(&c) {
-                                            color_settings
-                                        }
-                                        else {
-                                            settings
-                                        }
-                                    }
-                                    _ => {
-                                        color_settings
-                                    }
-                                }
+                            count += self.settings.borrow().editor_settings.tab_size;
+
+                            for c in string.chars() {
+                                output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                             }
-                            else if let Some(mut parent) = parent_node {
-                                let mut colors = color_settings;
+                        },
+                        '\n' => {
+                            count += 1;
+                            let string = " ".to_string();
 
-                                if let Some(settings) = syntax_highlighting.get(&parent.kind().to_string()) {
+                            for c in string.chars() {
+                                output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
+                            }
+                        },
+                        ' ' => {
+                            count += 1;
+                            let string = " ".to_string();
+
+                            for c in string.chars() {
+                                output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
+                            }
+                        },
+                        c => {
+                            count += 1;
+                            let string = c.to_string();
+
+                            for c in string.chars() {
+
+                                let color_settings = if let Some(settings) = syntax_highlighting.get(&node.kind().to_string()) {
                                     match settings {
                                         SyntaxHighlight::Child(settings) => {
-                                            colors = settings;
+                                            settings
                                         }
                                         SyntaxHighlight::ChildExclude(settings, exclude) => {
                                             if exclude.contains(&c) {
-                                                colors = color_settings;
+                                                color_settings
                                             }
                                             else {
-                                                colors = settings;
+                                                settings
                                             }
                                         }
-                                        SyntaxHighlight::Parent(color_map) => {
-                                            let mut cursor = parent.walk();
+                                        _ => {
+                                            color_settings
+                                        }
+                                    }
+                                }
+                                else if let Some(mut parent) = parent_node {
+                                    let mut colors = color_settings;
 
-                                            let mut index = 0;
-
-                                            for child_node in parent.children(&mut cursor) {
-                                                if child_node.id() == node.id() {
-                                                    break;
-                                                }
-                                                index += 1;
+                                    if let Some(settings) = syntax_highlighting.get(&parent.kind().to_string()) {
+                                        match settings {
+                                            SyntaxHighlight::Child(settings) => {
+                                                colors = settings;
                                             }
-
-                                            if let Some(field) = parent.field_name_for_child(index) {
-                                                if let Some(highlight) = color_map.get(field) {
-                                                    colors = match highlight {
-                                                        SyntaxHighlight::Child(settings) => settings,
-                                                        SyntaxHighlight::ChildExclude(settings, exclude) => {
-                                                            if exclude.contains(&c) {
-                                                                color_settings
-                                                            }
-                                                            else {
-                                                                settings
-                                                            }
-                                                        }
-                                                        _ => {
-                                                            color_settings
-                                                        }
-                                                    };
+                                            SyntaxHighlight::ChildExclude(settings, exclude) => {
+                                                if exclude.contains(&c) {
+                                                    colors = color_settings;
+                                                }
+                                                else {
+                                                    colors = settings;
                                                 }
                                             }
-                                        },
-                                        SyntaxHighlight::ParentExclude(color_map, exclude) => {
-                                            if exclude.contains(&c) {
-                                                colors = color_settings;
-                                            }
-                                            else {
+                                            SyntaxHighlight::Parent(color_map) => {
                                                 let mut cursor = parent.walk();
 
                                                 let mut index = 0;
@@ -691,58 +692,58 @@ impl Pane for TreesitterPane {
                                                         };
                                                     }
                                                 }
-                                            }
-                                        },
-                                        SyntaxHighlight::GrandParent(grandparents) => {
-                                            if let Some(highlight) = grandparents.get(&parent.kind().to_string()) {
-                                                match highlight {
-                                                    SyntaxHighlight::Child(ref settings) => {
-                                                        colors = settings;
+                                            },
+                                            SyntaxHighlight::ParentExclude(color_map, exclude) => {
+                                                if exclude.contains(&c) {
+                                                    colors = color_settings;
+                                                }
+                                                else {
+                                                    let mut cursor = parent.walk();
+
+                                                    let mut index = 0;
+
+                                                    for child_node in parent.children(&mut cursor) {
+                                                        if child_node.id() == node.id() {
+                                                            break;
+                                                        }
+                                                        index += 1;
                                                     }
-                                                    SyntaxHighlight::ChildExclude(ref settings, exclude) => {
-                                                        if exclude.contains(&c) {
-                                                            colors = color_settings;
-                                                        }
-                                                        else {
-                                                            colors = settings;
-                                                        }
-                                                    }
-                                                    SyntaxHighlight::Parent(color_map) => {
-                                                        let mut cursor = parent.walk();
 
-                                                        let mut index = 0;
-
-                                                        for child_node in parent.children(&mut cursor) {
-                                                            if child_node.id() == node.id() {
-                                                                break;
-                                                            }
-                                                            index += 1;
-                                                        }
-
-                                                        if let Some(field) = parent.field_name_for_child(index) {
-                                                            if let Some(highlight) = color_map.get(field) {
-                                                                colors = match highlight {
-                                                                    SyntaxHighlight::Child(settings) => settings,
-                                                                    SyntaxHighlight::ChildExclude(settings, exclude) => {
-                                                                        if exclude.contains(&c) {
-                                                                            color_settings
-                                                                        }
-                                                                        else {
-                                                                            settings
-                                                                        }
-                                                                    }
-                                                                    _ => {
+                                                    if let Some(field) = parent.field_name_for_child(index) {
+                                                        if let Some(highlight) = color_map.get(field) {
+                                                            colors = match highlight {
+                                                                SyntaxHighlight::Child(settings) => settings,
+                                                                SyntaxHighlight::ChildExclude(settings, exclude) => {
+                                                                    if exclude.contains(&c) {
                                                                         color_settings
                                                                     }
-                                                                };
+                                                                    else {
+                                                                        settings
+                                                                    }
+                                                                }
+                                                                _ => {
+                                                                    color_settings
+                                                                }
+                                                            };
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            SyntaxHighlight::GrandParent(grandparents) => {
+                                                if let Some(highlight) = grandparents.get(&parent.kind().to_string()) {
+                                                    match highlight {
+                                                        SyntaxHighlight::Child(ref settings) => {
+                                                            colors = settings;
+                                                        }
+                                                        SyntaxHighlight::ChildExclude(ref settings, exclude) => {
+                                                            if exclude.contains(&c) {
+                                                                colors = color_settings;
+                                                            }
+                                                            else {
+                                                                colors = settings;
                                                             }
                                                         }
-                                                    },
-                                                    SyntaxHighlight::ParentExclude(color_map, exclude) => {
-                                                        if exclude.contains(&c) {
-                                                            colors = color_settings;
-                                                        }
-                                                        else {
+                                                        SyntaxHighlight::Parent(color_map) => {
                                                             let mut cursor = parent.walk();
 
                                                             let mut index = 0;
@@ -772,44 +773,24 @@ impl Pane for TreesitterPane {
                                                                     };
                                                                 }
                                                             }
-                                                        }
-                                                    },
-                                                    _ => {
-                                                        colors = color_settings;
-                                                    }
-                                                }
-                                            }
-                                            else {
-                                                let old_parent = parent;
-                                                while let Some(new_parent) = parent.parent() {
-                                                    parent = new_parent;
-                                                    if let Some(highlight) = grandparents.get(&parent.kind().to_string()) {
-
-                                                        match highlight {
-                                                            SyntaxHighlight::Child(ref settings) => {
-                                                                colors = settings;
+                                                        },
+                                                        SyntaxHighlight::ParentExclude(color_map, exclude) => {
+                                                            if exclude.contains(&c) {
+                                                                colors = color_settings;
                                                             }
-                                                            SyntaxHighlight::ChildExclude(ref settings, exclude) => {
-                                                                if exclude.contains(&c) {
-                                                                    colors = color_settings;
-                                                                }
-                                                                else {
-                                                                    colors = settings;
-                                                                }
-                                                            }
-                                                            SyntaxHighlight::Parent(color_map) => {
-                                                                let mut cursor = old_parent.walk();
+                                                            else {
+                                                                let mut cursor = parent.walk();
 
                                                                 let mut index = 0;
 
-                                                                for child_node in old_parent.children(&mut cursor) {
+                                                                for child_node in parent.children(&mut cursor) {
                                                                     if child_node.id() == node.id() {
                                                                         break;
                                                                     }
                                                                     index += 1;
                                                                 }
 
-                                                                if let Some(field) = old_parent.field_name_for_child(index) {
+                                                                if let Some(field) = parent.field_name_for_child(index) {
                                                                     if let Some(highlight) = color_map.get(field) {
                                                                         colors = match highlight {
                                                                             SyntaxHighlight::Child(settings) => settings,
@@ -827,13 +808,33 @@ impl Pane for TreesitterPane {
                                                                         };
                                                                     }
                                                                 }
-                                                            },
-                                                            SyntaxHighlight::ParentExclude(color_map, exclude) => {
-                                                                if exclude.contains(&c) {
-                                                                    colors = color_settings;
+                                                            }
+                                                        },
+                                                        _ => {
+                                                            colors = color_settings;
+                                                        }
+                                                    }
+                                                }
+                                                else {
+                                                    let old_parent = parent;
+                                                    while let Some(new_parent) = parent.parent() {
+                                                        parent = new_parent;
+                                                        if let Some(highlight) = grandparents.get(&parent.kind().to_string()) {
+
+                                                            match highlight {
+                                                                SyntaxHighlight::Child(ref settings) => {
+                                                                    colors = settings;
                                                                 }
-                                                                else {
-                                                                    let mut cursor = parent.walk();
+                                                                SyntaxHighlight::ChildExclude(ref settings, exclude) => {
+                                                                    if exclude.contains(&c) {
+                                                                        colors = color_settings;
+                                                                    }
+                                                                    else {
+                                                                        colors = settings;
+                                                                    }
+                                                                }
+                                                                SyntaxHighlight::Parent(color_map) => {
+                                                                    let mut cursor = old_parent.walk();
 
                                                                     let mut index = 0;
 
@@ -862,202 +863,238 @@ impl Pane for TreesitterPane {
                                                                             };
                                                                         }
                                                                     }
+                                                                },
+                                                                SyntaxHighlight::ParentExclude(color_map, exclude) => {
+                                                                    if exclude.contains(&c) {
+                                                                        colors = color_settings;
+                                                                    }
+                                                                    else {
+                                                                        let mut cursor = parent.walk();
+
+                                                                        let mut index = 0;
+
+                                                                        for child_node in old_parent.children(&mut cursor) {
+                                                                            if child_node.id() == node.id() {
+                                                                                break;
+                                                                            }
+                                                                            index += 1;
+                                                                        }
+
+                                                                        if let Some(field) = old_parent.field_name_for_child(index) {
+                                                                            if let Some(highlight) = color_map.get(field) {
+                                                                                colors = match highlight {
+                                                                                    SyntaxHighlight::Child(settings) => settings,
+                                                                                    SyntaxHighlight::ChildExclude(settings, exclude) => {
+                                                                                        if exclude.contains(&c) {
+                                                                                            color_settings
+                                                                                        }
+                                                                                        else {
+                                                                                            settings
+                                                                                        }
+                                                                                    }
+                                                                                    _ => {
+                                                                                        color_settings
+                                                                                    }
+                                                                                };
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                },
+                                                                _ => {
+                                                                    colors = color_settings;
                                                                 }
+                                                            }
+                                                            break;
+                                                        }
+
+                                                    }
+
+                                                }
+
+                                            }
+
+                                        }
+
+
+                                    }
+
+
+
+                                    colors
+                                }
+                                else {
+                                    color_settings
+                                };
+
+
+
+
+                                match c {
+                                    '(' | ')' | '{' | '}' | '[' | ']' | '<' | '>' => {
+                                        if self.settings.borrow().editor_settings.rainbow_delimiters {
+                                            let colors = &self.settings.borrow().colors.rainbow_delimiters;
+                                            match c {
+                                                '(' => {
+                                                    let index = self.rainbow_delimiters.borrow().len() % colors.len();
+                                                    self.rainbow_delimiters.borrow_mut().push((c, colors[index].clone()));
+                                                    output.push(Some(Some(StyledChar::new(c, colors[index].clone()))));
+                                                },
+                                                '{' => {
+                                                    let index = self.rainbow_delimiters.borrow().len() % colors.len();
+                                                    self.rainbow_delimiters.borrow_mut().push((c, colors[index].clone()));
+                                                    output.push(Some(Some(StyledChar::new(c, colors[index].clone()))));
+                                                },
+                                                '[' => {
+                                                    let index = self.rainbow_delimiters.borrow().len() % colors.len();
+                                                    self.rainbow_delimiters.borrow_mut().push((c, colors[index].clone()));
+                                                    output.push(Some(Some(StyledChar::new(c, colors[index].clone()))));
+                                                },
+                                                ')' => {
+                                                    let (_, color) = self.rainbow_delimiters.borrow_mut().pop().unwrap_or((c, color_settings.clone()));
+                                                    output.push(Some(Some(StyledChar::new(c, color))));
+                                                },
+                                                '}' => {
+                                                    let (_, color) = self.rainbow_delimiters.borrow_mut().pop().unwrap_or((c, color_settings.clone()));
+                                                    output.push(Some(Some(StyledChar::new(c, color))));
+                                                },
+                                                ']' => {
+                                                    let (_, color) = self.rainbow_delimiters.borrow_mut().pop().unwrap_or((c, color_settings.clone()));
+                                                    output.push(Some(Some(StyledChar::new(c, color))));
+                                                },
+                                                '<' => {
+                                                    if let Some(parent) = parent_node {
+
+                                                        match parent.kind() {
+                                                            "type_arguments" | "system_lib_string" => {
+                                                                let index = self.rainbow_delimiters.borrow().len() % colors.len();
+                                                                self.rainbow_delimiters.borrow_mut().push((c, colors[index].clone()));
+                                                                output.push(Some(Some(StyledChar::new(c, colors[index].clone()))));
                                                             },
                                                             _ => {
-                                                                colors = color_settings;
-                                                            }
+                                                                match node.kind() {
+                                                                    "system_lib_string" => {
+                                                                        let index = self.rainbow_delimiters.borrow().len() % colors.len();
+                                                                        self.rainbow_delimiters.borrow_mut().push((c, colors[index].clone()));
+                                                                        output.push(Some(Some(StyledChar::new(c, colors[index].clone()))));
+                                                                    },
+                                                                    _ => {
+                                                                        output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
+                                                                    },
+                                                                }
+                                                            },
                                                         }
-                                                        break;
                                                     }
+                                                    else {
+                                                        match node.kind() {
+                                                            "system_lib_string" => {
+                                                                let index = self.rainbow_delimiters.borrow().len() % colors.len();
+                                                                self.rainbow_delimiters.borrow_mut().push((c, colors[index].clone()));
+                                                                output.push(Some(Some(StyledChar::new(c, colors[index].clone()))));
+                                                            },
+                                                            _ => {
+                                                                output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
+                                                            },
+                                                        }
+                                                    }
+                                                },
+                                                '>' => {
+                                                    if let Some(parent) = parent_node {
 
+                                                        match parent.kind() {
+                                                            "type_arguments" | "system_lib_string" => {
+                                                                let (_, color) = self.rainbow_delimiters.borrow_mut().pop().unwrap_or((c, color_settings.clone()));
+                                                                output.push(Some(Some(StyledChar::new(c, color))));
+                                                            },
+                                                            _ => {
+                                                                match node.kind() {
+                                                                    "system_lib_string" => {
+                                                                        let (_, color) = self.rainbow_delimiters.borrow_mut().pop().unwrap_or((c, color_settings.clone()));
+                                                                        output.push(Some(Some(StyledChar::new(c, color))));
+                                                                    },
+                                                                    _ => {
+                                                                        output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
+                                                                    },
+                                                                }
+                                                            },
+                                                        }
+                                                    }
+                                                    else {
+                                                        match node.kind() {
+                                                            "system_lib_string" => {
+                                                                let (_, color) = self.rainbow_delimiters.borrow_mut().pop().unwrap_or((c, color_settings.clone()));
+                                                                output.push(Some(Some(StyledChar::new(c, color))));
+                                                            },
+                                                            _ => {
+                                                                output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
+                                                            },
+                                                        }
+                                                    }
+                                                },
+                                                _ => {
+                                                },
+                                            }
+                                        }
+                                        else {
+                                            output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
+                                        }
+                                    },
+                                    _ => {
+
+                                        let diagnostic = self.lsp_diagnostics.get_diagnostic(real_row, count);
+                                        //eprintln!("Diagnostic: {:?}", diagnostic);
+                                        match diagnostic {
+                                            None => output.push(Some(Some(StyledChar::new(c, color_settings.clone())))),
+                                            Some(diagnostic) => {
+                                                match diagnostic.severity {
+                                                    3 => {
+                                                        let mut color_settings = color_settings.add_attribute(Attribute::Undercurled);
+                                                        color_settings.underline_color = Color::DarkRed;
+                                                        output.push(Some(Some(StyledChar::new(c, color_settings))));
+                                                    },
+                                                    2 => {
+                                                        let mut color_settings = color_settings.add_attribute(Attribute::Undercurled);
+                                                        color_settings.underline_color = Color::DarkYellow;
+                                                        output.push(Some(Some(StyledChar::new(c, color_settings))));
+                                                    },
+                                                    1 | _ => {
+                                                        let mut color_settings = color_settings.add_attribute(Attribute::Undercurled);
+                                                        color_settings.underline_color = Color::Yellow;
+                                                        output.push(Some(Some(StyledChar::new(c, color_settings))));
+                                                    },
                                                 }
-
                                             }
 
                                         }
 
+                                        //output.push(Some(StyledChar::new(c, color_settings.clone())));
                                     }
-
-
                                 }
-
-
-                                
-                                colors
                             }
-                            else {
-                                color_settings
-                            };
-
-                            
-
-                            
-                            match c {
-                                '(' | ')' | '{' | '}' | '[' | ']' | '<' | '>' => {
-                                    if self.settings.borrow().editor_settings.rainbow_delimiters {
-                                        let colors = &self.settings.borrow().colors.rainbow_delimiters;
-                                        match c {
-                                            '(' => {
-                                                let index = self.rainbow_delimiters.borrow().len() % colors.len();
-                                                self.rainbow_delimiters.borrow_mut().push((c, colors[index].clone()));
-                                                output.push(Some(Some(StyledChar::new(c, colors[index].clone()))));
-                                            },
-                                            '{' => {
-                                                let index = self.rainbow_delimiters.borrow().len() % colors.len();
-                                                self.rainbow_delimiters.borrow_mut().push((c, colors[index].clone()));
-                                                output.push(Some(Some(StyledChar::new(c, colors[index].clone()))));
-                                            },
-                                            '[' => {
-                                                let index = self.rainbow_delimiters.borrow().len() % colors.len();
-                                                self.rainbow_delimiters.borrow_mut().push((c, colors[index].clone()));
-                                                output.push(Some(Some(StyledChar::new(c, colors[index].clone()))));
-                                            },
-                                            ')' => {
-                                                let (_, color) = self.rainbow_delimiters.borrow_mut().pop().unwrap_or((c, color_settings.clone()));
-                                                output.push(Some(Some(StyledChar::new(c, color))));
-                                            },
-                                            '}' => {
-                                                let (_, color) = self.rainbow_delimiters.borrow_mut().pop().unwrap_or((c, color_settings.clone()));
-                                                output.push(Some(Some(StyledChar::new(c, color))));
-                                            },
-                                            ']' => {
-                                                let (_, color) = self.rainbow_delimiters.borrow_mut().pop().unwrap_or((c, color_settings.clone()));
-                                                output.push(Some(Some(StyledChar::new(c, color))));
-                                            },
-                                            '<' => {
-                                                if let Some(parent) = parent_node {
-
-                                                    match parent.kind() {
-                                                        "type_arguments" | "system_lib_string" => {
-                                                            let index = self.rainbow_delimiters.borrow().len() % colors.len();
-                                                            self.rainbow_delimiters.borrow_mut().push((c, colors[index].clone()));
-                                                            output.push(Some(Some(StyledChar::new(c, colors[index].clone()))));
-                                                        },
-                                                        _ => {
-                                                            match node.kind() {
-                                                                "system_lib_string" => {
-                                                                    let index = self.rainbow_delimiters.borrow().len() % colors.len();
-                                                                    self.rainbow_delimiters.borrow_mut().push((c, colors[index].clone()));
-                                                                    output.push(Some(Some(StyledChar::new(c, colors[index].clone()))));
-                                                                },
-                                                                _ => {
-                                                                    output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
-                                                                },
-                                                            }
-                                                        },
-                                                    }
-                                                }
-                                                else {
-                                                    match node.kind() {
-                                                        "system_lib_string" => {
-                                                            let index = self.rainbow_delimiters.borrow().len() % colors.len();
-                                                            self.rainbow_delimiters.borrow_mut().push((c, colors[index].clone()));
-                                                            output.push(Some(Some(StyledChar::new(c, colors[index].clone()))));
-                                                        },
-                                                        _ => {
-                                                            output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
-                                                        },
-                                                    }
-                                                }
-                                            },
-                                            '>' => {
-                                                if let Some(parent) = parent_node {
-
-                                                    match parent.kind() {
-                                                        "type_arguments" | "system_lib_string" => {
-                                                            let (_, color) = self.rainbow_delimiters.borrow_mut().pop().unwrap_or((c, color_settings.clone()));
-                                                            output.push(Some(Some(StyledChar::new(c, color))));
-                                                        },
-                                                        _ => {
-                                                            match node.kind() {
-                                                                "system_lib_string" => {
-                                                                    let (_, color) = self.rainbow_delimiters.borrow_mut().pop().unwrap_or((c, color_settings.clone()));
-                                                                    output.push(Some(Some(StyledChar::new(c, color))));
-                                                                },
-                                                                _ => {
-                                                                    output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
-                                                                },
-                                                            }
-                                                        },
-                                                    }
-                                                }
-                                                else {
-                                                    match node.kind() {
-                                                        "system_lib_string" => {
-                                                            let (_, color) = self.rainbow_delimiters.borrow_mut().pop().unwrap_or((c, color_settings.clone()));
-                                                            output.push(Some(Some(StyledChar::new(c, color))));
-                                                        },
-                                                        _ => {
-                                                            output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
-                                                        },
-                                                    }
-                                                }
-                                            },
-                                            _ => {
-                                            },
-                                        }
-                                    }
+                        },
+                    }
+                }
                                     else {
-                                        output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
-                                    }
-                                },
-                                _ => {
+                });
 
-                                    let diagnostic = self.lsp_diagnostics.get_diagnostic(real_row, count);
-                                    //eprintln!("Diagnostic: {:?}", diagnostic);
-                                    match diagnostic {
-                                        None => output.push(Some(Some(StyledChar::new(c, color_settings.clone())))),
-                                        Some(diagnostic) => {
-                                            match diagnostic.severity {
-                                                3 => {
-                                                    let mut color_settings = color_settings.add_attribute(Attribute::Undercurled);
-                                                    color_settings.underline_color = Color::DarkRed;
-                                                    output.push(Some(Some(StyledChar::new(c, color_settings))));
-                                                },
-                                                2 => {
-                                                    let mut color_settings = color_settings.add_attribute(Attribute::Undercurled);
-                                                    color_settings.underline_color = Color::DarkYellow;
-                                                    output.push(Some(Some(StyledChar::new(c, color_settings))));
-                                                },
-                                                1 | _ => {
-                                                    let mut color_settings = color_settings.add_attribute(Attribute::Undercurled);
-                                                    color_settings.underline_color = Color::Yellow;
-                                                    output.push(Some(Some(StyledChar::new(c, color_settings))));
-                                                },
-                                            }
-                                        }
-                                        
-                                    }
-                                    
-                                    //output.push(Some(StyledChar::new(c, color_settings.clone())));
-                                }
-                            }
-                        }
-                    },
+                let string = " ".repeat(cols.saturating_sub(count + num_width));
+
+                for c in string.chars() {
+                    output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                 }
             }
-                                 else {
-            });
+            else if real_row >= number_of_lines {
+                let string = " ".repeat(cols);
 
-            let string = " ".repeat(cols.saturating_sub(count + num_width));
-
-            for c in string.chars() {
-                output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
+                for c in string.chars() {
+                    output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
+                }
             }
-        }
-        else if real_row >= number_of_lines {
-            let string = " ".repeat(cols);
+            else {
+                let string = " ".repeat(cols.saturating_sub(num_width));
 
-            for c in string.chars() {
-                output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
-            }
-        }
-        else {
-            let string = " ".repeat(cols.saturating_sub(num_width));
-
-            for c in string.chars() {
-                output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
+                for c in string.chars() {
+                    output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
+                }
             }
         }
     }

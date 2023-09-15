@@ -719,7 +719,6 @@ impl Window {
                     Message::ClosePane(go_down, uuid) => {
 
                         self.buffers[self.active_layer].hard_clear();
-                        self.contents.set_change(true);
                         match uuid {
                             None => {
                                 //self.panes[self.active_layer].remove(self.active_panes[self.active_layer]);
@@ -832,23 +831,16 @@ impl Window {
         let event = self.process_event()?;
         match event {
             Event::Key(key) => {
-                self.contents.set_change(true);
-                self.process_keypress(key)?;
-                
-                Ok(true)
+                self.process_keypress(key)
             },
             Event::Resize(width, height) => {
-                self.contents.set_change(true);
                 self.resize(width, height);
 
-                //self.refresh_screen()?;
+                self.refresh_screen()?;
                 
                 Ok(true)
             }
             _ => {
-                self.contents.set_change(true);
-
-                self.panes[self.active_layer][self.active_panes[self.active_layer]].reset();
                 Ok(true)},
         }
     }
@@ -859,7 +851,7 @@ impl Window {
             pane.resize((width as usize, height as usize));
         }
         for buffer in self.buffers.iter_mut() {
-            buffer.resize();
+            buffer.resize((width as usize, height as usize - 1));
         }
         self.compositor.resize((width as usize, height as usize - 1));
     }
@@ -992,7 +984,11 @@ impl Window {
 
     pub fn force_refresh_screen(&mut self) -> io::Result<()> {
         //Self::clear_screen()?;
-        self.contents.set_change(true);
+        for layer in self.panes.iter_mut() {
+            for pane in layer.iter_mut() {
+                pane.changed();
+            }
+        }
         self.refresh_screen()
     }
 
@@ -1086,6 +1082,7 @@ impl Window {
 pub struct StyledChar {
     pub chr: char,
     pub color: ColorScheme,
+    pub changed: bool,
 }
 
 impl Debug for StyledChar {
@@ -1099,6 +1096,7 @@ impl StyledChar {
         Self {
             chr,
             color,
+            changed: true,
         }
     }
 
@@ -1109,7 +1107,7 @@ impl StyledChar {
 
 #[derive(Clone)]
 pub struct TextRow {
-    pub contents: Vec<Rc<Option<StyledChar>>>,
+    pub contents: Vec<Rc<RefCell<Option<StyledChar>>>>,
     pub index: usize,
     pub changed: bool,
 }
@@ -1139,16 +1137,18 @@ impl TextRow {
         if self.index >= self.contents.len() {
             match chr {
                 None => panic!("Tried to push None on first draw"),
-                Some(chr) => self.contents.push(Rc::new(chr)),
+                Some(chr) => self.contents.push(Rc::new(RefCell::new(chr))),
             }
             self.changed = true;
         }
         else {
             match chr {
-                None => {},
+                None => {
+                    self.contents[self.index].borrow_mut().as_mut().unwrap().changed = false;
+                },
                 Some(chr) => {
                     self.changed = true;
-                    self.contents[self.index] = Rc::new(chr);
+                    self.contents[self.index] = Rc::new(RefCell::new(chr));
                 },
             }
         }
@@ -1162,13 +1162,13 @@ impl TextRow {
                 if index >= other.len() {
                     break;
                 }
-                self.contents.push(Rc::new(other[index].take()));
+                self.contents.push(Rc::new(RefCell::new(other[index].take())));
             }
             else {
                 if index >= other.len() {
                     break;
                 }
-                self.contents[self.index] = Rc::new(other[index].take());
+                self.contents[self.index] = Rc::new(RefCell::new(other[index].take()));
             }
             self.index += 1;
             index += 1;
@@ -1183,9 +1183,8 @@ impl TextRow {
         self.contents.len()
     }
 
-    pub fn resize(&mut self) {
-        // in the future we may want to only get rid of what has been cut off
-        self.contents.clear();
+    pub fn resize(&mut self, cols: usize) {
+        self.contents.truncate(cols);
         self.index = 0;
         self.changed = true;
     }
@@ -1199,7 +1198,7 @@ impl TextRow {
 }
 
 impl Index<usize> for TextRow {
-    type Output = Option<StyledChar>;
+    type Output = Rc<RefCell<Option<StyledChar>>>;
 
     fn index(&self, index: usize) -> &Self::Output {
         &self.contents[index]
@@ -1226,9 +1225,10 @@ impl TextBuffer {
         }
     }
 
-    pub fn resize(&mut self) {
+    pub fn resize(&mut self, (cols, rows): (usize, usize)) {
+        self.contents.truncate(rows);
         for row in self.contents.iter_mut() {
-            row.resize();
+            row.resize(cols);
         }
     }
 
@@ -1291,9 +1291,9 @@ impl CompositorRow {
         self.contents.len()
     }
 
-    pub fn resize(&mut self) {
+    pub fn resize(&mut self, cols: usize) {
         // in the future we may want to only get rid of what has been cut off
-        self.contents.clear();
+        self.contents.truncate(cols);
         self.index = 0;
         self.changed = true;
     }
@@ -1354,7 +1354,7 @@ impl Compositor {
                 let mut curr_layer = top_layer;
 
                 
-                while layers[curr_layer].contents[y].len() == 0 || layers[curr_layer].contents[y][x].is_none() && curr_layer > 0 {
+                while layers[curr_layer].contents[y].len() == 0 || layers[curr_layer].contents[y][x].borrow().is_none() && curr_layer > 0 {
                     curr_layer -= 1;
                 }
 
@@ -1362,9 +1362,20 @@ impl Compositor {
                     continue;
                 }
 
-                if let Some(chr) = layers[curr_layer].contents[y][x].clone() {
+                let chr_ref = layers[curr_layer].contents[y][x].clone().borrow().clone();
+                
+                if let Some(chr) = chr_ref {
                     self.contents.push(CompositorRow::new());
-                    self.contents[y].push(Some(chr));
+                    if chr.changed {
+                        self.contents[y].push(Some(chr));
+                        layers[curr_layer].contents[y][x].borrow_mut().as_mut().unwrap().changed = false;
+                    }
+                    else {
+                        self.contents[y].push(None);
+                        layers[curr_layer].contents[y][x].borrow_mut().as_mut().unwrap().changed = false;
+                    }
+                    //self.contents[y].push(Some(chr));
+                    //layers[curr_layer].contents[y].changed = false;
                 }
                 else {
                     if self.contents.len() <= y {
@@ -1386,12 +1397,13 @@ impl Compositor {
                 output.push_str(self.contents[y][x].style());
             }
         }
+        //eprintln!("Cols: {}, Rows: {}", cols, rows);
         //eprintln!("{:#?}", self);
     }
 
     pub fn resize(&mut self, (cols, rows): (usize, usize)) {
         for row in self.contents.iter_mut() {
-            row.resize();
+            row.resize(cols);
         }
         self.cols = cols;
         self.rows = rows;
@@ -1407,69 +1419,52 @@ pub trait WindowContentsUtils<T> {
 
 pub struct WindowContents {
     content: String,
-    change: bool,
 }
 
 impl WindowContents {
     pub fn new() -> Self {
         Self {
             content: String::new(),
-            change: true,
         }
     }
 
     fn push(&mut self, c: char) {
         self.content.push(c);
-        self.change = true;
     }
 
     fn merge(&mut self, other: &mut Self) {
         self.content.push_str(other.content.as_str());
         other.content.clear();
-        self.change = true;
-    }
-
-    fn set_change(&mut self, change: bool) {
-        self.change = change;
-    }
-
-    fn will_change(&self) -> bool {
-        self.change
     }
 }
 
 impl WindowContentsUtils<&str> for WindowContents {
     fn push_str(&mut self, s: &str) {
         self.content.push_str(s);
-        self.change = true;
     }
 }
 
 impl WindowContentsUtils<String> for WindowContents {
     fn push_str(&mut self, s: String) {
         self.content.push_str(s.as_str());
-        self.change = true;
     }
 }
 
 impl WindowContentsUtils<&String> for WindowContents {
     fn push_str(&mut self, s: &String) {
         self.content.push_str(s.as_str());
-        self.change = true;
     }
 }
 
 impl WindowContentsUtils<StyledContent<&str>> for WindowContents {
     fn push_str(&mut self, s: StyledContent<&str>) {
         self.content.push_str(&format!("{}", s));
-        self.change = true;
     }
 }
 
 impl WindowContentsUtils<StyledContent<String>> for WindowContents {
     fn push_str(&mut self, s: StyledContent<String>) {
         self.content.push_str(&format!("{}", s));
-        self.change = true;
     }
 }
 
@@ -1486,13 +1481,9 @@ impl io::Write for WindowContents {
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        if !self.change {
-            return Ok(());
-        }
         let out = write!(std::io::stdout(), "{}", self.content);
         std::io::stdout().flush()?;
         self.content.clear();
-        self.change = true;
         out
     }
 }
