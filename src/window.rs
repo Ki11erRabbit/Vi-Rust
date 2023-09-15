@@ -1365,10 +1365,9 @@ impl Compositor {
                 let chr_ref = layers[curr_layer].contents[y][x].clone().borrow().clone();
                 
                 if let Some(chr) = chr_ref {
-                    self.contents.push(CompositorRow::new());
+                    //self.contents.push(CompositorRow::new());
                     if chr.changed {
                         self.contents[y].push(Some(chr));
-                        layers[curr_layer].contents[y][x].borrow_mut().as_mut().unwrap().changed = false;
                     }
                     else {
                         self.contents[y].push(None);
