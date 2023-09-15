@@ -8,7 +8,7 @@ use std::{rc::Rc, cell::RefCell, path::PathBuf, io, cmp, fmt::Debug, sync::mpsc:
 use crossterm::event::KeyEvent;
 use uuid::Uuid;
 
-use crate::{settings::Settings, window::{StyledChar, Message}, cursor::Cursor, buffer::Buffer};
+use crate::{settings::Settings, window::{StyledChar, Message, TextRow}, cursor::Cursor, buffer::Buffer};
 
 
 pub enum PaneMessage {
@@ -87,6 +87,10 @@ impl PaneContainer {
             (_, (_, end_y)) = self.get_corners();
         }
 
+    }
+
+    pub fn reset(&mut self) {
+        self.pane.borrow_mut().reset();
     }
 
     pub fn set_move_not_resize(&mut self, move_not_resize: bool) {
@@ -287,7 +291,7 @@ impl PaneContainer {
         pane.refresh(self);
     }
 
-    pub fn draw_row(&self, index: usize, contents: &mut Vec<Option<StyledChar>>) {
+    pub fn draw_row(&self, index: usize, contents: &mut TextRow) {
         self.pane.borrow().draw_row(index, self, contents);
     }
 
@@ -317,7 +321,7 @@ impl PaneContainer {
 }
 
 pub trait Pane {
-    fn draw_row(&self, index: usize, container: &PaneContainer, contents: &mut Vec<Option<StyledChar>>);
+    fn draw_row(&self, index: usize, container: &PaneContainer, contents: &mut TextRow);
 
     fn refresh(&mut self, container: &mut PaneContainer);
 
@@ -363,5 +367,9 @@ pub trait Pane {
     fn borrow_mut_buffer(&mut self) -> &mut Buffer;
 
     fn set_sender(&mut self, sender: Sender<Message>);
+
+    /// This function is called after we redraw the screen
+    /// For most panes it should tell the cursor that it hasn't moved yet
+    fn reset(&mut self);
 
 }

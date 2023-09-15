@@ -1,4 +1,5 @@
 use crate::mode::PromptType;
+use crate::window::TextRow;
 use crate::{pane::Pane, window::StyledChar, cursor::CursorMove, buffer::Buffer};
 use std::{io::Write, sync::mpsc::Receiver};
 
@@ -226,10 +227,17 @@ impl TextPane {
 }
 impl Pane for TextPane {
 
+    fn reset(&mut self) {
+        self.cursor.borrow_mut().reset_move();
+    }
 
-    fn draw_row(&self, mut index: usize, container: &PaneContainer, output: &mut Vec<Option<StyledChar>>) {
+    fn draw_row(&self, mut index: usize, container: &PaneContainer, output: &mut TextRow) {
         //let rows = container.get_size().1;
         let mut cols = container.get_size().0;
+
+        if !self.cursor.borrow().get_moved() {
+            output.push(None);
+        }
 
         let ((x1, y1), _) = container.get_corners();
 
@@ -241,7 +249,7 @@ impl Pane for TextPane {
                 let string = "-".repeat(cols);
 
                 for c in string.chars() {
-                    output.push(Some(StyledChar::new(c, color_settings.clone())));
+                    output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                 }
                 
                 //output.push_str(apply_colors!("-".repeat(cols), color_settings));
@@ -255,7 +263,7 @@ impl Pane for TextPane {
                 let string = "|".to_string();
 
                 for c in string.chars() {
-                    output.push(Some(StyledChar::new(c, color_settings.clone())));
+                    output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                 }
                 
                 cols = cols.saturating_sub(1);
@@ -287,7 +295,7 @@ impl Pane for TextPane {
                     let string = format!("{:width$}", real_row + 1, width = num_width);
 
                     for c in string.chars() {
-                        output.push(Some(StyledChar::new(c, color_settings.clone())));
+                        output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                     }
                 }
 
@@ -304,7 +312,7 @@ impl Pane for TextPane {
                     let string = format!("{:<width$}", real_row + 1 , width = num_width);
 
                     for c in string.chars() {
-                        output.push(Some(StyledChar::new(c, color_settings.clone())));
+                        output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                     }
                 }
                 else if real_row + 1 <= number_of_lines {
@@ -313,7 +321,7 @@ impl Pane for TextPane {
                                             width = num_width);
 
                     for c in string.chars() {
-                        output.push(Some(StyledChar::new(c, color_settings.clone())));
+                        output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                     }
                 }
             }
@@ -338,14 +346,14 @@ impl Pane for TextPane {
                         count += self.settings.borrow().editor_settings.tab_size;
 
                         for c in string.chars() {
-                            output.push(Some(StyledChar::new(c, color_settings.clone())));
+                            output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                         }
                     },
                     '\n' => {
                         let string = " ".to_string();
 
                         for c in string.chars() {
-                            output.push(Some(StyledChar::new(c, color_settings.clone())));
+                            output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                         }
                     },
                     c => {
@@ -353,7 +361,7 @@ impl Pane for TextPane {
                         let string = c.to_string();
 
                         for c in string.chars() {
-                            output.push(Some(StyledChar::new(c, color_settings.clone())));
+                            output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                         }
                     },
                 }
@@ -364,21 +372,21 @@ impl Pane for TextPane {
             let string = " ".repeat(cols.saturating_sub(count + num_width));
 
             for c in string.chars() {
-                output.push(Some(StyledChar::new(c, color_settings.clone())));
+                output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
             }
         }
         else if real_row >= number_of_lines {
             let string = " ".repeat(cols);
 
             for c in string.chars() {
-                output.push(Some(StyledChar::new(c, color_settings.clone())));
+                output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
             }
         }
         else {
             let string = " ".repeat(cols.saturating_sub(num_width));
 
             for c in string.chars() {
-                output.push(Some(StyledChar::new(c, color_settings.clone())));
+                output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
             }
         }
     }

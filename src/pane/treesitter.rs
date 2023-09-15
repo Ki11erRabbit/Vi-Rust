@@ -4,7 +4,7 @@ use crop::RopeSlice;
 use crossterm::{event::KeyEvent, style::{Attribute, Color}};
 use tree_sitter::{Parser, Tree, Point, Language, InputEdit};
 
-use crate::{window::{Message, StyledChar}, cursor::{Cursor, Direction, CursorMove}, mode::{Mode, base::{Normal, Insert, Command},  PromptType, Promptable}, buffer::Buffer, settings::{Settings, SyntaxHighlight, ColorScheme},  lsp::{ControllerMessage, LspNotification, lsp_utils::{Diagnostic, Diagnostics, CompletionList, TextEditType, LocationResponse}, LspResponse, LspRequest}};
+use crate::{window::{Message, StyledChar, TextRow}, cursor::{Cursor, Direction, CursorMove}, mode::{Mode, base::{Normal, Insert, Command},  PromptType, Promptable}, buffer::Buffer, settings::{Settings, SyntaxHighlight, ColorScheme},  lsp::{ControllerMessage, LspNotification, lsp_utils::{Diagnostic, Diagnostics, CompletionList, TextEditType, LocationResponse}, LspResponse, LspRequest}};
 
 use super::{text::{JumpTable, Waiting}, PaneMessage, Pane, PaneContainer, popup::PopUpPane};
 
@@ -431,9 +431,21 @@ impl TreesitterPane {
 
 
 impl Pane for TreesitterPane {
-    fn draw_row(&self, mut index: usize, container: &super::PaneContainer, output: &mut Vec<Option<crate::window::StyledChar>>) {
+
+    
+    fn reset(&mut self) {
+        self.cursor.borrow_mut().reset_move();
+    }
+    
+    fn draw_row(&self, mut index: usize, container: &PaneContainer, output: &mut TextRow) {
 
         let mut cols = container.get_size().0;
+
+        if !self.cursor.borrow().get_moved() {
+            for i in 0..cols {
+                output.push(None);
+            }
+        }
 
         let ((x1, y1), _) = container.get_corners();
 
@@ -446,7 +458,7 @@ impl Pane for TreesitterPane {
                 let string = "-".repeat(cols);
 
                 for c in string.chars() {
-                    output.push(Some(StyledChar::new(c, color_settings.clone())));
+                    output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                 }
                 
                 //output.push_str(apply_colors!("-".repeat(cols), color_settings));
@@ -460,7 +472,7 @@ impl Pane for TreesitterPane {
                 let string = "|".to_string();
 
                 for c in string.chars() {
-                    output.push(Some(StyledChar::new(c, color_settings.clone())));
+                    output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                 }
                 
                 cols = cols.saturating_sub(1);
@@ -492,7 +504,7 @@ impl Pane for TreesitterPane {
                     let string = format!("{:width$}", real_row + 1, width = num_width);
 
                     for c in string.chars() {
-                        output.push(Some(StyledChar::new(c, color_settings.clone())));
+                        output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                     }
                 }
 
@@ -509,7 +521,7 @@ impl Pane for TreesitterPane {
                     let string = format!("{:<width$}", real_row + 1 , width = num_width);
 
                     for c in string.chars() {
-                        output.push(Some(StyledChar::new(c, color_settings.clone())));
+                        output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                     }
                 }
                 else if real_row + 1 <= number_of_lines {
@@ -518,7 +530,7 @@ impl Pane for TreesitterPane {
                                             width = num_width);
 
                     for c in string.chars() {
-                        output.push(Some(StyledChar::new(c, color_settings.clone())));
+                        output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                     }
                 }
             }
@@ -549,7 +561,7 @@ impl Pane for TreesitterPane {
                         count += self.settings.borrow().editor_settings.tab_size;
 
                         for c in string.chars() {
-                            output.push(Some(StyledChar::new(c, color_settings.clone())));
+                            output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                         }
                     },
                     '\n' => {
@@ -557,7 +569,7 @@ impl Pane for TreesitterPane {
                         let string = " ".to_string();
 
                         for c in string.chars() {
-                            output.push(Some(StyledChar::new(c, color_settings.clone())));
+                            output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                         }
                     },
                     ' ' => {
@@ -565,7 +577,7 @@ impl Pane for TreesitterPane {
                         let string = " ".to_string();
 
                         for c in string.chars() {
-                            output.push(Some(StyledChar::new(c, color_settings.clone())));
+                            output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                         }
                     },
                     c => {
@@ -883,29 +895,29 @@ impl Pane for TreesitterPane {
                                             '(' => {
                                                 let index = self.rainbow_delimiters.borrow().len() % colors.len();
                                                 self.rainbow_delimiters.borrow_mut().push((c, colors[index].clone()));
-                                                output.push(Some(StyledChar::new(c, colors[index].clone())));
+                                                output.push(Some(Some(StyledChar::new(c, colors[index].clone()))));
                                             },
                                             '{' => {
                                                 let index = self.rainbow_delimiters.borrow().len() % colors.len();
                                                 self.rainbow_delimiters.borrow_mut().push((c, colors[index].clone()));
-                                                output.push(Some(StyledChar::new(c, colors[index].clone())));
+                                                output.push(Some(Some(StyledChar::new(c, colors[index].clone()))));
                                             },
                                             '[' => {
                                                 let index = self.rainbow_delimiters.borrow().len() % colors.len();
                                                 self.rainbow_delimiters.borrow_mut().push((c, colors[index].clone()));
-                                                output.push(Some(StyledChar::new(c, colors[index].clone())));
+                                                output.push(Some(Some(StyledChar::new(c, colors[index].clone()))));
                                             },
                                             ')' => {
                                                 let (_, color) = self.rainbow_delimiters.borrow_mut().pop().unwrap_or((c, color_settings.clone()));
-                                                output.push(Some(StyledChar::new(c, color)));
+                                                output.push(Some(Some(StyledChar::new(c, color))));
                                             },
                                             '}' => {
                                                 let (_, color) = self.rainbow_delimiters.borrow_mut().pop().unwrap_or((c, color_settings.clone()));
-                                                output.push(Some(StyledChar::new(c, color)));
+                                                output.push(Some(Some(StyledChar::new(c, color))));
                                             },
                                             ']' => {
                                                 let (_, color) = self.rainbow_delimiters.borrow_mut().pop().unwrap_or((c, color_settings.clone()));
-                                                output.push(Some(StyledChar::new(c, color)));
+                                                output.push(Some(Some(StyledChar::new(c, color))));
                                             },
                                             '<' => {
                                                 if let Some(parent) = parent_node {
@@ -914,17 +926,17 @@ impl Pane for TreesitterPane {
                                                         "type_arguments" | "system_lib_string" => {
                                                             let index = self.rainbow_delimiters.borrow().len() % colors.len();
                                                             self.rainbow_delimiters.borrow_mut().push((c, colors[index].clone()));
-                                                            output.push(Some(StyledChar::new(c, colors[index].clone())));
+                                                            output.push(Some(Some(StyledChar::new(c, colors[index].clone()))));
                                                         },
                                                         _ => {
                                                             match node.kind() {
                                                                 "system_lib_string" => {
                                                                     let index = self.rainbow_delimiters.borrow().len() % colors.len();
                                                                     self.rainbow_delimiters.borrow_mut().push((c, colors[index].clone()));
-                                                                    output.push(Some(StyledChar::new(c, colors[index].clone())));
+                                                                    output.push(Some(Some(StyledChar::new(c, colors[index].clone()))));
                                                                 },
                                                                 _ => {
-                                                                    output.push(Some(StyledChar::new(c, color_settings.clone())));
+                                                                    output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                                                                 },
                                                             }
                                                         },
@@ -935,10 +947,10 @@ impl Pane for TreesitterPane {
                                                         "system_lib_string" => {
                                                             let index = self.rainbow_delimiters.borrow().len() % colors.len();
                                                             self.rainbow_delimiters.borrow_mut().push((c, colors[index].clone()));
-                                                            output.push(Some(StyledChar::new(c, colors[index].clone())));
+                                                            output.push(Some(Some(StyledChar::new(c, colors[index].clone()))));
                                                         },
                                                         _ => {
-                                                            output.push(Some(StyledChar::new(c, color_settings.clone())));
+                                                            output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                                                         },
                                                     }
                                                 }
@@ -949,16 +961,16 @@ impl Pane for TreesitterPane {
                                                     match parent.kind() {
                                                         "type_arguments" | "system_lib_string" => {
                                                             let (_, color) = self.rainbow_delimiters.borrow_mut().pop().unwrap_or((c, color_settings.clone()));
-                                                            output.push(Some(StyledChar::new(c, color)));
+                                                            output.push(Some(Some(StyledChar::new(c, color))));
                                                         },
                                                         _ => {
                                                             match node.kind() {
                                                                 "system_lib_string" => {
                                                                     let (_, color) = self.rainbow_delimiters.borrow_mut().pop().unwrap_or((c, color_settings.clone()));
-                                                                    output.push(Some(StyledChar::new(c, color)));
+                                                                    output.push(Some(Some(StyledChar::new(c, color))));
                                                                 },
                                                                 _ => {
-                                                                    output.push(Some(StyledChar::new(c, color_settings.clone())));
+                                                                    output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                                                                 },
                                                             }
                                                         },
@@ -968,10 +980,10 @@ impl Pane for TreesitterPane {
                                                     match node.kind() {
                                                         "system_lib_string" => {
                                                             let (_, color) = self.rainbow_delimiters.borrow_mut().pop().unwrap_or((c, color_settings.clone()));
-                                                            output.push(Some(StyledChar::new(c, color)));
+                                                            output.push(Some(Some(StyledChar::new(c, color))));
                                                         },
                                                         _ => {
-                                                            output.push(Some(StyledChar::new(c, color_settings.clone())));
+                                                            output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                                                         },
                                                     }
                                                 }
@@ -981,7 +993,7 @@ impl Pane for TreesitterPane {
                                         }
                                     }
                                     else {
-                                        output.push(Some(StyledChar::new(c, color_settings.clone())));
+                                        output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
                                     }
                                 },
                                 _ => {
@@ -989,23 +1001,23 @@ impl Pane for TreesitterPane {
                                     let diagnostic = self.lsp_diagnostics.get_diagnostic(real_row, count);
                                     //eprintln!("Diagnostic: {:?}", diagnostic);
                                     match diagnostic {
-                                        None => output.push(Some(StyledChar::new(c, color_settings.clone()))),
+                                        None => output.push(Some(Some(StyledChar::new(c, color_settings.clone())))),
                                         Some(diagnostic) => {
                                             match diagnostic.severity {
                                                 3 => {
                                                     let mut color_settings = color_settings.add_attribute(Attribute::Undercurled);
                                                     color_settings.underline_color = Color::DarkRed;
-                                                    output.push(Some(StyledChar::new(c, color_settings)));
+                                                    output.push(Some(Some(StyledChar::new(c, color_settings))));
                                                 },
                                                 2 => {
                                                     let mut color_settings = color_settings.add_attribute(Attribute::Undercurled);
                                                     color_settings.underline_color = Color::DarkYellow;
-                                                    output.push(Some(StyledChar::new(c, color_settings)));
+                                                    output.push(Some(Some(StyledChar::new(c, color_settings))));
                                                 },
                                                 1 | _ => {
                                                     let mut color_settings = color_settings.add_attribute(Attribute::Undercurled);
                                                     color_settings.underline_color = Color::Yellow;
-                                                    output.push(Some(StyledChar::new(c, color_settings)));
+                                                    output.push(Some(Some(StyledChar::new(c, color_settings))));
                                                 },
                                             }
                                         }
@@ -1025,21 +1037,21 @@ impl Pane for TreesitterPane {
             let string = " ".repeat(cols.saturating_sub(count + num_width));
 
             for c in string.chars() {
-                output.push(Some(StyledChar::new(c, color_settings.clone())));
+                output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
             }
         }
         else if real_row >= number_of_lines {
             let string = " ".repeat(cols);
 
             for c in string.chars() {
-                output.push(Some(StyledChar::new(c, color_settings.clone())));
+                output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
             }
         }
         else {
             let string = " ".repeat(cols.saturating_sub(num_width));
 
             for c in string.chars() {
-                output.push(Some(StyledChar::new(c, color_settings.clone())));
+                output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
             }
         }
     }
@@ -1072,9 +1084,9 @@ impl Pane for TreesitterPane {
         self.file_name = Some(PathBuf::from(filename));
 
         self.tree = self.parser.parse(self.contents.to_string().as_bytes(), None).unwrap();
-        eprintln!("{}", self.contents.to_string());
+        //eprintln!("{}", self.contents.to_string());
 
-        eprintln!("{}", self.tree.root_node().to_sexp());
+        //eprintln!("{}", self.tree.root_node().to_sexp());
 
         let uri = self.generate_uri();
 
@@ -1562,7 +1574,7 @@ impl Pane for TreesitterPane {
                             LspRequest::RequestCompletion(uri.into(), position, "invoked".into())
                         )).expect("Failed to send message");
 
-                        eprintln!("Sent completion request");
+                        //eprintln!("Sent completion request");
                         while self.lsp_completion.is_none() {
                             self.read_lsp_messages();
                         }
@@ -1623,7 +1635,7 @@ impl Pane for TreesitterPane {
             },
             "insert" => {
                 if let Some(index) = command_args.next() {
-                    eprintln!("Inserting {}", index);
+                    //eprintln!("Inserting {}", index);
 
                     if let Some(index) = index.parse::<usize>().ok() {
                         match &self.lsp_client {
@@ -1632,17 +1644,17 @@ impl Pane for TreesitterPane {
                                 match self.lsp_completion {
                                     None => {},
                                     Some(ref mut list) => {
-                                        eprintln!("Inserting {}", index);
+                                        //eprintln!("Inserting {}", index);
                                         if let Some(completion) = list.get_completion(index) {
-                                            eprintln!("Inserting {}", index);
+                                            //eprintln!("Inserting {}", index);
                                             if let Some(text_edit) = completion.get_edit_text() {
-                                                eprintln!("Inserting {}", index);
+                                                //eprintln!("Inserting {}", index);
                                                 match text_edit {
                                                     TextEditType::TextEdit(text_edit) => {
                                                         let (pos, _) = text_edit.get_range();
 
                                                         self.insert_str_at(pos, &text_edit.newText);
-                                                        eprintln!("Inserting {} at {:?}", &text_edit.newText, pos);
+                                                        //eprintln!("Inserting {} at {:?}", &text_edit.newText, pos);
                                                     },
                                                     TextEditType::InsertReplaceEdit(text_edit) => {
                                                         unimplemented!();
@@ -1693,10 +1705,10 @@ impl Pane for TreesitterPane {
 
                         match lsp_location {
                             LocationResponse::Location(location) => {
-                                eprintln!("Got location {:?}", location);
+                                //eprintln!("Got location {:?}", location);
                                 
                                 if location.uri.as_str() == uri.as_str() {
-                                    eprintln!("Jumping to {:?}", location.range);
+                                    //eprintln!("Jumping to {:?}", location.range);
                                     self.jump_table.add(*self.cursor.borrow());
 
                                     let ((x, y), _) = location.range.get_positions();
@@ -1722,7 +1734,7 @@ impl Pane for TreesitterPane {
                                 if locations.len() == 1 {
                                     
                                     if locations[0].uri.as_str() == uri.as_str() {
-                                        eprintln!("Jumping to {:?}", locations[0].range);
+                                        //eprintln!("Jumping to {:?}", locations[0].range);
                                         self.jump_table.add(*self.cursor.borrow());
 
                                         let ((x, y), _) = locations[0].range.get_positions();

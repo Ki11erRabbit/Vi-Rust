@@ -90,7 +90,7 @@ pub enum ControllerMessage {
 
 impl Drop for LspController {
     fn drop(&mut self) {
-        eprintln!("Dropping lsp controller");
+        //eprintln!("Dropping lsp controller");
         for (_, client) in self.clients.iter_mut() {
             drop(client);
         }
@@ -135,7 +135,7 @@ impl LspController {
 
 
     pub fn run(&mut self) -> io::Result<()> {
-        eprintln!("Running lsp controller");
+        //eprintln!("Running lsp controller");
         while !self.exit {
             self.check_messages()?;
 
@@ -164,17 +164,17 @@ impl LspController {
 
             if let Some(value) = (&mut future).now_or_never() {
                 json = value?;
-                //eprintln!("Got json");
+                ////eprintln!("Got json");
             } else {
                 continue;
                 //json = future.await?;
             }
 
-            eprintln!("Json for: {} \n{:#?}", language, json);
+            //eprintln!("Json for: {} \n{:#?}", language, json);
 
             match process_json(json).expect("Failed to process json") {
                 LSPMessage::Diagnostics(diagnostics) => {
-                    //eprintln!("Got diagnostics");
+                    ////eprintln!("Got diagnostics");
                     let sender = self.server_channels.get(language).unwrap().0.clone();
 
                     let message = ControllerMessage::Response(
@@ -184,7 +184,7 @@ impl LspController {
                     sender.send(message).expect("Failed to send diagnostics");
                 },
                 LSPMessage::Completions(completion) => {
-                    eprintln!("Got completion");
+                    //eprintln!("Got completion");
                     let sender = self.server_channels.get(language).unwrap().0.clone();
 
                     let message = ControllerMessage::Response(
@@ -194,7 +194,7 @@ impl LspController {
                     sender.send(message).expect("Failed to send completions");
                 },
                 LSPMessage::Location(location) => {
-                    eprintln!("Got location");
+                    //eprintln!("Got location");
 
                     let sender = self.server_channels.get(language).unwrap().0.clone();
 
@@ -205,7 +205,7 @@ impl LspController {
                     sender.send(message).expect("Failed to send location");
                 },
                 LSPMessage::None => {
-                    //eprintln!("Got none");
+                    ////eprintln!("Got none");
                     continue;
                 }
             }

@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::cmp;
 use std::collections::{HashSet, HashMap};
+use std::ops::Index;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::io;
@@ -51,7 +52,7 @@ pub struct Window{
     panes: Vec<Vec<PaneContainer>>,
     id_to_pane: HashMap<Uuid, (usize, usize)>,
     buffers: Vec<TextBuffer>,
-    final_buffer: FinalTextBuffer,
+    final_buffer: Compositor,
     known_file_types: HashSet<String>,
     settings: Rc<RefCell<Settings>>,
     duration: Duration,
@@ -97,7 +98,7 @@ impl Window {
             panes,
             id_to_pane,
             buffers,
-            final_buffer: FinalTextBuffer::new(),
+            final_buffer: Compositor::new(),
             known_file_types,
             duration,
             settings,
@@ -397,6 +398,8 @@ impl Window {
 
         let active_pane = self.panes[self.active_layer][self.active_panes[self.active_layer]].get_pane().clone();
         let new_active_pane = self.panes[self.active_layer][new_active_pane_index].get_pane().clone();
+
+        active_pane.borrow_mut().reset();
 
         self.panes[self.active_layer][self.active_panes[self.active_layer]].change_pane(new_active_pane);
         self.panes[self.active_layer][new_active_pane_index].change_pane(active_pane);
@@ -816,8 +819,12 @@ impl Window {
             self.skip = false;
             return Ok(true);
         }
+
+
+        self.panes[self.active_layer][self.active_panes[self.active_layer]].reset();
         
         
+        eprintln!("Getting Event");
         let event = self.process_event()?;
         match event {
             Event::Key(key) => {
@@ -858,10 +865,13 @@ impl Window {
         //let panes = self.panes.len();
 
         for l in 0..self.panes.len() {
+            eprintln!("Layer: {}", l);
             for i in 0..rows {
+                eprintln!("Row: {}", i);
                 let mut pane_index = 0;
                 let mut window_index = 0;
                 while window_index < self.size.0 {
+                    eprintln!("Window Index: {}", window_index);
                     if pane_index >= self.panes[l].len() {
                         break;
                     }
@@ -869,11 +879,13 @@ impl Window {
 
 
                     if self.buffers[l].contents.len() <= i {
-                        self.buffers[l].contents.push(Vec::new());
+                        eprintln!("Pushing TextRow");
+                        self.buffers[l].contents.push(TextRow::new());
                     }
 
                     while window_index <= start_x {
-                        self.buffers[l].contents[i].push(None);
+                        eprintln!("Pushing None");
+                        self.buffers[l].contents[i].push(Some(None));
                         window_index += 1;
                     }
                     
@@ -894,24 +906,29 @@ impl Window {
                     }
                     else {
                         if self.buffers[l].contents.len() <= i {
-                            self.buffers[l].contents.push(vec![None; cols]);
+                            let mut text_row = TextRow::new();
+                            text_row.extend(vec![None; cols]);
+                            self.buffers[l].contents.push(text_row);
                         }
                     }
                     pane_index += 1;
                 }
 
                 while self.buffers[l].contents.len() <= i {
-                    self.buffers[l].contents.push(Vec::new());
+                    eprintln!("Pushing row");
+                    self.buffers[l].contents.push(TextRow::new());
                 }
 
                 while self.buffers[l].contents[i].len() < cols {
-                    self.buffers[l].contents[i].push(None);
+                    eprintln!("Pushing char");
+                    eprintln!("{}", self.buffers[l].contents[i].len());
+                    self.buffers[l].contents[i].push(Some(None));
                 }
 
                 let color_settings = &self.settings.borrow().colors.pane;
 
-                self.buffers[l].contents[i].push(Some(StyledChar::new('\r', color_settings.clone())));
-                self.buffers[l].contents[i].push(Some(StyledChar::new('\n', color_settings.clone())));
+                self.buffers[l].contents[i].push(Some(Some(StyledChar::new('\r', color_settings.clone()))));
+                self.buffers[l].contents[i].push(Some(Some(StyledChar::new('\n', color_settings.clone()))));
 
             }
 
@@ -1002,7 +1019,9 @@ impl Window {
             cursor::MoveTo(0, 0),
         )?;
 
+        eprintln!("drawing rows");
         self.draw_rows();
+        eprintln!("drawing status bar");
         self.draw_status_bar();
 
         let cursor = self.panes[0][self.active_panes[self.active_layer]].get_cursor();
@@ -1029,6 +1048,9 @@ impl Window {
             cursor::MoveTo(x as u16, y as u16),
             cursor::Show,
         )?;
+
+
+        
 
         self.contents.flush()
     }
@@ -1068,8 +1090,73 @@ impl StyledChar {
 }
 
 #[derive(Clone, Debug)]
+pub struct TextRow {
+    pub contents: Vec<Rc<Option<StyledChar>>>,
+    pub index: usize,
+}
+
+impl TextRow {
+    pub fn new() -> TextRow {
+        TextRow {
+            contents: Vec::new(),
+            index: 0,
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.index = 0;
+    }
+
+    pub fn push(&mut self, chr: Option<Option<StyledChar>>) {
+        if self.index >= self.contents.len() {
+            match chr {
+                None => panic!("Tried to push None on first draw"),
+                Some(chr) => self.contents.push(Rc::new(chr)),
+            }
+        }
+        else {
+            match chr {
+                None => self.contents[self.index] = Rc::new(None),
+                Some(chr) => self.contents[self.index] = Rc::new(chr),
+            }
+        }
+        self.index += 1;
+    }
+
+    pub fn extend(&mut self, mut other: Vec<Option<StyledChar>>) {
+        let mut index = 0;
+        while self.index < self.contents.len() {
+            self.contents[self.index] = Rc::new(other[index].take());
+            index += 1;
+        }
+        self.contents.extend(other[index..].iter().cloned().map(Rc::new));
+
+        self.index += other.len();
+    }
+
+    pub fn len(&self) -> usize {
+        self.contents.len()
+    }
+
+    pub fn resize(&mut self) {
+        // in the future we may want to only get rid of what has been cut off
+        self.contents.clear();
+        self.index = 0;
+    }
+    
+}
+
+impl Index<usize> for TextRow {
+    type Output = Option<StyledChar>;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.contents[index]
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct TextBuffer {
-    pub contents: Vec<Vec<Option<StyledChar>>>,
+    pub contents: Vec<TextRow>,
 }
 
 impl TextBuffer {
@@ -1080,17 +1167,19 @@ impl TextBuffer {
     }
 
     pub fn clear(&mut self) {
-        self.contents.clear();
+        for row in self.contents.iter_mut() {
+            row.clear();
+        }
     }
     
 }
 
 
-pub struct FinalTextBuffer {
+pub struct Compositor {
     pub contents: Vec<Vec<StyledChar>>,
 }
 
-impl FinalTextBuffer {
+impl Compositor {
     pub fn new() -> Self {
         Self {
             contents: Vec::new(),
@@ -1118,7 +1207,7 @@ impl FinalTextBuffer {
                     curr_layer -= 1;
                 }
 
-                if let Some(chr) = layers[curr_layer].contents[y][x].take() {
+                if let Some(chr) = layers[curr_layer].contents[y][x].clone() {
                     self.contents.push(Vec::new());
                     self.contents[y].push(chr);
                 }

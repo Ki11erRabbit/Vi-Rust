@@ -41,6 +41,7 @@ pub struct Cursor {
     pub ignore_offset: bool,
     pub hide: bool,
     pub jumped: bool,
+    moved: bool,
 }
 
 impl Cursor {
@@ -60,6 +61,7 @@ impl Cursor {
             ignore_offset: false,
             hide: false,
             jumped: false,
+            moved: true,
         }
     }
 
@@ -119,6 +121,14 @@ impl Cursor {
         (x, y)
     }
 
+    pub fn reset_move(&mut self) {
+        self.moved = false;
+    }
+
+    pub fn get_moved(&self) -> bool {
+        self.moved
+    }
+
     pub fn scroll(&mut self, pane: &PaneContainer) {
         self.jumped = false;
         let (pane_x, pane_y) = pane.get_size();
@@ -151,6 +161,7 @@ impl Cursor {
             eprintln!("3row offset: {}, 3y: {}, 3pane y: {}", self.row_offset, self.y, pane_y);
         }*/
 
+        self.moved = true;
     }
 
     pub fn set_cursor(&mut self, x: CursorMove, y: CursorMove, pane: &dyn Pane, (x_offset, y_offset): (usize, usize)) {
@@ -211,6 +222,7 @@ impl Cursor {
             },
             CursorMove::Nothing => {},
         }
+
     }
 
     pub fn move_cursor(&mut self, direction: Direction, mut n: usize, pane: &dyn Pane) {
@@ -320,7 +332,6 @@ impl Cursor {
                 self.draw_y = self.y;
             },
         }
-        
 
     }
 
