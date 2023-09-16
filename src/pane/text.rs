@@ -7,7 +7,7 @@ use std::{io::Write, sync::mpsc::Receiver};
 
 use std::{collections::HashMap, rc::Rc, cell::RefCell, path::PathBuf, sync::mpsc::Sender, io};
 
-use crop::RopeSlice;
+use crop::{RopeSlice, Rope};
 use crossterm::event::KeyEvent;
 
 use crate::{cursor::{Cursor, Direction}, mode::{Mode, base::{Normal, Insert, Command}}, settings::Settings, window::Message};
@@ -756,6 +756,48 @@ impl Pane for PlainTextPane {
                     self.sender.send(message).expect("Failed to send message");
                 }
                 
+
+            },
+            "copy" => {
+                eprintln!("Copy");
+                if let Some(way) = command_args.next() {
+
+                    let reg = if let Some(arg) = command_args.next() {
+                        let reg = if let Ok(number) = arg.parse::<usize>() {
+                            RegisterType::Number(number)
+                        } else {
+                            RegisterType::Name(arg.to_string())
+                        };
+                        reg
+                    } else {
+                        RegisterType::None
+                    };
+
+                    eprintln!("Register: {:?}", reg);
+
+                    match way {
+                        "line" => {
+                            let (_, y) = self.cursor.borrow().get_cursor();
+                            let (width, _) = container.get_size();
+                            
+                            let row = self.contents.get_row(y, 0, width);
+
+                            let row = match row {
+                                Some(row) => row.to_string(),
+                                None => String::new(),
+                            };
+
+                            let message = Message::Copy(reg, row);
+
+                            self.sender.send(message).expect("Failed to send message");
+                                    
+                        },
+                        _ => {},
+
+                    }
+                        
+
+                }
 
             },
 

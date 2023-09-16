@@ -14,9 +14,10 @@ pub enum EditorMessage {
     Quit,
     NthWindow(usize),
     Paste(RegisterType),
+    Copy(RegisterType, String),
 }
 
-
+#[derive(Clone, Debug)]
 pub enum RegisterType {
     Number(usize),
     Name(String),
@@ -155,6 +156,22 @@ impl Editor {
                                 Ok(())
                             },
                                                
+                        }
+                    },
+                    EditorMessage::Copy(ty, text) => {
+                        match ty {
+                            RegisterType::None => {
+                                self.registers.set_clipboard(text);
+                                Ok(())
+                            },
+                            RegisterType::Number(n) => {
+                                self.registers.set(n, text);
+                                Ok(())
+                            },
+                            RegisterType::Name(name) => {
+                                self.registers.set(name, text);
+                                Ok(())
+                            },
                         }
                     },
                 }

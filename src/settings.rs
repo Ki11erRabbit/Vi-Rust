@@ -489,6 +489,14 @@ impl Settings {
             key: KeyCode::Char('P'),
             modifier: KeyModifiers::NONE,
         }], "paste_before".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('y'),
+            modifier: KeyModifiers::NONE,
+        }, Key {
+            key: KeyCode::Char('y'),
+            modifier: KeyModifiers::NONE,
+        }], "copy_line".to_string());
+        
                                        
 
     }

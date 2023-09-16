@@ -45,7 +45,7 @@ pub enum Message {
     NthTab(usize),
     PasteResponse(Option<Box<str>>),
     Paste(RegisterType),
-        
+    Copy(RegisterType, String),
 }
 
 
@@ -806,6 +806,11 @@ impl Window {
                     Message::Paste(ty) => {
                         self.skip = true;
                         self.editor_sender.send(EditorMessage::Paste(ty)).unwrap();
+                        Ok(())
+                    },
+                    Message::Copy(ty, string) => {
+                        self.skip = true;
+                        self.editor_sender.send(EditorMessage::Copy(ty, string)).unwrap();
                         Ok(())
                     },
                     

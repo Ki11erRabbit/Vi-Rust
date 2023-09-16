@@ -124,11 +124,13 @@ impl Mode for Normal {
                 pane.run_command(&format!("paste {}", self.number_buffer), container);
             },
             "insert_text" => {
-                eprintln!("insert text");
                 let text = command_args.collect::<Vec<&str>>().join(" ");
 
                 pane.insert_str(&text);
                 
+            },
+            "copy_line" => {
+                pane.run_command(&format!("copy line {}", self.number_buffer), container);
             },
             command => {
                 pane.run_command(command, container);
