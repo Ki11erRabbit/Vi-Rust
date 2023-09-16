@@ -1,4 +1,6 @@
+use crate::editor::RegisterType;
 use crate::mode::PromptType;
+use crate::registers::Registers;
 use crate::window::TextRow;
 use crate::{pane::Pane, window::StyledChar, cursor::CursorMove, buffer::Buffer};
 use std::{io::Write, sync::mpsc::Receiver};
@@ -227,6 +229,11 @@ impl PlainTextPane {
 }
 impl Pane for PlainTextPane {
 
+    fn execute_command(&mut self, command: &str, container: &mut PaneContainer) {
+        let mode = self.mode.clone();
+        mode.borrow_mut().execute_command(command, self, container);
+    }
+    
     fn changed(&mut self) {
         self.cursor.borrow_mut().set_moved();
     }
@@ -730,6 +737,26 @@ impl Pane for PlainTextPane {
             },
             "open_tab_with_pane" => {
                 self.sender.send(Message::OpenNewTabWithPane).expect("Failed to send message");
+            },
+            "paste" => {
+                
+                if let Some(arg) = command_args.next() {
+                    if let Ok(number) = arg.parse::<usize>() {
+                        let message = Message::Paste(RegisterType::Number(number));
+
+                        self.sender.send(message).expect("Failed to send message");
+                    } else {
+                        let message = Message::Paste(RegisterType::Name(arg.to_string()));
+
+                        self.sender.send(message).expect("Failed to send message");
+                    }
+                } else {
+                    let message = Message::Paste(RegisterType::None);
+
+                    self.sender.send(message).expect("Failed to send message");
+                }
+                
+
             },
 
             _ => {}

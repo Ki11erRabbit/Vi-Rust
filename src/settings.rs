@@ -480,7 +480,15 @@ impl Settings {
             key: KeyCode::Char('i'),
             modifier: KeyModifiers::NONE,
         }], "goto_implementation".to_string());
-            
+
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('p'),
+            modifier: KeyModifiers::NONE,
+        }], "paste_after".to_string());
+        normal_keybindings.insert(vec![Key {
+            key: KeyCode::Char('P'),
+            modifier: KeyModifiers::NONE,
+        }], "paste_before".to_string());
                                        
 
     }

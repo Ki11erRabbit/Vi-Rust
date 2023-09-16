@@ -362,7 +362,11 @@ impl PaneContainer {
         self.pane.borrow_mut().backup_buffer();
     }
 
-
+    pub fn execute_command(&mut self, command: &str) {
+        let pane = self.pane.clone();
+        pane.borrow_mut().execute_command(command, self);
+    }
+    
 }
 
 pub trait Pane {
@@ -378,6 +382,11 @@ pub trait Pane {
     fn get_status(&self, container: &PaneContainer) -> (String, String, String);
 
     fn run_command(&mut self, command: &str, container: &PaneContainer);
+
+    /// The difference bettween run_command and this function is that this function
+    /// will try to execute the command in the current mode, and if it fails it will
+    /// try to execute it in the pane.
+    fn execute_command(&mut self, command: &str, container: &mut PaneContainer);
 
     fn change_mode(&mut self, mode_name: &str);
 

@@ -16,7 +16,7 @@ use crossterm::style::{Stylize, StyledContent};
 use crossterm::{terminal::{self, ClearType}, execute, cursor, queue};
 use uuid::Uuid;
 
-use crate::editor::EditorMessage;
+use crate::editor::{EditorMessage, RegisterType};
 use crate::lsp::ControllerMessage;
 use crate::pane::treesitter::TreesitterPane;
 use crate::settings::ColorScheme;
@@ -43,8 +43,12 @@ pub enum Message {
     NextTab,
     PreviousTab,
     NthTab(usize),
+    PasteResponse(Option<Box<str>>),
+    Paste(RegisterType),
         
 }
+
+
 
 pub struct Window{
     size: (usize, usize),
@@ -60,6 +64,7 @@ pub struct Window{
     duration: Duration,
     channels: (Sender<Message>, Receiver<Message>),
     editor_sender: Sender<EditorMessage>,
+    /// For when we want to avoid waiting for an event to be processed
     skip: bool,
     lsp_responder: Sender<ControllerMessage>,
     lsp_listener: Rc<Receiver<ControllerMessage>>,
@@ -112,7 +117,7 @@ impl Window {
         }
     }
 
-    fn get_sender(&self) -> Sender<Message> {
+    pub fn get_sender(&self) -> Sender<Message> {
         self.channels.0.clone()
     }
 
@@ -780,6 +785,27 @@ impl Window {
                     Message::NthTab(n) => {
                         self.editor_sender.send(EditorMessage::NthWindow(n)).unwrap();
                         self.skip = true;
+                        Ok(())
+                    },
+                    Message::PasteResponse(text) => {
+                        self.skip = true;
+
+                        match text {
+                            None => {},
+                            Some(text) => {
+                                let command = format!("insert_text {}", text);
+
+                                self.panes[self.active_layer]
+                                    [self.active_panes[self.active_layer]].execute_command(&command);
+                            }
+                        }
+                        self.force_refresh_screen()?;
+                        
+                        Ok(())
+                    },
+                    Message::Paste(ty) => {
+                        self.skip = true;
+                        self.editor_sender.send(EditorMessage::Paste(ty)).unwrap();
                         Ok(())
                     },
                     

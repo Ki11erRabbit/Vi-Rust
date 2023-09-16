@@ -4,7 +4,7 @@ use crop::RopeSlice;
 use crossterm::{event::KeyEvent, style::{Attribute, Color}};
 use tree_sitter::{Parser, Tree, Point, Language, InputEdit};
 
-use crate::{window::{Message, StyledChar, TextRow}, cursor::{Cursor, Direction, CursorMove}, mode::{Mode, base::{Normal, Insert, Command},  PromptType, Promptable}, buffer::Buffer, settings::{Settings, SyntaxHighlight, ColorScheme},  lsp::{ControllerMessage, LspNotification, lsp_utils::{Diagnostic, Diagnostics, CompletionList, TextEditType, LocationResponse}, LspResponse, LspRequest}};
+use crate::{window::{Message, StyledChar, TextRow}, cursor::{Cursor, Direction, CursorMove}, mode::{Mode, base::{Normal, Insert, Command},  PromptType, Promptable}, buffer::Buffer, settings::{Settings, SyntaxHighlight, ColorScheme},  lsp::{ControllerMessage, LspNotification, lsp_utils::{Diagnostic, Diagnostics, CompletionList, TextEditType, LocationResponse}, LspResponse, LspRequest}, editor::RegisterType};
 
 use super::{text::{JumpTable, Waiting}, PaneMessage, Pane, PaneContainer, popup::PopUpPane};
 
@@ -431,6 +431,11 @@ impl TreesitterPane {
 
 
 impl Pane for TreesitterPane {
+
+    fn execute_command(&mut self, command: &str, container: &mut PaneContainer) {
+        let mode = self.mode.clone();
+        mode.borrow_mut().execute_command(command, self, container);
+    }
 
     fn changed(&mut self) {
         self.cursor.borrow_mut().set_moved();
@@ -1894,7 +1899,26 @@ impl Pane for TreesitterPane {
                     self.sender.send(message).expect("Failed to send message");
                     
                 }
-            }
+            },
+            "paste" => {
+                if let Some(arg) = command_args.next() {
+                    if let Ok(number) = arg.parse::<usize>() {
+                        let message = Message::Paste(RegisterType::Number(number));
+
+                        self.sender.send(message).expect("Failed to send message");
+                    } else {
+                        let message = Message::Paste(RegisterType::Name(arg.to_string()));
+
+                        self.sender.send(message).expect("Failed to send message");
+                    }
+                } else {
+                    let message = Message::Paste(RegisterType::None);
+
+                    self.sender.send(message).expect("Failed to send message");
+                }
+                
+
+            },
                 
 
             _ => {}
