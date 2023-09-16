@@ -1,5 +1,6 @@
 use std::{cell::RefCell, rc::Rc, sync::mpsc::{Receiver, Sender}, collections::HashMap, path::PathBuf, io, cmp};
 
+use crossterm::event::KeyEvent;
 use uuid::Uuid;
 
 use crate::{new_editor::{TextLayer, Compositor, StyledChar}, editor::{RegisterType, EditorMessage}, settings::Settings, lsp::LspControllerMessage, treesitter::tree_sitter_scheme, Mailbox, window::TextRow};
@@ -212,10 +213,7 @@ impl Window {
     }
 
     pub fn open_file(&mut self, filename: PathBuf) -> io::Result<()> {
-        let pane: Rc<RefCell<dyn Pane>> = self.file_opener(filename)?;
-
-        let pos = self.insert_pane(pane);
-
+        let pos = self.file_opener(filename)?;
 
         self.switch_pane(pos, None);
 
@@ -520,11 +518,11 @@ impl Window {
     }
     
 
-    fn check_messages(&mut self) -> io::Result<()> {
-        self.check_editor_messages()?;
-        self.check_window_messages()?;
+    fn check_messages(&mut self) -> io::Result<bool> {
+        let result = self.check_editor_messages()?;
+        //result = result || self.check_window_messages()?;
 
-        Ok(())
+        Ok(result)
     }
 
 
@@ -674,7 +672,7 @@ impl Window {
 
     }
 
-    pub fn draw_status_bar(&mut self) {
+    fn draw_status_bar(&mut self) {
 
         let current_layer = self.panes[self.active_layer][self.active_panes[self.active_layer]].should_draw();
 
@@ -726,5 +724,39 @@ impl Window {
         self.write();
         compositor.merge(&mut self.text_layers);
     }
-    
+
+
+    pub fn get_cursor_coords(&self) -> Option<(usize, usize)> {
+
+        self.panes[self.active_layer][self.active_panes[self.active_layer]].get_cursor_coords()
+    }
+
+    pub fn process_keypress(&mut self, key: KeyEvent) -> io::Result<()> {
+        self.panes[self.active_layer][self.active_panes[self.active_layer]].process_keypress(key)
+    }
+
+    pub fn can_close(&mut self) -> bool {
+
+        if !self.check_messages()? {
+            return true;
+        }
+
+        if self.panes[0].len() == 0 {
+            return true;
+        }
+
+        let ((x1, y1), (x2, y2)) = self.panes[0][self.active_panes[0]].get_corners();
+
+        if x1 == x2 && y1 == y2 {
+            return true;
+        }
+    }
+
+    pub fn refresh(&mut self) {
+        for layer in self.panes.iter_mut() {
+            for pane in layer.iter_mut() {
+                pane.refresh();
+            }
+        }
+    }
 }

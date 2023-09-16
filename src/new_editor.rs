@@ -8,17 +8,18 @@ use std::cell::RefCell;
 use std::sync::mpsc::{Sender, Receiver};
 use std::time::Duration;
 
-use crossterm::cursor::SetCursorStyle;
+use crossterm::cursor::{SetCursorStyle, MoveTo, Hide, Show};
+use crossterm::event::{Event, KeyEvent};
 use crossterm::style::StyledContent;
-use crossterm::{terminal, execute};
+use crossterm::{terminal, execute, event, queue};
 
 use crate::lsp::LspControllerMessage;
 use crate::new_window::WindowMessage;
-use crate::{apply_colors, Mailbox};
+use crate::{apply_colors, Mailbox, cursor};
 use crate::pane::Pane;
 use crate::registers::Registers;
 use crate::settings::{ColorScheme, Settings};
-use crate::window::Window;
+use crate::new_window::Window;
 
 
 
@@ -133,13 +134,6 @@ impl Editor {
 
         let mailbox = EditorMailbox::new();
 
-        let window = Window::new(mailbox.get_far_sender(),
-                                 mailbox.get_far_receiver(),
-                                 lsp_sender.clone(),
-                                 lsp_listener.clone());
-
-
-        let window_sender = window.get_sender();
 
         //todo: load settings from file
         let mut settings = Settings::default();
@@ -152,6 +146,16 @@ impl Editor {
 
 
         let settings = Rc::new(RefCell::new(settings));
+
+        let window = Window::new(mailbox.get_far_sender(),
+                                 mailbox.get_far_receiver(),
+                                 lsp_sender.clone(),
+                                 lsp_listener.clone(),
+                                 settings.clone());
+
+
+        let window_sender = window.get_sender();
+
 
         Self {
             windows: vec![window],
@@ -166,6 +170,114 @@ impl Editor {
             output_buffer: OutputBuffer::new(size),
             poll_duration,
         }
+
+    }
+
+    #[inline]
+    fn write(&mut self) {
+        self.windows[self.active_window].draw(&mut self.output_buffer);
+    }
+    
+
+    /// This function draws the current window to the compositor
+    fn draw(&mut self) {
+
+        self.write();
+        self.compositor.merge(&mut self.text_layers);
+    }
+
+
+    fn get_cursor_coords(&self) -> Option<(usize, usize)> {
+
+        self.panes[self.active_layer][self.active_panes[self.active_layer]].get_cursor_coords()
+    }
+
+
+    /// This function is called every time we want to redraw the screen
+    /// We also move or hide the cursor here
+    fn refresh_screen(&mut self) -> io::Result<()> {
+        self.windows[self.active_window].refresh();
+
+        queue!(
+            self.output_buffer,
+            Hide,
+            MoveTo(0, 0),
+        )?;
+
+        self.draw();
+
+        let cursor = self.get_cursor_coords();
+
+        if let Some((x, y)) = cursor {
+            queue!(
+                self.output_buffer,
+                MoveTo(x as u16, y as u16),
+                Show,
+            )?;
+        }
+
+        self.compositor.draw(&mut self.output_buffer);
+        
+        
+        self.output_buffer.flush()
+
+    }
+
+    fn process_event(&mut self) -> io::Result<Event> {
+        loop {
+            if event::poll(self.duration)? {
+                return event::read();
+            }
+        }
+    }
+
+
+    fn resize(&mut self, cols: usize, rows: usize) {
+        for window in &mut self.windows {
+            window.resize((cols, rows));
+        }
+    }
+
+    fn process_keypress(&mut self, key: KeyEvent) -> io::Result<()> {
+        self.windows[self.active_window].process_keypress(key)
+    }
+
+
+    pub fn run(&mut self) -> io::Result<bool> {
+        if self.windows[self.active_window].can_close() {
+            self.windows.remove(self.active_window);
+            self.window_senders.remove(self.active_window);
+            self.active_window = self.active_window.saturating_sub(1);
+        }
+
+        if self.windows.is_empty() {
+            return Ok(false);
+        }
+
+
+
+        self.check_messages();
+
+
+        self.refresh_screen()?;
+
+
+        let event = self.process_event()?;
+
+        match event {
+            Event::Key(key) => {
+                self.process_keypress(key)?;
+                Ok(true)
+            },
+            Event::Resize(w, h) => {
+                self.resize(w as usize, h as usize);
+
+                self.refresh_screen()?;
+                Ok(true)
+            },
+            _ => Ok(true),
+        }
+
 
     }
 
