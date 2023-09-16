@@ -27,6 +27,7 @@ impl Clone for PaneContainer {
         Self {
             pane: self.pane.clone(),
             duplicate: true,
+            max_size: self.max_size,
             size: self.size,
             original_size: self.original_size,
             position: self.position,
@@ -43,6 +44,7 @@ impl Clone for PaneContainer {
 pub struct PaneContainer {
     pane: Rc<RefCell<dyn Pane>>,
     duplicate: bool,
+    max_size: (usize, usize),
     size: (usize, usize),
     original_size: (usize, usize),
     position: (usize, usize),
@@ -62,6 +64,7 @@ impl PaneContainer {
         Self {
             pane,
             duplicate: false,
+            max_size: size,
             size,
             original_size: size,
             position,
@@ -120,16 +123,15 @@ impl PaneContainer {
         self.size
     }
 
-    pub fn set_size(&mut self, size: (usize, usize)) {
-        self.size = size;
-    }
-
     pub fn change_pane(&mut self, pane: Rc<RefCell<dyn Pane>>) {
         self.pane = pane;
         self.changed();
         self.duplicate = false;
     }
 
+    pub fn get_pane(&self) -> Rc<RefCell<dyn Pane>> {
+        self.pane.clone()
+    }
 
     pub fn changed(&mut self) {
         self.pane.borrow_mut().changed();
@@ -143,6 +145,10 @@ impl PaneContainer {
         self.pane.borrow_mut().refresh(self);
     }
 
+    pub fn get_cursor_coords(&self) -> Option<(usize, usize)> {
+        self.pane.borrow().get_cursor()
+    }
+
     pub fn draw_row(&mut self, row: usize, contents: &mut LayerRow) {
         let pane = self.pane.clone();
         pane.borrow_mut().draw_row(row, self, contents);
@@ -153,12 +159,24 @@ impl PaneContainer {
         pane.borrow_mut().process_keypress(key, self)
     }
 
+    pub fn draw_status(&self) -> bool {
+        self.pane.borrow().draw_status()
+    }
+
+    pub fn set_location(&mut self, location: (usize, usize)) {
+        self.pane.borrow_mut().set_location(location);
+    }
+
     pub fn close(&mut self) {
         self.close = true;
     }
 
     pub fn can_close(&self) -> bool {
         self.close
+    }
+
+    pub fn lose_focus(&mut self) {
+        self.pane.borrow_mut().changed();
     }
 
     pub fn combine(&mut self, corners: ((usize, usize), (usize, usize))) -> bool {
@@ -247,6 +265,7 @@ impl PaneContainer {
 
         //self.size.0 = new_width.ceil() as usize;
         //self.size.1 = new_height.ceil() as usize;
+        
 
         let new_start_x = (max_size.0 * start_x) as f64 / self.max_size.0 as f64;
         let new_start_y = (max_size.1 * start_y) as f64 / self.max_size.1 as f64;
@@ -286,7 +305,7 @@ impl PaneContainer {
             self.grow();
             self.shrink();
         }
-        self.pane.borrow_mut().resize_cursor(self.size);
+        self.pane.borrow_mut().resize(self.size);
 
         //eprintln!("New Size: {:?}", self.size);
         
@@ -354,6 +373,7 @@ pub trait Pane {
     /// It returns the name of the mode, a first item, and a second item
     fn get_status(&self, container: &PaneContainer) -> (String, String, String);
 
+    /// This function returns whether or not the status bar should be drawn
     fn draw_status(&self) -> bool;
 
     /// This function is called after we redraw the screen
@@ -368,6 +388,10 @@ pub trait Pane {
     fn get_name(&self) -> &str;
 
     fn run_command(&mut self, command: &str, container: &mut PaneContainer);
+
+    fn resize(&mut self, size: (usize, usize));
+
+    fn set_location(&mut self, location: (usize, usize));
 }
 
 

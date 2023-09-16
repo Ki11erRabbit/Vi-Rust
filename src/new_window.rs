@@ -131,7 +131,6 @@ impl Window {
     }
 
     pub fn lose_focus(&mut self) {
-        self.focused = false;
 
         for layer in self.panes.iter_mut() {
             for container in layer.iter_mut() {
@@ -141,7 +140,7 @@ impl Window {
     }
 
     pub fn get_sender(&self) -> Sender<WindowMessage> {
-        self.sender.clone()
+        self.mailbox.get_far_sender()
     }
 
     fn file_opener(&mut self, path: PathBuf) -> io::Result<(usize, usize)> {
@@ -298,7 +297,7 @@ impl Window {
 
         for (i, layer) in self.panes.iter().enumerate() {
             for (j, pane) in layer.iter().enumerate() {
-                self.id_to_pane.insert(pane.get_uuid(), (i, j));
+                self.id_to_pane.insert(pane.get_id(), (i, j));
             }
         }
     }
@@ -337,7 +336,7 @@ impl Window {
         // This is for testing purposes, we need to make sure that we can actually access the new pane
         self.active_panes[self.active_layer] = new_pane_index;
 
-        self.id_to_pane.insert(self.panes[self.active_layer][new_pane_index].get_uuid(), (self.active_layer, new_pane_index));
+        self.id_to_pane.insert(self.panes[self.active_layer][new_pane_index].get_id(), (self.active_layer, new_pane_index));
 
         //eprintln!("split panes: {:?}", self.panes.len());
     }
@@ -373,7 +372,7 @@ impl Window {
         
         self.active_panes[self.active_layer] = new_pane_index;
 
-        self.id_to_pane.insert(self.panes[self.active_layer][new_pane_index].get_uuid(), (self.active_layer, new_pane_index));
+        self.id_to_pane.insert(self.panes[self.active_layer][new_pane_index].get_id(), (self.active_layer, new_pane_index));
 
         //eprintln!("new corners {:?}", self.panes[self.active_layer][self.active_panes[self.active_layer]].get_corners());
     }
@@ -520,7 +519,7 @@ impl Window {
     
 
     fn check_messages(&mut self) -> io::Result<bool> {
-        let result = self.check_editor_messages()?;
+        let result = self.check_window_messages()?;
         //result = result || self.check_window_messages()?;
 
         Ok(result)
@@ -561,8 +560,11 @@ impl Window {
                     },
                     WindowMessage::OpenFile(path, pos) => {
                         let path = PathBuf::from(path);
-                        
-                        self.open_file_at(path, pos);
+
+                        match pos {
+                            None => self.open_file(path)?,
+                            Some(pos) => self.open_file_at(path, pos)?,
+                        }
                         Ok(true)
                     },
                     WindowMessage::ClosePane(go_down, uuid) => {
@@ -570,7 +572,7 @@ impl Window {
                         Ok(true)
                     },
                     WindowMessage::CreatePopup(container, make_active) => {
-                        self.create_popup(container, make_active);
+                        //self.create_popup(container, make_active);
                         Ok(true)
                     },
                     WindowMessage::OpenNewTabWithPane => {
@@ -618,7 +620,7 @@ impl Window {
             for i in 0..rows {
                 let mut pane_index = 0;
                 let mut window_index = 0;
-                while window_index < self.size.0 {
+                while window_index < cols {
                     if pane_index >= self.panes[l].len() {
                         break;
                     }
@@ -675,12 +677,12 @@ impl Window {
 
     fn draw_status_bar(&mut self) {
 
-        let current_layer = self.panes[self.active_layer][self.active_panes[self.active_layer]].should_draw();
+        let current_layer = self.panes[self.active_layer][self.active_panes[self.active_layer]].draw_status();
 
         let (name, first, second) = if current_layer {
-            self.panes[self.active_layer][self.active_panes[self.active_layer]].get_status();
+            self.panes[self.active_layer][self.active_panes[self.active_layer]].get_status()
         } else {
-            self.panes[0][self.active_panes[0]].get_status();
+            self.panes[0][self.active_panes[0]].get_status()
         };
 
         let total = name.len() + 1 + first.len() + second.len();// + 1 for the space between the name and first
@@ -695,12 +697,12 @@ impl Window {
 
         let mode_color = &settings.colors.mode.get(&name).unwrap_or(&color_settings);
 
-        for chr in name.borrow().chars() {
-            self.text_layers[0][row].push(Some(Some(StyledChar::new(chr, mode_color.clone()))));
+        for chr in name.chars() {
+            self.text_layers[0][row].push(Some(Some(StyledChar::new(chr, Clone::clone(&mode_color)))));
         }
         self.text_layers[0].contents[row].push(Some(Some(StyledChar::new(' ', color_settings.clone()))));
 
-        for chr in first.borrow().chars() {
+        for chr in first.chars() {
             self.text_layers[0][row].push(Some(Some(StyledChar::new(chr, color_settings.clone()))));
         }
 
@@ -708,7 +710,7 @@ impl Window {
             self.text_layers[0][row].push(Some(Some(StyledChar::new(chr, color_settings.clone()))));
         }
 
-        for chr in second.borrow().chars() {
+        for chr in second.chars() {
             self.text_layers[0][row].push(Some(Some(StyledChar::new(chr, color_settings.clone()))));
         }
     }
@@ -752,7 +754,10 @@ impl Window {
 
         if x1 == x2 && y1 == y2 {
             return true;
+        } else {
+            return false;
         }
+        
     }
 
     pub fn refresh(&mut self) {

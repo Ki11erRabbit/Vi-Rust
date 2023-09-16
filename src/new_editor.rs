@@ -2,7 +2,7 @@
 use std::io::Write;
 use std::{cmp, io};
 use std::fmt::{Formatter, self};
-use std::ops::Index;
+use std::ops::{Index, IndexMut};
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::sync::mpsc::{Sender, Receiver};
@@ -427,6 +427,21 @@ impl Index<usize> for LayerRow {
 #[derive(Clone, Debug)]
 pub struct TextLayer {
     pub contents: Vec<LayerRow>,
+}
+
+
+impl Index<usize> for TextLayer {
+    type Output = LayerRow;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.contents[index]
+    }
+}
+
+impl IndexMut<usize> for TextLayer {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.contents[index]
+    }
 }
 
 impl TextLayer {

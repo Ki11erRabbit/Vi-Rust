@@ -1,16 +1,16 @@
 use std::{io, rc::Rc};
 
 
-use crate::{editor::Editor, lsp::{LspController, ControllerMessage}};
+use crate::{new_editor::Editor, lsp::{LspController, LspControllerMessage}};
 
-pub mod window;
+//pub mod window;
 pub mod mode;
 pub mod cursor;
 pub mod settings;
 pub mod pane;
 pub mod buffer;
 pub mod treesitter;
-pub mod editor;
+//pub mod editor;
 pub mod lsp;
 pub mod registers;
 
@@ -63,14 +63,14 @@ fn main() -> io::Result<()> {
 
     
     if let Some(filename) = std::env::args().nth(1) {
-        editor.open_file(&filename)?;
+        //editor.open_file(&filename)?;
     }
 
 
 
     while editor.run()? {}
 
-    lsp_sender.send(ControllerMessage::Exit).unwrap();
+    lsp_sender.send(LspControllerMessage::Exit).unwrap();
     
     thread_handle.join().unwrap();
 
