@@ -1,4 +1,4 @@
-use core::fmt;
+use core::fmt
 use std::{collections::{HashMap, HashSet}, rc::Rc};
 
 use crossterm::{event::{KeyCode, KeyModifiers, KeyEvent}, style::{Attribute, Color}};
@@ -9,12 +9,14 @@ use serde::Deserialize;
 macro_rules! apply_colors {
     ($input:expr, $settings:expr) => {
         {
-            let mut inter = $input.with($settings.foreground_color)
-                .on($settings.background_color)
-                .underline($settings.underline_color);
+            let mut inter = crossterm::style::Stylize::underline(
+                crossterm::style::Stylize::on(
+                crossterm::style::Stylize::with($input, $settings.foreground_color),
+                    $settings.background_color),
+                $settings.underline_color);
 
             for attribute in $settings.attributes.iter() {
-                inter = inter.attribute(*attribute);
+                inter = crossterm::style::Stylize::attribute(inter, *attribute);
             }
             inter
         }
@@ -735,6 +737,7 @@ pub struct EditorSettings {
     pub tab_size: usize,
     pub use_spaces: bool,
     pub key_timeout: u64,
+    pub poll_timeout: u64,
     pub border: bool,
     pub minimum_width: usize,
     pub minimum_height: usize,
@@ -749,6 +752,7 @@ impl Default for EditorSettings {
             tab_size: 4,
             use_spaces: true,
             key_timeout: 3000,
+            poll_timeout: 100,
             border: true,
             minimum_width: 24,
             minimum_height: 1,

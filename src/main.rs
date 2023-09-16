@@ -14,6 +14,8 @@ pub mod editor;
 pub mod lsp;
 pub mod registers;
 
+pub mod new_editor;
+
 //const EDITOR_NAME: &str = "vi";
 
 fn main() -> io::Result<()> {
