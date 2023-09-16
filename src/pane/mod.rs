@@ -358,21 +358,21 @@ impl PaneContainer {
         self.close
     }
 
-    pub fn backup_buffer(&mut self) {
+    pub fn backup(&mut self) {
         self.pane.borrow_mut().backup_buffer();
     }
 
-
+    pub fn execute_command(&mut self, command: &str) {
+        let pane = self.pane.clone();
+        pane.borrow_mut().execute_command(command, self);
+    }
+    
 }
 
 pub trait Pane {
     fn draw_row(&self, index: usize, container: &PaneContainer, contents: &mut TextRow);
 
     fn refresh(&mut self, container: &mut PaneContainer);
-
-    fn save_buffer(&mut self) -> io::Result<()>;
-    fn open_file(&mut self, filename: &PathBuf) -> io::Result<()>;
-    fn backup_buffer(&mut self);
 
 
     fn process_keypress(&mut self, key: KeyEvent, container: &mut PaneContainer) -> io::Result<bool>;
@@ -383,7 +383,30 @@ pub trait Pane {
 
     fn run_command(&mut self, command: &str, container: &PaneContainer);
 
+    /// The difference bettween run_command and this function is that this function
+    /// will try to execute the command in the current mode, and if it fails it will
+    /// try to execute it in the pane.
+    fn execute_command(&mut self, command: &str, container: &mut PaneContainer);
+
     fn change_mode(&mut self, mode_name: &str);
+
+
+    fn get_settings(&self) -> Rc<RefCell<Settings>>;
+
+    fn set_sender(&mut self, sender: Sender<Message>);
+
+    /// This function is called after we redraw the screen
+    /// For most panes it should tell the cursor that it hasn't moved yet
+    fn reset(&mut self);
+
+    /// This gets called whenever we do an action that would cause a redraw of the screen.
+    fn changed(&mut self);
+
+    fn get_cursor(&self) -> Rc<RefCell<Cursor>>;
+
+    fn save_buffer(&mut self) -> io::Result<()>;
+    fn open_file(&mut self, filename: &PathBuf) -> io::Result<()>;
+    fn backup_buffer(&mut self);
 
     fn insert_newline(&mut self) {
         self.insert_char('\n');
@@ -393,7 +416,6 @@ pub trait Pane {
     fn delete_char(&mut self);
     fn backspace_char(&mut self);
 
-    fn get_cursor(&self) -> Rc<RefCell<Cursor>>;
 
     fn get_line_count(&self) -> usize;
 
@@ -405,19 +427,11 @@ pub trait Pane {
 
     fn resize_cursor(&mut self, size: (usize, usize));
     fn set_cursor_size(&mut self, size: (usize, usize));
-
-    fn get_settings(&self) -> Rc<RefCell<Settings>>;
-
     fn borrow_buffer(&self) -> &Buffer;
     fn borrow_mut_buffer(&mut self) -> &mut Buffer;
-
-    fn set_sender(&mut self, sender: Sender<Message>);
-
-    /// This function is called after we redraw the screen
-    /// For most panes it should tell the cursor that it hasn't moved yet
-    fn reset(&mut self);
-
-    /// This gets called whenever we do an action that would cause a redraw of the screen.
-    fn changed(&mut self);
-
+    
 }
+
+
+
+

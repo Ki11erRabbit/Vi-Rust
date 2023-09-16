@@ -1,4 +1,4 @@
-use std::{io, rc::Rc, time::Duration, thread};
+use std::{io, rc::Rc};
 
 
 use crate::{editor::Editor, lsp::{LspController, ControllerMessage}};
@@ -12,6 +12,7 @@ pub mod buffer;
 pub mod treesitter;
 pub mod editor;
 pub mod lsp;
+pub mod registers;
 
 //const EDITOR_NAME: &str = "vi";
 

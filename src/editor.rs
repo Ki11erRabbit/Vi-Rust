@@ -2,7 +2,7 @@ use std::{io, sync::mpsc::{Receiver, Sender}, cell::RefCell, rc::Rc, thread};
 
 use crossterm::{terminal, execute, cursor::{SetCursorStyle, MoveTo}};
 
-use crate::{window::Window, pane::Pane, lsp::{ControllerMessage, LspController}};
+use crate::{window::{Window, Message}, pane::Pane, lsp::{ControllerMessage, LspController}, registers::{Registers, RegisterUtils}};
 
 
 
@@ -13,17 +13,27 @@ pub enum EditorMessage {
     CloseWindow,
     Quit,
     NthWindow(usize),
+    Paste(RegisterType),
+    Copy(RegisterType, String),
 }
 
-
+#[derive(Clone, Debug)]
+pub enum RegisterType {
+    Number(usize),
+    Name(String),
+    None,
+}
 
 pub struct Editor {
     windows: Vec<Window>,
+    window_senders: Vec<Sender<Message>>,
     active_window: usize,
     reciever: Receiver<EditorMessage>,
     sender: Sender<EditorMessage>,
     lsp_listener: Rc<Receiver<ControllerMessage>>,
     lsp_responder: Sender<ControllerMessage>,
+
+    registers: Registers,
 }
 
 
@@ -39,14 +49,20 @@ impl Editor {
 
         //eprintln!("Editor created");
         //let lsp_listener = Rc::new(lsp_controller_reciever);
+
+        let window = Window::new(sender.clone(), lsp_sender.clone(), lsp_listener.clone());
+
+        let window_sender = window.get_sender();
         
         Self {
-            windows: vec![Window::new(sender.clone(), lsp_sender.clone(), lsp_listener.clone())],
+            windows: vec![window],
+            window_senders: vec![window_sender],
             active_window: 0,
             reciever,
             sender,
             lsp_listener,
             lsp_responder: lsp_sender,
+            registers: Registers::new(),
         }
     }
 
@@ -96,6 +112,67 @@ impl Editor {
                         }
                         self.windows[self.active_window].force_refresh_screen()?;
                         Ok(())
+                    },
+                    EditorMessage::Paste(ty) => {
+                        match ty {
+                            RegisterType::None => {
+
+                                eprintln!("Pasting from clipboard");
+
+                                let text = self.registers.get_clipboard();
+
+                                eprintln!("{:?}", text);
+
+                                let response = text.and_then(|text| Some(text.into_boxed_str()));
+
+                                let response = Message::PasteResponse(response);
+
+                                self.window_senders[self.active_window].send(response).expect("Failed to send paste response");
+
+                                Ok(())
+                            },
+                            RegisterType::Number(n) => {
+
+                                let text = self.registers.get(n);
+
+                                let response = text.and_then(|text| Some(text.clone().into_boxed_str()));
+
+                                let response = Message::PasteResponse(response);
+
+                                self.window_senders[self.active_window].send(response).expect("Failed to send paste response");
+
+                                Ok(())
+                            },
+                            RegisterType::Name(name) => {
+
+                                let text = self.registers.get(name);
+
+                                let response = text.and_then(|text| Some(text.clone().into_boxed_str()));
+
+                                let response = Message::PasteResponse(response);
+
+                                self.window_senders[self.active_window].send(response).expect("Failed to send paste response");
+
+                                Ok(())
+                            },
+                                               
+                        }
+                    },
+                    EditorMessage::Copy(ty, text) => {
+                        match ty {
+                            RegisterType::None => {
+                                self.registers.set_clipboard(text);
+                                Ok(())
+                            },
+                            RegisterType::Number(n) => {
+                                self.registers.set(n, text);
+                                Ok(())
+                            },
+                            RegisterType::Name(name) => {
+                                self.registers.set(name, text);
+                                Ok(())
+                            },
+                        }
                     },
                 }
             },

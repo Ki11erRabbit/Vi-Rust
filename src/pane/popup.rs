@@ -292,6 +292,10 @@ impl Pane for PopUpPane {
         }
     }
 
+    fn execute_command(&mut self, _command: &str, _container: &mut PaneContainer) {
+
+    }
+
     fn run_command(&mut self, command: &str, _container: &PaneContainer) {
         let mut command_args = command.split(" ");
 

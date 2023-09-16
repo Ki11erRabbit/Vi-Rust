@@ -16,13 +16,13 @@ use crossterm::style::{Stylize, StyledContent};
 use crossterm::{terminal::{self, ClearType}, execute, cursor, queue};
 use uuid::Uuid;
 
-use crate::editor::EditorMessage;
+use crate::editor::{EditorMessage, RegisterType};
 use crate::lsp::ControllerMessage;
 use crate::pane::treesitter::TreesitterPane;
 use crate::settings::ColorScheme;
 use crate::{apply_colors, settings::Settings};
 use crate::pane::{Pane, PaneContainer};
-use crate::pane::text::TextPane;
+use crate::pane::text::PlainTextPane;
 use crate::treesitter::tree_sitter_scheme;
 
 
@@ -43,8 +43,12 @@ pub enum Message {
     NextTab,
     PreviousTab,
     NthTab(usize),
-        
+    PasteResponse(Option<Box<str>>),
+    Paste(RegisterType),
+    Copy(RegisterType, String),
 }
+
+
 
 pub struct Window{
     size: (usize, usize),
@@ -60,6 +64,7 @@ pub struct Window{
     duration: Duration,
     channels: (Sender<Message>, Receiver<Message>),
     editor_sender: Sender<EditorMessage>,
+    /// For when we want to avoid waiting for an event to be processed
     skip: bool,
     lsp_responder: Sender<ControllerMessage>,
     lsp_listener: Rc<Receiver<ControllerMessage>>,
@@ -79,7 +84,7 @@ impl Window {
         let win_size = terminal::size()
             .map(|(w, h)| (w as usize, h as usize - 1))// -1 for trailing newline and -1 for command bar
             .unwrap();
-        let pane: Rc<RefCell<dyn Pane>> = Rc::new(RefCell::new(TextPane::new(settings.clone(), channels.0.clone())));
+        let pane: Rc<RefCell<dyn Pane>> = Rc::new(RefCell::new(PlainTextPane::new(settings.clone(), channels.0.clone())));
 
         pane.borrow_mut().set_cursor_size(win_size);
         
@@ -112,7 +117,7 @@ impl Window {
         }
     }
 
-    fn get_sender(&self) -> Sender<Message> {
+    pub fn get_sender(&self) -> Sender<Message> {
         self.channels.0.clone()
     }
 
@@ -364,7 +369,7 @@ impl Window {
                 Rc::new(RefCell::new(pane))
             }
             "txt" | _ => {
-                let mut pane = TextPane::new(self.settings.clone(), self.channels.0.clone());
+                let mut pane = PlainTextPane::new(self.settings.clone(), self.channels.0.clone());
                 pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))
@@ -780,6 +785,32 @@ impl Window {
                     Message::NthTab(n) => {
                         self.editor_sender.send(EditorMessage::NthWindow(n)).unwrap();
                         self.skip = true;
+                        Ok(())
+                    },
+                    Message::PasteResponse(text) => {
+                        self.skip = true;
+
+                        match text {
+                            None => {},
+                            Some(text) => {
+                                let command = format!("insert_text {}", text);
+
+                                self.panes[self.active_layer]
+                                    [self.active_panes[self.active_layer]].execute_command(&command);
+                            }
+                        }
+                        self.force_refresh_screen()?;
+                        
+                        Ok(())
+                    },
+                    Message::Paste(ty) => {
+                        self.skip = true;
+                        self.editor_sender.send(EditorMessage::Paste(ty)).unwrap();
+                        Ok(())
+                    },
+                    Message::Copy(ty, string) => {
+                        self.skip = true;
+                        self.editor_sender.send(EditorMessage::Copy(ty, string)).unwrap();
                         Ok(())
                     },
                     

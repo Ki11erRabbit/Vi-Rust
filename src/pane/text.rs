@@ -1,11 +1,13 @@
+use crate::editor::RegisterType;
 use crate::mode::PromptType;
+use crate::registers::Registers;
 use crate::window::TextRow;
 use crate::{pane::Pane, window::StyledChar, cursor::CursorMove, buffer::Buffer};
 use std::{io::Write, sync::mpsc::Receiver};
 
 use std::{collections::HashMap, rc::Rc, cell::RefCell, path::PathBuf, sync::mpsc::Sender, io};
 
-use crop::RopeSlice;
+use crop::{RopeSlice, Rope};
 use crossterm::event::KeyEvent;
 
 use crate::{cursor::{Cursor, Direction}, mode::{Mode, base::{Normal, Insert, Command}}, settings::Settings, window::Message};
@@ -110,7 +112,7 @@ pub enum Waiting {
 
 
 
-pub struct TextPane {
+pub struct PlainTextPane {
     cursor: Rc<RefCell<Cursor>>,
     file_name: Option<PathBuf>,
     contents: Buffer,
@@ -124,7 +126,7 @@ pub struct TextPane {
     waiting: Waiting,
 }
 
-impl TextPane {
+impl PlainTextPane {
     pub fn new(settings: Rc<RefCell<Settings>>, sender: Sender<Message>) -> Self {
         let mut modes: HashMap<String, Rc<RefCell<dyn Mode>>> = HashMap::new();
         let normal = Rc::new(RefCell::new(Normal::new()));
@@ -225,8 +227,13 @@ impl TextPane {
     }
 
 }
-impl Pane for TextPane {
+impl Pane for PlainTextPane {
 
+    fn execute_command(&mut self, command: &str, container: &mut PaneContainer) {
+        let mode = self.mode.clone();
+        mode.borrow_mut().execute_command(command, self, container);
+    }
+    
     fn changed(&mut self) {
         self.cursor.borrow_mut().set_moved();
     }
@@ -730,6 +737,68 @@ impl Pane for TextPane {
             },
             "open_tab_with_pane" => {
                 self.sender.send(Message::OpenNewTabWithPane).expect("Failed to send message");
+            },
+            "paste" => {
+                
+                if let Some(arg) = command_args.next() {
+                    if let Ok(number) = arg.parse::<usize>() {
+                        let message = Message::Paste(RegisterType::Number(number));
+
+                        self.sender.send(message).expect("Failed to send message");
+                    } else {
+                        let message = Message::Paste(RegisterType::Name(arg.to_string()));
+
+                        self.sender.send(message).expect("Failed to send message");
+                    }
+                } else {
+                    let message = Message::Paste(RegisterType::None);
+
+                    self.sender.send(message).expect("Failed to send message");
+                }
+                
+
+            },
+            "copy" => {
+                eprintln!("Copy");
+                if let Some(way) = command_args.next() {
+
+                    let reg = if let Some(arg) = command_args.next() {
+                        let reg = if let Ok(number) = arg.parse::<usize>() {
+                            RegisterType::Number(number)
+                        } else {
+                            RegisterType::Name(arg.to_string())
+                        };
+                        reg
+                    } else {
+                        RegisterType::None
+                    };
+
+                    eprintln!("Register: {:?}", reg);
+
+                    match way {
+                        "line" => {
+                            let (_, y) = self.cursor.borrow().get_cursor();
+                            let (width, _) = container.get_size();
+                            
+                            let row = self.contents.get_row(y, 0, width);
+
+                            let row = match row {
+                                Some(row) => row.to_string(),
+                                None => String::new(),
+                            };
+
+                            let message = Message::Copy(reg, row);
+
+                            self.sender.send(message).expect("Failed to send message");
+                                    
+                        },
+                        _ => {},
+
+                    }
+                        
+
+                }
+
             },
 
             _ => {}

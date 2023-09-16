@@ -54,6 +54,9 @@ impl Mode for Normal {
     }
 
     fn execute_command(&mut self, command: &str, pane: &mut dyn Pane, container: &mut PaneContainer) {
+        let mut command_args = command.split_whitespace();
+        let command = command_args.next().unwrap_or("");
+        
         match command {
             "left" => {
                 pane.run_command(&format!("move left {}", self.number_buffer), container);
@@ -112,6 +115,22 @@ impl Mode for Normal {
             },
             "start_command" => {
                 self.change_mode("Command", pane, container);
+            },
+            "paste_after" => {
+                eprintln!("paste after");
+                pane.run_command(&format!("paste {}", self.number_buffer), container);
+            },
+            "paste_before" => {
+                pane.run_command(&format!("paste {}", self.number_buffer), container);
+            },
+            "insert_text" => {
+                let text = command_args.collect::<Vec<&str>>().join(" ");
+
+                pane.insert_str(&text);
+                
+            },
+            "copy_line" => {
+                pane.run_command(&format!("copy line {}", self.number_buffer), container);
             },
             command => {
                 pane.run_command(command, container);
@@ -532,7 +551,7 @@ impl Mode for Command {
         "Command".to_string()
     }
 
-    fn update_status(&mut self, pane: &dyn Pane, container: &PaneContainer) -> (String, String, String) {
+    fn update_status(&mut self, pane: &dyn Pane, _container: &PaneContainer) -> (String, String, String) {
 
 
         execute!(io::stdout(),SetCursorStyle::BlinkingBar).unwrap();
