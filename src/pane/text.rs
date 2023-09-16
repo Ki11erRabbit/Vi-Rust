@@ -110,7 +110,7 @@ pub enum Waiting {
 
 
 
-pub struct TextPane {
+pub struct PlainTextPane {
     cursor: Rc<RefCell<Cursor>>,
     file_name: Option<PathBuf>,
     contents: Buffer,
@@ -124,7 +124,7 @@ pub struct TextPane {
     waiting: Waiting,
 }
 
-impl TextPane {
+impl PlainTextPane {
     pub fn new(settings: Rc<RefCell<Settings>>, sender: Sender<Message>) -> Self {
         let mut modes: HashMap<String, Rc<RefCell<dyn Mode>>> = HashMap::new();
         let normal = Rc::new(RefCell::new(Normal::new()));
@@ -225,7 +225,7 @@ impl TextPane {
     }
 
 }
-impl Pane for TextPane {
+impl Pane for PlainTextPane {
 
     fn changed(&mut self) {
         self.cursor.borrow_mut().set_moved();
