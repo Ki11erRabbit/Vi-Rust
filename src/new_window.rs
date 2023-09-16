@@ -1,8 +1,8 @@
-use std::{cell::RefCell, rc::Rc, sync::mpsc::{Receiver, Sender}, collections::HashMap, path::PathBuf};
+use std::{cell::RefCell, rc::Rc, sync::mpsc::{Receiver, Sender}, collections::HashMap, path::PathBuf, io};
 
 use uuid::Uuid;
 
-use crate::{new_editor::TextLayer, editor::{RegisterType, EditorMessage}, settings::Settings, lsp::LspControllerMessage};
+use crate::{new_editor::TextLayer, editor::{RegisterType, EditorMessage}, settings::Settings, lsp::LspControllerMessage, treesitter::tree_sitter_scheme};
 
 
 
@@ -66,7 +66,7 @@ impl Window {
 
         let text_layers = Vec::new();
 
-        let active_panes = vec![0];
+        let active_panes = Vec::new();
 
         let active_layer = 0;
 
@@ -92,6 +92,72 @@ impl Window {
         self.sender.clone()
     }
 
+    fn file_opener(&mut self, path: PathBuf) -> io::Result<(usize, usize)> {
+
+        let filename = path.file_name().unwrap().to_str();
+
+        if let Some(filename) = filename {
+
+            for layer in 0..self.panes.len() {
+                for (index, container) in self.panes[self.active_panes[layer]].iter().enumerate() {
+                    if container.get_name() == filename {
+                        return Ok((layer, index));
+                    }
+
+                }
+            }
+
+        }
+
+
+        let mut pane = TextPane::new(self.settings.clone(),
+                                     self.sender.clone(),
+                                     self.editor_sender.clone(),
+                                     self.lsp_sender.clone(),
+                                     self.lsp_listener.clone());
+
+        pane.open_file(filename)?;
+
+        let pane = Rc::new(RefCell::new(pane));
+
+
+        let pos = self.insert_pane(pane);
+
+        Ok(pos)
+    }
+    
+    fn insert_pane(&mut self, pane: Rc<RefCell<dyn Pane>>) -> (usize, usize) {
+
+        let mut container = if self.panes.len() == 0 {
+            self.panes.push(Vec::new());
+            self.active_panes.push(0);
+
+            let size = self.settings.borrow().get_window_size();
+
+            let mut container = PaneContainer::new(size, pane, self.settings.clone());
+
+            container.set_size(size);
+            
+            container
+        } else {
+            let size = self.settings.borrow().get_window_size();
+
+            let mut container = PaneContainer::new(size, pane, self.settings.clone());
+
+            container.set_size((0, 0));
+            
+            container
+
+        };
+
+        self.panes[self.active_panes[self.active_layer]].push(container);
+
+        let pos = (self.active_layer, self.panes[self.active_panes[self.active_layer]].len() - 1);
+
+        self.id_to_pane.insert(container.get_id(), pos);
+
+        pos
+    }
 
     pub fn open_file(&mut self, filename: PathBuf) -> io::Result<()> {
         let pane: Rc<RefCell<dyn Pane>> = self.file_opener(filename)?;
@@ -105,13 +171,36 @@ impl Window {
     }
 
     pub fn open_file_at(&mut self, filename: PathBuf, location: (usize, usize)) -> io::Result<()> {
-        let pane: Rc<RefCell<dyn Pane>> = self.file_opener(filename)?;
-
-        let pos = self.insert_pane(pane);
+        let pos = self.file_opener(filename)?;
 
         self.switch_pane(pos, Some(location));
 
         Ok(())
     }
+
+
+    fn switch_pane(&mut self, (layer, index): (usize, usize), location: Option<(usize, usize)>) {
+
+        let new_active_container = &mut self.panes[self.active_panes[layer]][index];
+
+        let old_active_container = &mut self.panes[self.active_panes[self.active_layer]][self.active_panes[self.active_layer]];
+
+
+        let active_pane = new_active_container.get_pane().clone();
+        let new_active_pane = new_active_container.get_pane().clone();
+
+        active_pane.borrow_mut().reset();
+
+        old_active_container.change_pane(new_active_pane);
+        new_active_container.change_pane(active_pane);
+
+
+
+        if let Some(location) = location {
+           old_active_container.set_location(location);
+        }
+    }
+
+
 
 }

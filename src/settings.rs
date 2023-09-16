@@ -684,6 +684,11 @@ impl Settings {
             modifier: KeyModifiers::NONE,
         }], "down".to_string());
     }
+
+    pub fn get_window_size(&self) -> (usize, usize) {
+        (self.cols, self.rows)
+    }
+    
 }
 
 impl Default for Settings {
