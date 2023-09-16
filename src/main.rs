@@ -17,6 +17,13 @@ pub mod registers;
 pub mod new_editor;
 pub mod new_window;
 
+
+pub trait Mailbox<M> {
+    fn send(&self, message: M) -> Result<(), std::sync::mpsc::SendError<M>>;
+    fn recv(&self) -> Result<M, std::sync::mpsc::RecvError>;
+    fn try_recv(&self) -> Result<M, std::sync::mpsc::TryRecvError>;
+}
+
 //const EDITOR_NAME: &str = "vi";
 
 fn main() -> io::Result<()> {

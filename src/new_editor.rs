@@ -12,7 +12,9 @@ use crossterm::cursor::SetCursorStyle;
 use crossterm::style::StyledContent;
 use crossterm::{terminal, execute};
 
-use crate::apply_colors;
+use crate::lsp::LspControllerMessage;
+use crate::new_window::WindowMessage;
+use crate::{apply_colors, Mailbox};
 use crate::pane::Pane;
 use crate::registers::Registers;
 use crate::settings::{ColorScheme, Settings};
@@ -41,16 +43,65 @@ pub enum RegisterType {
 
 
 
+pub struct EditorMailbox {
+    /// The receiver for messages to the editor
+    local_receiver: Receiver<EditorMessage>,
+    /// The sender for messages to the editor
+    /// This isn't wrapped in an Rc because it is easy to share
+    far_sender: Sender<EditorMessage>,
+    /// The receiver for messages not to the editor
+    /// This is wrapped in an Rc so that it can be shared with other parts of the editor
+    far_receiver: Rc<Receiver<EditorMessage>>,
+    /// The sender for messages not to the editor
+    local_sender: Sender<EditorMessage>,
+}
+
+impl EditorMailbox {
+    pub fn new() -> Self {
+        let (local_sender, local_receiver) = std::sync::mpsc::channel();
+        let (far_sender, far_receiver) = std::sync::mpsc::channel();
+
+        Self {
+            local_receiver,
+            far_sender,
+            far_receiver: Rc::new(far_receiver),
+            local_sender,
+        }
+    }
+
+    pub fn get_far_receiver(&self) -> Rc<Receiver<EditorMessage>> {
+        self.far_receiver.clone()
+    }
+
+    pub fn get_far_sender(&self) -> Sender<EditorMessage> {
+        self.far_sender.clone()
+    }
+
+}
+
+impl Mailbox<EditorMessage> for EditorMailbox {
+    fn send(&self, message: EditorMessage) -> Result<(), std::sync::mpsc::SendError<EditorMessage>> {
+        self.local_sender.send(message)
+    }
+    
+
+    fn recv(&self) -> Result<EditorMessage, std::sync::mpsc::RecvError> {
+        self.local_receiver.recv()
+    }
+
+    fn try_recv(&self) -> Result<EditorMessage, std::sync::mpsc::TryRecvError> {
+        self.local_receiver.try_recv()
+    }
+
+
+}
+
 
 pub struct Editor {
     windows: Vec<Window>,
     window_senders: Vec<Sender<WindowMessage>>,
     active_window: usize,
-    /// The receiver for messages to the editor
-    mailbox: Receiver<EditorMessage>,
-    /// Then sender for messages to the editor
-    /// This is meant to be shared with anything that wishes to communicate with the editor
-    sender: Sender<EditorMessage>,
+    mailbox: EditorMailbox,
 
     /// The receiver for messages from the LSP controller
     /// It is wrapped in an Rc so that it can be shared with other parts of the editor
@@ -71,7 +122,7 @@ pub struct Editor {
 
 
 impl Editor {
-    pub fn new(lsp_sender: Sender<LspControlerMessage>, lsp_listener: Rc<Receiver<LspControllerMessage>>) -> Self {
+    pub fn new(lsp_sender: Sender<LspControllerMessage>, lsp_listener: Rc<Receiver<LspControllerMessage>>) -> Self {
         terminal::enable_raw_mode().expect("Failed to enable raw mode");
         execute!(std::io::stdout(), terminal::EnterAlternateScreen).expect("Failed to enter alternate screen");
         execute!(std::io::stdout(), SetCursorStyle::BlinkingBlock).expect("Failed to set cursor style");
@@ -80,9 +131,12 @@ impl Editor {
         let size = terminal::size()
             .map(|(w, h)| (w as usize, h as usize)).unwrap();
 
-        let (sender, mailbox) = std::sync::mpsc::channel();
+        let mailbox = EditorMailbox::new();
 
-        let window = Window::new(sender.clone(), lsp_sender.clone(), lsp_listener.clone());
+        let window = Window::new(mailbox.get_far_sender(),
+                                 mailbox.get_far_receiver(),
+                                 lsp_sender.clone(),
+                                 lsp_listener.clone());
 
 
         let window_sender = window.get_sender();
@@ -104,13 +158,13 @@ impl Editor {
             window_senders: vec![window_sender],
             active_window: 0,
             mailbox,
-            sender,
             lsp_listener,
             lsp_sender,
             registers: Registers::new(),
             settings,
             compositor: Compositor::new(size),
             output_buffer: OutputBuffer::new(size),
+            poll_duration,
         }
 
     }
