@@ -16,6 +16,7 @@ pub mod registers;
 
 pub mod new_editor;
 pub mod new_window;
+pub mod new_pane;
 
 
 pub trait Mailbox<M> {
