@@ -22,7 +22,7 @@ use crate::pane::treesitter::TreesitterPane;
 use crate::settings::ColorScheme;
 use crate::{apply_colors, settings::Settings};
 use crate::pane::{Pane, PaneContainer};
-use crate::pane::text::TextPane;
+use crate::pane::text::PlainTextPane;
 use crate::treesitter::tree_sitter_scheme;
 
 
@@ -79,7 +79,7 @@ impl Window {
         let win_size = terminal::size()
             .map(|(w, h)| (w as usize, h as usize - 1))// -1 for trailing newline and -1 for command bar
             .unwrap();
-        let pane: Rc<RefCell<dyn Pane>> = Rc::new(RefCell::new(TextPane::new(settings.clone(), channels.0.clone())));
+        let pane: Rc<RefCell<dyn Pane>> = Rc::new(RefCell::new(PlainTextPane::new(settings.clone(), channels.0.clone())));
 
         pane.borrow_mut().set_cursor_size(win_size);
         
@@ -364,7 +364,7 @@ impl Window {
                 Rc::new(RefCell::new(pane))
             }
             "txt" | _ => {
-                let mut pane = TextPane::new(self.settings.clone(), self.channels.0.clone());
+                let mut pane = PlainTextPane::new(self.settings.clone(), self.channels.0.clone());
                 pane.open_file(&filename)?;
                 pane.backup_buffer();
                 Rc::new(RefCell::new(pane))

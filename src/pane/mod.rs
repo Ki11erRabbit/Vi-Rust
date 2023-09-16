@@ -305,7 +305,7 @@ impl PaneContainer {
             self.grow();
             self.shrink();
         }
-        self.pane.borrow_mut().resize(self.size);
+        self.pane.borrow_mut().resize_cursor(self.size);
 
         //eprintln!("New Size: {:?}", self.size);
         
@@ -359,7 +359,7 @@ impl PaneContainer {
     }
 
     pub fn backup(&mut self) {
-        self.pane.borrow_mut().backup();
+        self.pane.borrow_mut().backup_buffer();
     }
 
 
@@ -393,16 +393,8 @@ pub trait Pane {
     /// This gets called whenever we do an action that would cause a redraw of the screen.
     fn changed(&mut self);
 
-    fn resize(&mut self, size: (usize, usize));
-
-    fn backup(&mut self);
-
     fn get_cursor(&self) -> Rc<RefCell<Cursor>>;
-    
-}
 
-pub trait TextPane: Pane {
-    
     fn save_buffer(&mut self) -> io::Result<()>;
     fn open_file(&mut self, filename: &PathBuf) -> io::Result<()>;
     fn backup_buffer(&mut self);
@@ -428,9 +420,9 @@ pub trait TextPane: Pane {
     fn set_cursor_size(&mut self, size: (usize, usize));
     fn borrow_buffer(&self) -> &Buffer;
     fn borrow_mut_buffer(&mut self) -> &mut Buffer;
-
     
 }
+
 
 
 
