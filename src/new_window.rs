@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc, sync::mpsc::{Receiver, Sender}, collections::Ha
 use crossterm::event::KeyEvent;
 use uuid::Uuid;
 
-use crate::{new_editor::{TextLayer, Compositor, StyledChar}, editor::{RegisterType, EditorMessage}, settings::Settings, lsp::LspControllerMessage, treesitter::tree_sitter_scheme, Mailbox, window::TextRow};
+use crate::{new_editor::{TextLayer, Compositor, StyledChar}, editor::{RegisterType, EditorMessage}, settings::Settings, lsp::LspControllerMessage, treesitter::tree_sitter_scheme, Mailbox, window::TextRow, new_pane::{PaneContainer, text_pane::TextPane, Pane, TextBuffer}};
 
 
 
@@ -166,10 +166,11 @@ impl Window {
                                      self.mailbox.get_far_sender(),
                                      self.mailbox.get_far_receiver(),
                                      self.editor_sender.clone(),
+                                     self.editor_listener.clone(),
                                      self.lsp_sender.clone(),
                                      self.lsp_listener.clone());
 
-        pane.open_file(filename)?;
+        pane.open_file(&path)?;
 
         let pane = Rc::new(RefCell::new(pane));
 
@@ -736,6 +737,8 @@ impl Window {
     }
 
     pub fn can_close(&mut self) -> bool {
+
+        self.remove_panes();
 
         if !self.check_messages()? {
             return true;
