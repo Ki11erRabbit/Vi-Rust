@@ -43,8 +43,6 @@ pub enum RegisterType {
 
 
 pub struct Editor {
-    size: (usize, usize),
-    
     windows: Vec<Window>,
     window_senders: Vec<Sender<WindowMessage>>,
     active_window: usize,
@@ -90,7 +88,10 @@ impl Editor {
         let window_sender = window.get_sender();
 
         //todo: load settings from file
-        let settings = Settings::default();
+        let mut settings = Settings::default();
+
+        settings.cols = size.0;
+        settings.rows = size.1;
 
         let poll_duration = Duration::from_millis(settings.editor_settings.poll_timeout);
 
@@ -99,7 +100,6 @@ impl Editor {
         let settings = Rc::new(RefCell::new(settings));
 
         Self {
-            size,
             windows: vec![window],
             window_senders: vec![window_sender],
             active_window: 0,
@@ -478,16 +478,25 @@ impl Compositor {
 }
 
 
-
+#[derive(Debug, Clone)]
 pub struct OutputRow {
     contents: Vec<String>,
     index: usize,
 }
 
-impl OutputRow {
-    pub fn new() -> Self {
+impl Default for OutputRow {
+    fn default() -> Self {
         Self {
             contents: Vec::new(),
+            index: 0,
+        }
+    }
+}
+
+impl OutputRow {
+    pub fn new(cols: usize) -> Self {
+        Self {
+            contents: vec![" ".to_string(); cols],
             index: 0,
         }
     }
@@ -549,9 +558,9 @@ pub struct OutputBuffer {
 
 
 impl OutputBuffer {
-    pub fn new() -> Self {
+    pub fn new((cols, rows): (usize, usize)) -> Self {
         Self {
-            contents: Vec::new(),
+            contents: vec![OutputRow::new(cols); rows],
             current_row: 0,
         }
 
@@ -567,7 +576,7 @@ impl OutputBuffer {
     pub fn push(&mut self, content: Option<StyledContent<String>>) {
 
         if self.current_row >= self.contents.len() {
-            self.contents.push(OutputRow::new());
+            self.contents.push(OutputRow::default());
             if self.contents[self.current_row].push(content) {
                 self.current_row += 1;
             }

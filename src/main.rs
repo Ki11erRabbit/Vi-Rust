@@ -15,6 +15,7 @@ pub mod lsp;
 pub mod registers;
 
 pub mod new_editor;
+pub mod new_window;
 
 //const EDITOR_NAME: &str = "vi";
 

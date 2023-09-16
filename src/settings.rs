@@ -108,6 +108,8 @@ pub type Keys = Vec<Key>;
 
 #[derive(Debug, Clone)]
 pub struct Settings {
+    pub cols: usize,
+    pub rows: usize,
     pub editor_settings: EditorSettings,
     pub mode_keybindings: HashMap<Mode, HashMap<Keys, Command>>,
     pub colors: EditorColors,
@@ -723,6 +725,8 @@ impl Default for Settings {
         let colors = EditorColors::default();
         
         Self {
+            cols: 0,
+            rows: 0,
             editor_settings,
             mode_keybindings,
             colors,
