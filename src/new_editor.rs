@@ -202,10 +202,6 @@ impl Editor {
     /// We also move or hide the cursor here
     fn refresh_screen(&mut self) -> io::Result<()> {
 
-        queue!(
-            std::io::stdout(),
-            terminal::Clear(ClearType::UntilNewLine),
-        ).unwrap();
         //Self::clear_screen()?;
         
         self.windows[self.active_window].refresh();
@@ -229,7 +225,6 @@ impl Editor {
         }
 
         self.compositor.draw(&mut self.output_buffer);
-        
         
         self.output_buffer.flush()
 

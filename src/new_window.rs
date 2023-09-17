@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc, sync::mpsc::{Receiver, Sender}, collections::HashMap, path::PathBuf, io, cmp};
 
-use crossterm::event::KeyEvent;
+use crossterm::{event::KeyEvent, queue, terminal::{ClearType, self}};
 use uuid::Uuid;
 
 use crate::{new_editor::{TextLayer, Compositor, StyledChar}, new_editor::{RegisterType, EditorMessage, LayerRow}, settings::Settings, lsp::LspControllerMessage,  Mailbox, new_pane::{PaneContainer, text_pane::TextPane, Pane, TextBuffer}};
@@ -697,6 +697,7 @@ impl Window {
     }
 
     fn draw_status_bar(&mut self) {
+
 
         let current_layer = self.panes[self.active_layer][self.active_panes[self.active_layer]].draw_status();
 
