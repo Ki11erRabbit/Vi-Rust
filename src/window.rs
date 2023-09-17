@@ -1052,11 +1052,13 @@ impl Window {
 
         let mode_color = &settings.colors.mode.get(&name).unwrap_or(&color_settings);
 
-        if self.buffers[0].contents.len() <= self.size.1 {
+        if self.buffers[0].contents.len() == self.size.1 {
             // we need to add a Some(None) to the start of the row for at least the first time so that the compositor knows to add a new row
-            let mut text_row = TextRow::new();
-            text_row.push(Some(None));
-            self.buffers[0].contents.push(text_row);
+            for buffer in self.buffers.iter_mut() {
+                let mut text_row = TextRow::new();
+                text_row.push(Some(None));
+                buffer.contents.push(text_row);
+            }
 
             
         }
@@ -1091,6 +1093,8 @@ impl Window {
         for c in second.chars() {
             self.buffers[0].contents[self.size.1].push(Some(Some(StyledChar::new(c, color_settings.clone()))));
         }
+
+        self.buffers[0].contents[self.size.1].push(Some(None));
     }
 
     pub fn force_refresh_screen(&mut self) -> io::Result<()> {
@@ -1499,11 +1503,11 @@ impl Compositor {
                     
                     if chr.changed {
                         self.contents[y].push(Some(chr.clone()));
-                        //chr.changed = false;
+                        chr.changed = false;
                     }
                     else {
                         self.contents[y].push(None);
-                        //chr.changed = false;
+                        chr.changed = false;
                         //layers[curr_layer].contents[y][x].borrow_mut().as_mut().unwrap().changed = false;
                     }
                     //self.contents[y].push(Some(chr));
