@@ -63,7 +63,7 @@ fn main() -> io::Result<()> {
 
     
     if let Some(filename) = std::env::args().nth(1) {
-        //editor.open_file(&filename)?;
+        editor.open_file(&filename)?;
     }
 
 

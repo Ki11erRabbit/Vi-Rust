@@ -761,7 +761,7 @@ impl Default for EditorSettings {
             tab_size: 4,
             use_spaces: true,
             key_timeout: 3000,
-            poll_timeout: 100,
+            poll_timeout: 3000,
             border: true,
             minimum_width: 24,
             minimum_height: 1,

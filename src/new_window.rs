@@ -171,6 +171,8 @@ impl Window {
 
         pane.open_file(path)?;
 
+        eprintln!("Opened file");
+
         let pane = Rc::new(RefCell::new(pane));
 
 
@@ -181,7 +183,10 @@ impl Window {
     
     fn insert_pane(&mut self, pane: Rc<RefCell<dyn Pane>>) -> (usize, usize) {
 
-        let mut container = if self.panes.len() == 0 {
+        eprintln!("Inserting pane");
+        
+        let container = if self.panes.len() == 0 {
+            self.text_layers.push(TextLayer::new());
             self.panes.push(Vec::new());
             self.active_panes.push(0);
 
@@ -189,6 +194,7 @@ impl Window {
 
             let mut container = PaneContainer::new(pane, self.settings.clone());
 
+            container.set_max_size(size);
             container.set_size(size);
             
             container
@@ -197,7 +203,8 @@ impl Window {
 
             let mut container = PaneContainer::new(pane, self.settings.clone());
 
-            container.set_size((0, 0));
+            container.set_max_size(size);
+            container.set_size((0,0));
             
             container
 
@@ -213,6 +220,14 @@ impl Window {
 
         pos
     }
+
+    pub fn first_open(&mut self, filename: PathBuf) -> io::Result<()> {
+        eprintln!("First open: {:?}", filename);
+        let _pos = self.file_opener(filename)?;
+
+        Ok(())
+    }
+
 
     pub fn open_file(&mut self, filename: PathBuf) -> io::Result<()> {
         let pos = self.file_opener(filename)?;
@@ -232,7 +247,7 @@ impl Window {
 
 
     fn switch_pane(&mut self, (layer, index): (usize, usize), location: Option<(usize, usize)>) {
-
+        eprintln!("Switching to pane: {}, {}", layer, index);
 
 
         let active_pane = self.panes[self.active_panes[self.active_layer]]
@@ -261,6 +276,7 @@ impl Window {
         for (i, layer) in self.panes.iter().enumerate() {
             for (j, container) in layer.iter().enumerate() {
                 if container.can_close() {
+                    eprintln!("removing pane");
                     panes_to_remove.push((i, j));
                 }
             }
@@ -618,7 +634,7 @@ impl Window {
     fn draw_rows(&mut self) {
         let (cols, rows) = self.settings.borrow().get_window_size();
 
-        let rows = rows.saturating_sub(1);
+        //let rows = rows.saturating_sub(1);
 
 
         for l in 0..self.panes.len() {
@@ -721,6 +737,7 @@ impl Window {
     }
 
     fn write(&mut self) {
+        eprintln!("{}", self.panes.len());
         self.draw_rows();
 
         self.draw_status_bar();
@@ -748,9 +765,13 @@ impl Window {
         self.remove_panes();
 
         if !self.check_messages()? {
+            eprintln!("Received a message that would cause a close");
             return Ok(true);
         } 
-        
+
+        if self.panes.len() == 0 {
+            return Ok(true);
+        }
 
         if self.panes[0].len() == 0 {
             return Ok(true);

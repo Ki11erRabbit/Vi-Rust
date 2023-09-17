@@ -83,6 +83,10 @@ impl PaneContainer {
         self.move_not_resize
     }
 
+    pub fn set_max_size(&mut self, size: (usize, usize)) {
+        self.max_size = size;
+    }
+    
     pub fn set_size(&mut self, size: (usize, usize)) {
         self.size = size;
     }

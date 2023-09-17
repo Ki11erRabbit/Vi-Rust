@@ -1,5 +1,6 @@
 
 use std::io::Write;
+use std::path::PathBuf;
 use std::{cmp, io};
 use std::fmt::{Formatter, self};
 use std::ops::{Index, IndexMut};
@@ -11,6 +12,7 @@ use std::time::Duration;
 use crossterm::cursor::{SetCursorStyle, MoveTo, Hide, Show};
 use crossterm::event::{Event, KeyEvent};
 use crossterm::style::StyledContent;
+use crossterm::terminal::ClearType;
 use crossterm::{terminal, execute, event, queue};
 
 use crate::lsp::LspControllerMessage;
@@ -191,10 +193,21 @@ impl Editor {
         self.windows[self.active_window].get_cursor_coords()
     }
 
+    pub fn clear_screen() -> io::Result<()> {
+        execute!(std::io::stdout(), terminal::Clear(terminal::ClearType::All))
+        //execute!(std::io::stdout(), cursor::MoveTo(0, 0))
+    }
 
     /// This function is called every time we want to redraw the screen
     /// We also move or hide the cursor here
     fn refresh_screen(&mut self) -> io::Result<()> {
+
+        queue!(
+            std::io::stdout(),
+            terminal::Clear(ClearType::UntilNewLine),
+        ).unwrap();
+        //Self::clear_screen()?;
+        
         self.windows[self.active_window].refresh();
 
         queue!(
@@ -285,6 +298,9 @@ impl Editor {
 
     }
 
+    pub fn open_file(&mut self, path: &str) -> io::Result<()> {
+        self.windows[self.active_window].first_open(PathBuf::from(path))
+    }
 
 }
 
@@ -323,11 +339,8 @@ impl StyledChar {
         }
     }
 
-    pub fn style(&self) -> Option<StyledContent<String>> {
-        if !self.changed {
-            return None;
-        }
-        Some(apply_colors!(self.chr.to_string(), self.color))
+    pub fn style(&self) -> StyledContent<String> {
+        apply_colors!(self.chr.to_string(), self.color)
     }
 }
 
@@ -356,7 +369,7 @@ impl LayerRow {
         Self {
             contents: Vec::new(),
             index: 0,
-            changed: false,
+            changed: true,
         }
     }
 
@@ -512,7 +525,7 @@ impl CompositorRow {
         Self {
             contents: Vec::new(),
             index: 0,
-            changed: false,
+            changed: true,
         }
     }
 
@@ -649,7 +662,7 @@ impl Compositor {
         }
     }
 
-    pub fn draw(&self, output: &mut OutputBuffer) {
+    pub fn draw(&mut self, output: &mut OutputBuffer) {
 
         let rows = cmp::min(self.rows, self.contents.len());
         let cols = cmp::min(self.cols, self.contents[0].len());
@@ -661,6 +674,7 @@ impl Compositor {
         }
         //eprintln!("Cols: {}, Rows: {}", cols, rows);
         //eprintln!("{:#?}", self);
+        self.clear();
     }
 
     pub fn resize(&mut self, (cols, rows): (usize, usize)) {
@@ -747,30 +761,28 @@ impl Index<usize> for OutputRow {
 }
 
 pub struct OutputBuffer {
-    contents: Vec<OutputRow>,
-    current_row: usize,
+    //contents: Vec<OutputRow>,
+    contents: String,
 }
 
 
 impl OutputBuffer {
     pub fn new((cols, rows): (usize, usize)) -> Self {
         Self {
-            contents: vec![OutputRow::new(cols); rows],
-            current_row: 0,
+            //contents: vec![OutputRow::new(cols); rows],
+            contents: String::new(),
         }
 
     }
 
     pub fn clear(&mut self) {
-        self.current_row = 0;
-        for row in self.contents.iter_mut() {
-            row.clear();
-        }
+        self.contents.clear();
     }
 
-    pub fn push(&mut self, content: Option<StyledContent<String>>) {
+    pub fn push(&mut self, content: StyledContent<String>) {
 
-        if self.current_row >= self.contents.len() {
+        self.contents.push_str(&content.to_string());
+        /*if self.current_row >= self.contents.len() {
             self.contents.push(OutputRow::default());
             if self.contents[self.current_row].push(content) {
                 self.current_row += 1;
@@ -780,14 +792,14 @@ impl OutputBuffer {
             if self.contents[self.current_row].push(content) {
                 self.current_row += 1;
             }
-        }
+        }*/
     }
 
     pub fn resize(&mut self, (cols, rows): (usize, usize)) {
-        for row in self.contents.iter_mut() {
+        /*for row in self.contents.iter_mut() {
             row.resize(cols);
         }
-        self.contents.truncate(rows);
+        self.contents.truncate(rows);*/
     }
 }
 
@@ -804,13 +816,15 @@ impl io::Write for OutputBuffer {
 
     fn flush(&mut self) -> io::Result<()> {
         let mut out = Ok(());
-        for row in self.contents.iter() {
+        /*for row in self.contents.iter() {
             out = row.write();
 
             if out.is_err() {
                 return out;
             }
-        }
+    }*/
+        write!(std::io::stdout(), "{}", self.contents)?;
+        
         std::io::stdout().flush()?;
         self.clear();
         out
