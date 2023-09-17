@@ -40,8 +40,8 @@ pub struct EditorMailbox {
 
 impl EditorMailbox {
     pub fn new() -> Self {
-        let (local_sender, local_receiver) = std::sync::mpsc::channel();
-        let (far_sender, far_receiver) = std::sync::mpsc::channel();
+        let (far_sender, local_receiver) = std::sync::mpsc::channel();
+        let (local_sender , far_receiver) = std::sync::mpsc::channel();
 
         Self {
             local_receiver,
