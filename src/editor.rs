@@ -280,6 +280,13 @@ impl Editor {
         }
     }
 
+    pub fn draw(&mut self) -> io::Result<()> {
+        self.windows[self.active_window].refresh_screen()?;
+        self.windows[self.active_window].reset_active_pane();
+        
+        Ok(())
+    }
+
 
     pub fn run(&mut self) -> io::Result<bool> {
         self.check_messages()?;

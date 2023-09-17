@@ -63,7 +63,7 @@ fn main() -> io::Result<()> {
         editor.open_file(&filename)?;
     }
 
-
+    editor.draw()?;
 
     while editor.run()? {}
 

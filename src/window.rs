@@ -165,7 +165,7 @@ impl Window {
             panes,
             id_to_pane,
             buffers,
-            compositor: Compositor::new((win_size.0, win_size.1 + 1)),
+            compositor: Compositor::new((win_size.0, win_size.1)),
             known_file_types,
             duration,
             settings,
@@ -1064,15 +1064,25 @@ impl Window {
 
         }
 
+        self.compositor.merge(&mut self.buffers);
+
+        self.compositor.draw(&mut self.contents);
+
+        self.compositor.clear();
+        for buffer in self.buffers.iter_mut() {
+            buffer.clear();
+        }
+
+
     }
 
 
     pub fn draw_status_bar(&mut self) {
         //Self::clear_screen().unwrap();
-        /*queue!(
+        queue!(
             self.contents,
             terminal::Clear(ClearType::UntilNewLine),
-        ).unwrap();*/
+        ).unwrap();
 
         let settings = self.settings.borrow();
         
@@ -1083,49 +1093,50 @@ impl Window {
 
         let mode_color = &settings.colors.mode.get(&name).unwrap_or(&color_settings);
 
-        if self.buffers[0].contents.len() == self.size.1 {
+        /*if self.buffers[0].contents.len() == self.size.1 {
             // we need to add a Some(None) to the start of the row for at least the first time so that the compositor knows to add a new row
             for buffer in self.buffers.iter_mut() {
-                let mut text_row = TextRow::new();
-                text_row.push(Some(None));
+                let text_row = TextRow::new();
                 buffer.contents.push(text_row);
             }
 
             
-        }
+        }*/
+
         //self.buffers[0].contents[self.size.1].push(Some(None));
 
-        for c in name.chars() {
+        /*for c in name.chars() {
             self.buffers[0].contents[self.size.1].push(Some(Some(StyledChar::new(c, (*mode_color).clone()))));
-        }
+        }*/
 
-        self.buffers[0].contents[self.size.1].push(Some(Some(StyledChar::new(' ', color_settings.clone()))));
+        //self.buffers[0].contents[self.size.1].push(Some(Some(StyledChar::new(' ', color_settings.clone()))));
 
-        //self.contents.push_str(apply_colors!(format!("{}", name), mode_color));
+        self.contents.push_str(apply_colors!(format!("{}", name), mode_color));
 
-        //self.contents.push_str(apply_colors!(" ", color_settings));
-
-        for c in first.chars() {
+        self.contents.push_str(apply_colors!(" ", color_settings));
+        //eprintln!("{} {}", first, second);
+        
+        /*for c in first.chars() {
             self.buffers[0].contents[self.size.1].push(Some(Some(StyledChar::new(c, color_settings.clone()))));
-        }
+        }*/
 
-        //self.contents.push_str(apply_colors!(first, color_settings));
+        self.contents.push_str(apply_colors!(first, color_settings));
         
         let remaining = self.size.0.saturating_sub(total);
 
-        for c in " ".repeat(remaining).chars() {
+        /*for c in " ".repeat(remaining).chars() {
             self.buffers[0].contents[self.size.1].push(Some(Some(StyledChar::new(c, color_settings.clone()))));
-        }
+        }*/
         
-        //self.contents.push_str(apply_colors!(" ".repeat(remaining), color_settings));
+        self.contents.push_str(apply_colors!(" ".repeat(remaining), color_settings));
 
 
-        //self.contents.push_str(apply_colors!(second, color_settings));
-        for c in second.chars() {
+        self.contents.push_str(apply_colors!(second, color_settings));
+        /*for c in second.chars() {
             self.buffers[0].contents[self.size.1].push(Some(Some(StyledChar::new(c, color_settings.clone()))));
-        }
+        }*/
 
-        self.buffers[0].contents[self.size.1].push(Some(None));
+        //self.buffers[0].contents[self.size.1].push(Some(None));
     }
 
     pub fn force_refresh_screen(&mut self) -> io::Result<()> {
@@ -1179,14 +1190,6 @@ impl Window {
         self.draw_status_bar();
 
 
-        self.compositor.merge(&mut self.buffers);
-
-        self.compositor.draw(&mut self.contents);
-
-        self.compositor.clear();
-        for buffer in self.buffers.iter_mut() {
-            buffer.clear();
-        }
         
 
         let cursor = self.panes[0][self.active_panes[self.active_layer]].get_cursor();
@@ -1517,6 +1520,7 @@ impl Compositor {
                 }
 
                 if !layers[curr_layer].contents[y].changed {
+                    eprintln!("skipping {}", y);
                     continue;
                 }
 
@@ -1524,7 +1528,7 @@ impl Compositor {
 
                 // For this code to work properly, the first item must be a Some(None) so that we can create a new row if needed
                 if layers[curr_layer].contents[y][x].clone().borrow().is_some() {
-                    eprintln!("writing ");
+                    //eprintln!("writing ");
                     //self.contents.push(CompositorRow::new());
 
                     let chr = layers[curr_layer].contents[y][x].clone();
@@ -1546,7 +1550,7 @@ impl Compositor {
                 }
                 else {
                     if self.contents.len() <= y {
-                        eprintln!("Pushing row");
+                        //eprintln!("Pushing row");
                         self.contents.push(CompositorRow::new());
                     }
                     //self.contents[y].push(StyledChar::new(' ', ColorScheme::default()));
