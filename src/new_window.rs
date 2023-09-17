@@ -643,11 +643,11 @@ impl Window {
         
     }
 
-    /*#[inline]
+    #[inline]
     fn draw_rows(&mut self) {
         let (cols, rows) = self.settings.borrow().get_window_size();
 
-        let rows = rows.saturating_sub(2);
+        let rows = rows.saturating_sub(1);
 
 
         for l in 0..self.panes.len() {
@@ -709,15 +709,15 @@ impl Window {
 
         eprintln!("rows: {}", rows);
 
-    }*/
+    }
 
-    fn draw_rows(&mut self) {
-        //let (cols, rows) = self.settings.borrow().get_window_size();
+    /*fn draw_rows(&mut self) {
+        let (cols, rows) = self.settings.borrow().get_window_size();
 
-        //let rows = rows.saturating_sub(1);
+        let rows = rows.saturating_sub(1);
 
-        let cols = self.size.0;
-        let rows = self.size.1;
+        //let cols = self.size.0;
+        //let rows = self.size.1;
 
 
         //eprintln!("panes: {}", self.panes.len());
@@ -791,19 +791,19 @@ impl Window {
 
         }
 
-        self.compositor.merge(&mut self.text_layers);
+        /*self.compositor.merge(&mut self.text_layers);
 
         self.compositor.draw(&mut self.contents);
 
         self.compositor.clear();
         for buffer in self.text_layers.iter_mut() {
             buffer.clear();
-        }
+        }*/
         
-    }
+    }*/
     
 
-    /*fn draw_status_bar(&mut self) {
+    fn draw_status_bar(&mut self) {
 
 
         let current_layer = self.panes[self.active_layer][self.active_panes[self.active_layer]].draw_status();
@@ -822,8 +822,10 @@ impl Window {
 
         let row = rows.saturating_sub(1);
 
-        while rows > self.text_layers[0].contents.len() {
-            self.text_layers[0].contents.push(LayerRow::new());
+        if row >= self.text_layers[0].contents.len() {
+            let mut layer_row = LayerRow::new();
+            layer_row.push(Some(None));
+            self.text_layers[0].contents.push(layer_row);
         }
 
         eprintln!("len: {}", self.text_layers[0].contents.len());
@@ -848,9 +850,9 @@ impl Window {
         for chr in second.chars() {
             self.text_layers[0][row].push(Some(Some(StyledChar::new(chr, color_settings.clone()))));
         }
-}*/
+}
 
-    pub fn draw_status_bar(&mut self) {
+    /*pub fn draw_status_bar(&mut self) {
 
         let (cols, rows) = self.settings.borrow().get_window_size();
         //Self::clear_screen().unwrap();
@@ -881,7 +883,7 @@ impl Window {
 
 
         self.contents.push(apply_colors!(second, color_settings));
-    }
+    }*/
     
 
     fn write(&mut self) {
@@ -889,6 +891,10 @@ impl Window {
         self.draw_rows();
 
         self.draw_status_bar();
+
+        self.compositor.merge(&mut self.text_layers);
+        self.compositor.draw(&mut self.contents);
+        self.compositor.clear();
         
     }
 
@@ -909,11 +915,11 @@ impl Window {
             cursor::MoveTo(0, 0),
         ).unwrap();
 
-        //self.write();
+        self.write();
 
-        self.draw_rows();
+        //self.draw_rows();
 
-        self.draw_status_bar();
+        //self.draw_status_bar();
 
         queue!(
             self.contents,

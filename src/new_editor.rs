@@ -178,7 +178,7 @@ impl Editor {
 
     #[inline]
     fn write(&mut self) {
-        //self.windows[self.active_window].draw(&mut self.compositor);
+        self.windows[self.active_window].draw();
     }
     
 
@@ -260,7 +260,7 @@ impl Editor {
 
 
     pub fn run(&mut self) -> io::Result<bool> {
-        /*if self.windows[self.active_window].can_close()? {
+        if self.windows[self.active_window].can_close()? {
             self.windows.remove(self.active_window);
             self.window_senders.remove(self.active_window);
             self.active_window = self.active_window.saturating_sub(1);
@@ -292,9 +292,9 @@ impl Editor {
                 Ok(true)
             },
             _ => Ok(true),
-    }*/
+    }
 
-        self.windows[self.active_window].run()
+        //self.windows[self.active_window].run()
     }
 
 
