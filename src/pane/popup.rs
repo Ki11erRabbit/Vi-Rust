@@ -3,7 +3,7 @@ use std::{rc::Rc, cell::RefCell, sync::mpsc::{Sender, Receiver}, path::PathBuf, 
 
 use uuid::Uuid;
 
-use crate::{mode::{Mode, PromptType, Promptable}, cursor::Cursor, window::{StyledChar, Message, TextRow}, settings::Settings, buffer::Buffer};
+use crate::{mode::{Mode, PromptType, Promptable}, cursor::Cursor, window::{StyledChar, WindowMessage, TextRow}, settings::Settings, buffer::Buffer};
 use super::{PaneMessage, PaneContainer, Pane};
 
 
@@ -15,7 +15,7 @@ use super::{PaneMessage, PaneContainer, Pane};
 
 pub struct PopUpPane {
     mode : Rc<RefCell<dyn Promptable>>,
-    window_sender: Sender<Message>,
+    window_sender: Sender<WindowMessage>,
     pane_sender: Sender<PaneMessage>,
     pane_receiver: Receiver<PaneMessage>,
     prompt: Vec<String>,
@@ -28,7 +28,7 @@ pub struct PopUpPane {
 impl PopUpPane {
     pub fn new_prompt(settings: Rc<RefCell<Settings>>,
                       prompt: Vec<String>,
-                      window_sender: Sender<Message>,
+                      window_sender: Sender<WindowMessage>,
                       pane_sender: Sender<PaneMessage>,
                       pane_receiver: Receiver<PaneMessage>,
                       prompts: Vec<PromptType>,
@@ -53,7 +53,7 @@ impl PopUpPane {
 
     pub fn new_info(settings: Rc<RefCell<Settings>>,
                     prompt: Vec<String>,
-                    window_sender: Sender<Message>,
+                    window_sender: Sender<WindowMessage>,
                     pane_sender: Sender<PaneMessage>,
                     pane_receiver: Receiver<PaneMessage>,
                     body: Vec<Option<String>>,
@@ -78,7 +78,7 @@ impl PopUpPane {
 
     pub fn new_dropdown(settings: Rc<RefCell<Settings>>,
                         prompt: Vec<String>,
-                        window_sender: Sender<Message>,
+                        window_sender: Sender<WindowMessage>,
                         pane_sender: Sender<PaneMessage>,
                         pane_receiver: Receiver<PaneMessage>,
                         buttons: PromptType,
@@ -303,7 +303,7 @@ impl Pane for PopUpPane {
         
         match command {
             "cancel" => {
-                self.window_sender.send(Message::ClosePane(true, None)).unwrap();
+                self.window_sender.send(WindowMessage::ClosePane(true, None)).unwrap();
             },
             "submit" => {
                 let result_type = command_args.next().unwrap();
@@ -311,17 +311,17 @@ impl Pane for PopUpPane {
                 match result_type {
                     "text" => {
                         let value = command_args.next().unwrap();
-                        self.window_sender.send(Message::ClosePane(true, None)).unwrap();
+                        self.window_sender.send(WindowMessage::ClosePane(true, None)).unwrap();
                         self.pane_sender.send(PaneMessage::String(value.to_string())).unwrap();
                     },
                     "radio" => {
                         let value = command_args.next().unwrap();
-                        self.window_sender.send(Message::ClosePane(true, None)).unwrap();
+                        self.window_sender.send(WindowMessage::ClosePane(true, None)).unwrap();
                         self.pane_sender.send(PaneMessage::String(value.to_string())).unwrap();
                     },
                     "button" => {
                         let value = command_args.collect::<Vec<&str>>().join(" ");
-                        self.window_sender.send(Message::ClosePane(true, None)).unwrap();
+                        self.window_sender.send(WindowMessage::ClosePane(true, None)).unwrap();
                         match self.pane_sender.send(PaneMessage::String(value.to_string())) {
                             Ok(_) => {},
                             Err(e) => {
@@ -331,7 +331,7 @@ impl Pane for PopUpPane {
                     },
                     "checkbox" => {
                         let value = command_args.next().unwrap();
-                        self.window_sender.send(Message::ClosePane(true, None)).unwrap();
+                        self.window_sender.send(WindowMessage::ClosePane(true, None)).unwrap();
                         self.pane_sender.send(PaneMessage::String(value.to_string())).unwrap();
                     },
                     x => {
@@ -341,10 +341,10 @@ impl Pane for PopUpPane {
             },
             "close" => {
                 if let Some(value) = command_args.next() {
-                    self.window_sender.send(Message::ClosePane(true, Some(Uuid::try_parse(value).unwrap()))).unwrap();
+                    self.window_sender.send(WindowMessage::ClosePane(true, Some(Uuid::try_parse(value).unwrap()))).unwrap();
                 }
                 else {
-                    self.window_sender.send(Message::ClosePane(true, None)).unwrap();
+                    self.window_sender.send(WindowMessage::ClosePane(true, None)).unwrap();
                 }
             },
             _x => {}
@@ -415,7 +415,7 @@ impl Pane for PopUpPane {
     }
 
 
-    fn set_sender(&mut self, _sender: Sender<Message>) {
+    fn set_sender(&mut self, _sender: Sender<WindowMessage>) {
         unimplemented!()
     }
 

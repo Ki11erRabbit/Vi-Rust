@@ -16,8 +16,9 @@ use crossterm::style::{Stylize, StyledContent};
 use crossterm::{terminal::{self, ClearType}, execute, cursor, queue};
 use uuid::Uuid;
 
+use crate::Mailbox;
 use crate::editor::{EditorMessage, RegisterType};
-use crate::lsp::ControllerMessage;
+use crate::lsp::LspControllerMessage;
 use crate::pane::treesitter::TreesitterPane;
 use crate::settings::ColorScheme;
 use crate::{apply_colors, settings::Settings};
@@ -26,7 +27,7 @@ use crate::pane::text::PlainTextPane;
 use crate::treesitter::tree_sitter_scheme;
 
 
-pub enum Message {
+pub enum WindowMessage {
     HorizontalSplit,
     VerticalSplit,
     ForceQuitAll,
@@ -48,6 +49,57 @@ pub enum Message {
     Copy(RegisterType, String),
 }
 
+pub struct WindowMailbox {
+    /// The receiver for messages to the editor
+    local_receiver: Receiver<WindowMessage>,
+    /// The sender for messages to the editor
+    /// This isn't wrapped in an Rc because it is easy to share
+    far_sender: Sender<WindowMessage>,
+    /// The receiver for messages not to the editor
+    /// This is wrapped in an Rc so that it can be shared with other parts of the editor
+    far_receiver: Rc<Receiver<WindowMessage>>,
+    /// The sender for messages not to the editor
+    local_sender: Sender<WindowMessage>,
+}
+
+impl WindowMailbox {
+    pub fn new() -> Self {
+        let (local_sender, far_receiver) = std::sync::mpsc::channel();
+        let (far_sender, local_receiver) = std::sync::mpsc::channel();
+
+        Self {
+            local_receiver,
+            far_sender,
+            far_receiver: Rc::new(far_receiver),
+            local_sender,
+        }
+    }
+
+    pub fn get_far_receiver(&self) -> Rc<Receiver<WindowMessage>> {
+        self.far_receiver.clone()
+    }
+
+    pub fn get_far_sender(&self) -> Sender<WindowMessage> {
+        self.far_sender.clone()
+    }
+    
+}
+
+
+impl Mailbox<WindowMessage> for WindowMailbox {
+    fn send(&self, message: WindowMessage) -> Result<(), std::sync::mpsc::SendError<WindowMessage>> {
+        self.local_sender.send(message)
+    }
+
+    fn recv(&self) -> Result<WindowMessage, std::sync::mpsc::RecvError> {
+        self.local_receiver.recv()
+    }
+
+    fn try_recv(&self) -> Result<WindowMessage, std::sync::mpsc::TryRecvError> {
+        self.local_receiver.try_recv()
+    }
+}
+
 
 
 pub struct Window{
@@ -62,28 +114,36 @@ pub struct Window{
     known_file_types: HashSet<String>,
     settings: Rc<RefCell<Settings>>,
     duration: Duration,
-    channels: (Sender<Message>, Receiver<Message>),
+    channels: (Sender<WindowMessage>, Receiver<WindowMessage>),
     editor_sender: Sender<EditorMessage>,
     /// For when we want to avoid waiting for an event to be processed
     skip: bool,
-    lsp_responder: Sender<ControllerMessage>,
-    lsp_listener: Rc<Receiver<ControllerMessage>>,
+    lsp_sender: Sender<LspControllerMessage>,
+    lsp_listener: Rc<Receiver<LspControllerMessage>>,
     
 }
 
 impl Window {
-    pub fn new(editor_sender: Sender<EditorMessage>, lsp_responder: Sender<ControllerMessage>, lsp_listener: Rc<Receiver<ControllerMessage>>) -> Self {
-        let settings = Settings::default();
-        let duration = Duration::from_millis(settings.editor_settings.key_timeout);
+    pub fn new(editor_sender: Sender<EditorMessage>,
+               editor_listener: Rc<Receiver<EditorMessage>>,
+               lsp_sender: Sender<LspControllerMessage>,
+               lsp_listener: Rc<Receiver<LspControllerMessage>>,
+               settings: Rc<RefCell<Settings>>) -> Self {
+    
+        //let settings = Settings::default();
+                                                             
+        let duration = Duration::from_millis(settings.borrow().editor_settings.key_timeout);
 
-        let settings = Rc::new(RefCell::new(settings));
+        //let settings = Rc::new(RefCell::new(settings));
         
 
         let channels = mpsc::channel();
         
-        let win_size = terminal::size()
+        /*let win_size = terminal::size()
             .map(|(w, h)| (w as usize, h as usize - 1))// -1 for trailing newline and -1 for command bar
-            .unwrap();
+        .unwrap();*/
+
+        let win_size = (settings.borrow().cols, settings.borrow().rows -1);
         let pane: Rc<RefCell<dyn Pane>> = Rc::new(RefCell::new(PlainTextPane::new(settings.clone(), channels.0.clone())));
 
         pane.borrow_mut().set_cursor_size(win_size);
@@ -113,11 +173,11 @@ impl Window {
             editor_sender,
             skip: false,
             lsp_listener,
-            lsp_responder,
+            lsp_sender,
         }
     }
 
-    pub fn get_sender(&self) -> Sender<Message> {
+    pub fn get_sender(&self) -> Sender<WindowMessage> {
         self.channels.0.clone()
     }
 
@@ -187,14 +247,14 @@ impl Window {
             },
             "rs" => {
 
-                self.lsp_responder.send(ControllerMessage::CreateClient("rust".to_string().into())).unwrap();
+                self.lsp_sender.send(LspControllerMessage::CreateClient("rust".to_string().into())).unwrap();
 
                 let lsp_client;
 
                 loop {
                         
                     match self.lsp_listener.try_recv() {
-                        Ok(ControllerMessage::ClientCreated(language_rcv)) => {
+                        Ok(LspControllerMessage::ClientCreated(language_rcv)) => {
                             lsp_client = language_rcv;
                             break;
                         },
@@ -210,7 +270,7 @@ impl Window {
                     }
                 }
 
-                let lsp_client = Some((self.lsp_responder.clone(), lsp_client));
+                let lsp_client = Some((self.lsp_sender.clone(), lsp_client));
                 
                 let language = tree_sitter_rust::language();
                 let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"rust", lsp_client);
@@ -221,14 +281,14 @@ impl Window {
             //todo: move h to C++ since there is no easy way of knowing which lang it is
             "c" | "h" => {
 
-                self.lsp_responder.send(ControllerMessage::CreateClient("c".to_string().into())).unwrap();
+                self.lsp_sender.send(LspControllerMessage::CreateClient("c".to_string().into())).unwrap();
 
                 let lsp_client;
                 
                 loop {
 
                     match self.lsp_listener.try_recv() {
-                        Ok(ControllerMessage::ClientCreated(language_rcv)) => {
+                        Ok(LspControllerMessage::ClientCreated(language_rcv)) => {
                             lsp_client = language_rcv;
                             break;
                         },
@@ -244,7 +304,7 @@ impl Window {
                     }
                 }
 
-                let lsp_client = Some((self.lsp_responder.clone(), lsp_client));
+                let lsp_client = Some((self.lsp_sender.clone(), lsp_client));
                 
                 let language = tree_sitter_c::language();
                 let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"c", lsp_client);
@@ -254,16 +314,16 @@ impl Window {
             }
             "cpp" | "hpp" /*| "h"*/ => {
 
-                self.lsp_responder.send(ControllerMessage::CreateClient("cpp".to_string().into())).unwrap();
+                self.lsp_sender.send(LspControllerMessage::CreateClient("cpp".to_string().into())).unwrap();
 
                 let lsp_client = match self.lsp_listener.recv().unwrap() {
-                    ControllerMessage::ClientCreated(language_rcv) => {
+                    LspControllerMessage::ClientCreated(language_rcv) => {
                         language_rcv
                     },
                     _ => unreachable!(),
                 };
 
-                let lsp_client = Some((self.lsp_responder.clone(), lsp_client));
+                let lsp_client = Some((self.lsp_sender.clone(), lsp_client));
                 
                 let language = tree_sitter_cpp::language();
                 let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"cpp", lsp_client);
@@ -273,16 +333,16 @@ impl Window {
             }
             "py" => {
 
-                self.lsp_responder.send(ControllerMessage::CreateClient("python".to_string().into())).unwrap();
+                self.lsp_sender.send(LspControllerMessage::CreateClient("python".to_string().into())).unwrap();
 
                 let lsp_client = match self.lsp_listener.recv().unwrap() {
-                    ControllerMessage::ClientCreated(language_rcv) => {
+                    LspControllerMessage::ClientCreated(language_rcv) => {
                         language_rcv
                     },
                     _ => unreachable!(),
                 };
 
-                let lsp_client = Some((self.lsp_responder.clone(), lsp_client));
+                let lsp_client = Some((self.lsp_sender.clone(), lsp_client));
                 
                 let language = tree_sitter_python::language();
                 let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"python", lsp_client);
@@ -299,16 +359,16 @@ impl Window {
             }
             "swift" => {
 
-                self.lsp_responder.send(ControllerMessage::CreateClient("swift".to_string().into())).unwrap();
+                self.lsp_sender.send(LspControllerMessage::CreateClient("swift".to_string().into())).unwrap();
 
                 let lsp_client = match self.lsp_listener.recv().unwrap() {
-                    ControllerMessage::ClientCreated(language_rcv) => {
+                    LspControllerMessage::ClientCreated(language_rcv) => {
                         language_rcv
                     },
                     _ => unreachable!(),
                 };
 
-                let lsp_client = Some((self.lsp_responder.clone(), lsp_client));
+                let lsp_client = Some((self.lsp_sender.clone(), lsp_client));
                 
                 let language = tree_sitter_swift::language();
                 let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"swift", lsp_client);
@@ -318,16 +378,16 @@ impl Window {
             }
             "go" => {
 
-                self.lsp_responder.send(ControllerMessage::CreateClient("go".to_string().into())).unwrap();
+                self.lsp_sender.send(LspControllerMessage::CreateClient("go".to_string().into())).unwrap();
 
                 let lsp_client = match self.lsp_listener.recv().unwrap() {
-                    ControllerMessage::ClientCreated(language_rcv) => {
+                    LspControllerMessage::ClientCreated(language_rcv) => {
                         language_rcv
                     },
                     _ => unreachable!(),
                 };
 
-                let lsp_client = Some((self.lsp_responder.clone(), lsp_client));
+                let lsp_client = Some((self.lsp_sender.clone(), lsp_client));
                 
                 let language = tree_sitter_go::language();
                 let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"go", lsp_client);
@@ -337,16 +397,16 @@ impl Window {
             }
             "sh" => {
 
-                self.lsp_responder.send(ControllerMessage::CreateClient("bash".to_string().into())).unwrap();
+                self.lsp_sender.send(LspControllerMessage::CreateClient("bash".to_string().into())).unwrap();
 
                 let lsp_client = match self.lsp_listener.recv().unwrap() {
-                    ControllerMessage::ClientCreated(language_rcv) => {
+                    LspControllerMessage::ClientCreated(language_rcv) => {
                         language_rcv
                     },
                     _ => unreachable!(),
                 };
 
-                let lsp_client = Some((self.lsp_responder.clone(), lsp_client));
+                let lsp_client = Some((self.lsp_sender.clone(), lsp_client));
                 
                 let language = tree_sitter_bash::language();
                 let mut pane = TreesitterPane::new(self.settings.clone(), self.channels.0.clone(), language,"bash", lsp_client);
@@ -683,15 +743,15 @@ impl Window {
         match self.channels.1.try_recv() {
             Ok(message) => {
                 match message {
-                    Message::HorizontalSplit => {
+                    WindowMessage::HorizontalSplit => {
                         self.horizontal_split();
                         Ok(())
                     }
-                    Message::VerticalSplit => {
+                    WindowMessage::VerticalSplit => {
                         self.vertical_split();
                         Ok(())
                     }
-                    Message::ForceQuitAll => {
+                    WindowMessage::ForceQuitAll => {
                         for layers in self.panes.iter_mut() {
                             for pane in layers.iter_mut() {
                                 pane.close();
@@ -700,28 +760,28 @@ impl Window {
                         self.editor_sender.send(EditorMessage::Quit).unwrap();
                         Ok(())
                     }
-                    Message::PaneUp => {
+                    WindowMessage::PaneUp => {
                         self.pane_up();
                         Ok(())
                     },
-                    Message::PaneDown => {
+                    WindowMessage::PaneDown => {
                         self.pane_down();
                         Ok(())
                     },
-                    Message::PaneLeft => {
+                    WindowMessage::PaneLeft => {
                         self.pane_left();
                         Ok(())
                     },
-                    Message::PaneRight => {
+                    WindowMessage::PaneRight => {
                         self.pane_right();
                         Ok(())
                     },
-                    Message::OpenFile(path, pos) => {
+                    WindowMessage::OpenFile(path, pos) => {
                         self.switch_pane(path, pos)?;
                         self.force_refresh_screen()?;
                         Ok(())
                     }
-                    Message::ClosePane(go_down, uuid) => {
+                    WindowMessage::ClosePane(go_down, uuid) => {
 
                         match uuid {
                             None => {
@@ -751,18 +811,18 @@ impl Window {
                         
                         Ok(())
                     },
-                    Message::CreatePopup(mut container, make_active) => {
+                    WindowMessage::CreatePopup(mut container, make_active) => {
                         container.set_move_not_resize(true);
                         self.create_popup(container, make_active);
                         self.force_refresh_screen()?;
                         Ok(())
                     },
-                    Message::OpenNewTab => {
+                    WindowMessage::OpenNewTab => {
                         self.editor_sender.send(EditorMessage::NewWindow(None)).unwrap();
                         self.skip = true;
                         Ok(())
                     },
-                    Message::OpenNewTabWithPane => {
+                    WindowMessage::OpenNewTabWithPane => {
                         let pane = self.panes[self.active_layer][self.active_panes[self.active_layer]].get_pane();
                         self.panes[self.active_layer][self.active_panes[self.active_layer]].close();
 
@@ -772,22 +832,22 @@ impl Window {
                         self.skip = true;
                         Ok(())
                     },
-                    Message::NextTab => {
+                    WindowMessage::NextTab => {
                         self.editor_sender.send(EditorMessage::NextWindow).unwrap();
                         self.skip = true;
                         Ok(())
                     },
-                    Message::PreviousTab => {
+                    WindowMessage::PreviousTab => {
                         self.editor_sender.send(EditorMessage::PrevWindow).unwrap();
                         self.skip = true;
                         Ok(())
                     },
-                    Message::NthTab(n) => {
+                    WindowMessage::NthTab(n) => {
                         self.editor_sender.send(EditorMessage::NthWindow(n)).unwrap();
                         self.skip = true;
                         Ok(())
                     },
-                    Message::PasteResponse(text) => {
+                    WindowMessage::PasteResponse(text) => {
                         self.skip = true;
 
                         match text {
@@ -803,12 +863,12 @@ impl Window {
                         
                         Ok(())
                     },
-                    Message::Paste(ty) => {
+                    WindowMessage::Paste(ty) => {
                         self.skip = true;
                         self.editor_sender.send(EditorMessage::Paste(ty)).unwrap();
                         Ok(())
                     },
-                    Message::Copy(ty, string) => {
+                    WindowMessage::Copy(ty, string) => {
                         self.skip = true;
                         self.editor_sender.send(EditorMessage::Copy(ty, string)).unwrap();
                         Ok(())

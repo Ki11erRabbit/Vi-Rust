@@ -8,7 +8,7 @@ use std::{rc::Rc, cell::RefCell, path::PathBuf, io, cmp, fmt::Debug, sync::mpsc:
 use crossterm::event::KeyEvent;
 use uuid::Uuid;
 
-use crate::{settings::Settings, window::{StyledChar, Message, TextRow}, cursor::Cursor, buffer::Buffer};
+use crate::{settings::Settings, window::{StyledChar, TextRow, WindowMessage}, cursor::Cursor, buffer::Buffer};
 
 
 pub enum PaneMessage {
@@ -136,7 +136,7 @@ impl PaneContainer {
         self.identifier
     }
 
-    pub fn set_sender(&mut self, sender: Sender<Message>) {
+    pub fn set_sender(&mut self, sender: Sender<WindowMessage>) {
         self.pane.borrow_mut().set_sender(sender);
     }
 
@@ -393,7 +393,7 @@ pub trait Pane {
 
     fn get_settings(&self) -> Rc<RefCell<Settings>>;
 
-    fn set_sender(&mut self, sender: Sender<Message>);
+    fn set_sender(&mut self, sender: Sender<WindowMessage>);
 
     /// This function is called after we redraw the screen
     /// For most panes it should tell the cursor that it hasn't moved yet

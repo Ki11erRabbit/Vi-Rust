@@ -4,7 +4,7 @@ use crop::RopeSlice;
 use crossterm::{event::KeyEvent, style::{Attribute, Color}};
 use tree_sitter::{Parser, Tree, Point, Language, InputEdit};
 
-use crate::{window::{Message, StyledChar, TextRow}, cursor::{Cursor, Direction, CursorMove}, mode::{Mode, base::{Normal, Insert, Command},  PromptType, Promptable}, buffer::Buffer, settings::{Settings, SyntaxHighlight, ColorScheme},  lsp::{ControllerMessage, LspNotification, lsp_utils::{Diagnostic, Diagnostics, CompletionList, TextEditType, LocationResponse}, LspResponse, LspRequest}, editor::RegisterType};
+use crate::{window::{WindowMessage, StyledChar, TextRow}, cursor::{Cursor, Direction, CursorMove}, mode::{Mode, base::{Normal, Insert, Command},  PromptType, Promptable}, buffer::Buffer, settings::{Settings, SyntaxHighlight, ColorScheme},  lsp::{LspControllerMessage, LspNotification, lsp_utils::{Diagnostic, Diagnostics, CompletionList, TextEditType, LocationResponse}, LspResponse, LspRequest}, editor::RegisterType};
 
 use super::{text::{JumpTable, Waiting}, PaneMessage, Pane, PaneContainer, popup::PopUpPane};
 
@@ -14,7 +14,7 @@ pub struct TreesitterPane {
     parser: Parser,
     tree: Tree,
     lang: String,
-    lsp_client: Option<(Sender<ControllerMessage>, Arc<Receiver<ControllerMessage>>)>,
+    lsp_client: Option<(Sender<LspControllerMessage>, Arc<Receiver<LspControllerMessage>>)>,
     file_version: usize,
     lsp_diagnostics: Diagnostics,
     sent_diagnostics: HashSet<Diagnostic>,
@@ -29,7 +29,7 @@ pub struct TreesitterPane {
     changed: bool,
     settings: Rc<RefCell<Settings>>,
     jump_table: JumpTable,
-    sender: Sender<Message>,
+    sender: Sender<WindowMessage>,
     popup_channels: Option<(Sender<PaneMessage>, Receiver<PaneMessage>)>,
     waiting: Waiting,
     rainbow_delimiters: RefCell<Vec<(char, ColorScheme)>>,
@@ -37,10 +37,10 @@ pub struct TreesitterPane {
 
 impl TreesitterPane {
     pub fn new(settings: Rc<RefCell<Settings>>,
-               sender: Sender<Message>,
+               sender: Sender<WindowMessage>,
                lang: Language,
                lang_string: &str,
-               lsp: Option<(Sender<ControllerMessage>, Arc<Receiver<ControllerMessage>>)>)
+               lsp: Option<(Sender<LspControllerMessage>, Arc<Receiver<LspControllerMessage>>)>)
                -> Self {
         let mut modes: HashMap<String, Rc<RefCell<dyn Mode>>> = HashMap::new();
         let normal = Rc::new(RefCell::new(Normal::new()));
@@ -187,7 +187,7 @@ impl TreesitterPane {
                 let mut other_uri_count = 0;
                 loop {
                     match receiver.try_recv() {
-                        Ok(ControllerMessage::Response(resp)) => {
+                        Ok(LspControllerMessage::Response(resp)) => {
                             match resp {
                                 LspResponse::PublishDiagnostics(diags) => {
                                     if diags.uri == self.generate_uri() {
@@ -198,7 +198,7 @@ impl TreesitterPane {
                                             break;
                                         }
                                         other_uri_count += 1;
-                                        sender.send(ControllerMessage::Resend(
+                                        sender.send(LspControllerMessage::Resend(
                                             self.lang.clone().into(),
                                             LspResponse::PublishDiagnostics(diags)
                                         )).unwrap();
@@ -334,7 +334,7 @@ impl TreesitterPane {
                 container.set_position(pos);
                 container.set_size(size);
 
-                self.sender.send(Message::CreatePopup(container, false)).expect("Failed to send message");
+                self.sender.send(WindowMessage::CreatePopup(container, false)).expect("Failed to send message");
                 self.waiting = Waiting::None;
 
                 self.popup_channels = Some((send2, recv));
@@ -1144,13 +1144,13 @@ impl Pane for TreesitterPane {
         match &self.lsp_client {
             None => {},
             Some((sender, _)) => {
-                sender.send(ControllerMessage::Notification(
+                sender.send(LspControllerMessage::Notification(
                     self.lang.clone().into(),
                     LspNotification::Open(uri.clone().into(),
                                           self.contents.to_string().into()))
                 ).expect("Failed to send message");
 
-                sender.send(ControllerMessage::Request(
+                sender.send(LspControllerMessage::Request(
                     self.lang.clone().into(),
                     LspRequest::RequestDiagnostic(uri.into())
                 )).expect("Failed to send message");
@@ -1189,7 +1189,7 @@ impl Pane for TreesitterPane {
             "q" => {
                 if self.changed {
                 } else {
-                    self.sender.send(Message::ClosePane(false, None)).unwrap();
+                    self.sender.send(WindowMessage::ClosePane(false, None)).unwrap();
                 }
 
                 let uri = self.generate_uri();
@@ -1197,7 +1197,7 @@ impl Pane for TreesitterPane {
                     None => {},
                     Some((sender,_)) => {
 
-                        sender.send(ControllerMessage::Notification(
+                        sender.send(LspControllerMessage::Notification(
                             self.lang.clone().into(),
                             LspNotification::Close(uri.into())
                         )).expect("Failed to send message");
@@ -1216,7 +1216,7 @@ impl Pane for TreesitterPane {
                     Some((sender, _)) => {
                         //TODO replace filename with URI
 
-                        sender.send(ControllerMessage::Notification(
+                        sender.send(LspControllerMessage::Notification(
                             self.lang.clone().into(),
                             LspNotification::WillSave(uri.clone().into(), "manual".into())
                         )).expect("Failed to send message");
@@ -1238,7 +1238,7 @@ impl Pane for TreesitterPane {
 
                         let text = self.contents.to_string();
 
-                        sender.send(ControllerMessage::Notification(
+                        sender.send(LspControllerMessage::Notification(
                             self.lang.clone().into(),
                             LspNotification::Save(uri.into(), text.into())
                         )).expect("Failed to send message");
@@ -1255,7 +1255,7 @@ impl Pane for TreesitterPane {
                     Some((sender, _)) => {
                         //TODO replace filename with URI
 
-                        sender.send(ControllerMessage::Notification(
+                        sender.send(LspControllerMessage::Notification(
                             self.lang.clone().into(),
                             LspNotification::WillSave(uri.clone().into(), "manual".into())
                         )).expect("Failed to send message");
@@ -1277,7 +1277,7 @@ impl Pane for TreesitterPane {
 
                         let text = self.contents.to_string();
 
-                        sender.send(ControllerMessage::Notification(
+                        sender.send(LspControllerMessage::Notification(
                             self.lang.clone().into(),
                             LspNotification::Save(uri.into(), text.into())
                         )).expect("Failed to send message");
@@ -1296,7 +1296,7 @@ impl Pane for TreesitterPane {
                     Some((sender, _)) => {
                         //TODO replace filename with URI
 
-                        sender.send(ControllerMessage::Notification(
+                        sender.send(LspControllerMessage::Notification(
                             self.lang.clone().into(),
                             LspNotification::WillSave(uri.clone().into(), "manual".into())
                         )).expect("Failed to send message");
@@ -1306,7 +1306,7 @@ impl Pane for TreesitterPane {
 
                 
                 self.save_buffer().expect("Failed to save file");
-                self.sender.send(Message::ClosePane(false, None)).unwrap();
+                self.sender.send(WindowMessage::ClosePane(false, None)).unwrap();
 
                 match &self.lsp_client {
                     None => {},
@@ -1314,7 +1314,7 @@ impl Pane for TreesitterPane {
 
                         let text = self.contents.to_string();
 
-                        sender.send(ControllerMessage::Notification(
+                        sender.send(LspControllerMessage::Notification(
                             self.lang.clone().into(),
                             LspNotification::Save(uri.clone().into(), text.into())
                         )).expect("Failed to send message");
@@ -1326,7 +1326,7 @@ impl Pane for TreesitterPane {
                     None => {},
                     Some((sender,_)) => {
 
-                        sender.send(ControllerMessage::Notification(
+                        sender.send(LspControllerMessage::Notification(
                             self.lang.clone().into(),
                             LspNotification::Close(uri.into())
                         )).expect("Failed to send message");
@@ -1335,14 +1335,14 @@ impl Pane for TreesitterPane {
                 
             },
             "q!" => {
-                self.sender.send(Message::ClosePane(false, None)).unwrap();
+                self.sender.send(WindowMessage::ClosePane(false, None)).unwrap();
                 let uri = self.generate_uri();
 
                 match &self.lsp_client {
                     None => {},
                     Some((sender,_)) => {
 
-                        sender.send(ControllerMessage::Notification(
+                        sender.send(LspControllerMessage::Notification(
                             self.lang.clone().into(),
                             LspNotification::Close(uri.into())
                         )).expect("Failed to send message");
@@ -1435,35 +1435,35 @@ impl Pane for TreesitterPane {
                 
             },
             "horizontal_split" => {
-                self.sender.send(Message::HorizontalSplit).expect("Failed to send message");
+                self.sender.send(WindowMessage::HorizontalSplit).expect("Failed to send message");
                 self.contents.add_new_rope();
             },
             "vertical_split" => {
-                self.sender.send(Message::VerticalSplit).expect("Failed to send message");
+                self.sender.send(WindowMessage::VerticalSplit).expect("Failed to send message");
                 self.contents.add_new_rope();
             },
             "qa!" => {
-                self.sender.send(Message::ForceQuitAll).expect("Failed to send message");
+                self.sender.send(WindowMessage::ForceQuitAll).expect("Failed to send message");
             },
             "pane_up" => {
-                self.sender.send(Message::PaneUp).expect("Failed to send message");
+                self.sender.send(WindowMessage::PaneUp).expect("Failed to send message");
                 self.contents.add_new_rope();
             },
             "pane_down" => {
-                self.sender.send(Message::PaneDown).expect("Failed to send message");
+                self.sender.send(WindowMessage::PaneDown).expect("Failed to send message");
                 self.contents.add_new_rope();
             },
             "pane_left" => {
-                self.sender.send(Message::PaneLeft).expect("Failed to send message");
+                self.sender.send(WindowMessage::PaneLeft).expect("Failed to send message");
                 self.contents.add_new_rope();
             },
             "pane_right" => {
-                self.sender.send(Message::PaneRight).expect("Failed to send message");
+                self.sender.send(WindowMessage::PaneRight).expect("Failed to send message");
                 self.contents.add_new_rope();
             },
             "e" => {
                 if let Some(file_name) = command_args.next() {
-                    self.sender.send(Message::OpenFile(file_name.to_string(), None)).expect("Failed to send message");
+                    self.sender.send(WindowMessage::OpenFile(file_name.to_string(), None)).expect("Failed to send message");
                 }
                 self.contents.add_new_rope();
             },
@@ -1506,7 +1506,7 @@ impl Pane for TreesitterPane {
 
 
 
-                self.sender.send(Message::CreatePopup(container, true)).expect("Failed to send message");
+                self.sender.send(WindowMessage::CreatePopup(container, true)).expect("Failed to send message");
                 self.waiting = Waiting::JumpTarget;
 
                 self.contents.add_new_rope();
@@ -1550,7 +1550,7 @@ impl Pane for TreesitterPane {
 
 
 
-                self.sender.send(Message::CreatePopup(container, true)).expect("Failed to send message");
+                self.sender.send(WindowMessage::CreatePopup(container, true)).expect("Failed to send message");
                 self.waiting = Waiting::JumpPosition;
 
                 self.contents.add_new_rope();
@@ -1574,15 +1574,15 @@ impl Pane for TreesitterPane {
             "change_tab" => {
                 if let Some(tab) = command_args.next() {
                     if let Ok(tab) = tab.parse::<usize>() {
-                        self.sender.send(Message::NthTab(tab)).expect("Failed to send message");
+                        self.sender.send(WindowMessage::NthTab(tab)).expect("Failed to send message");
                     }
                     else {
                         match tab {
                             "prev" => {
-                                self.sender.send(Message::PreviousTab).expect("Failed to send message");
+                                self.sender.send(WindowMessage::PreviousTab).expect("Failed to send message");
                             },
                             "next" => {
-                                self.sender.send(Message::NextTab).expect("Failed to send message");
+                                self.sender.send(WindowMessage::NextTab).expect("Failed to send message");
                             },
                             _ => {}
                         }
@@ -1590,10 +1590,10 @@ impl Pane for TreesitterPane {
                 }
             },
             "open_tab" => {
-                self.sender.send(Message::OpenNewTab).expect("Failed to send message");
+                self.sender.send(WindowMessage::OpenNewTab).expect("Failed to send message");
             },
             "open_tab_with_pane" => {
-                self.sender.send(Message::OpenNewTabWithPane).expect("Failed to send message");
+                self.sender.send(WindowMessage::OpenNewTabWithPane).expect("Failed to send message");
             },
             "info" => {
                 self.open_info(container);
@@ -1618,7 +1618,7 @@ impl Pane for TreesitterPane {
 
                         let position = self.cursor.borrow().get_cursor();
 
-                        sender.send(ControllerMessage::Request(
+                        sender.send(LspControllerMessage::Request(
                              self.lang.clone().into(),
                             LspRequest::RequestCompletion(uri.into(), position, "invoked".into())
                         )).expect("Failed to send message");
@@ -1672,7 +1672,7 @@ impl Pane for TreesitterPane {
 
 
 
-                        self.sender.send(Message::CreatePopup(container, true)).expect("Failed to send message");
+                        self.sender.send(WindowMessage::CreatePopup(container, true)).expect("Failed to send message");
                         self.waiting = Waiting::Completion;
 
                         self.contents.add_new_rope();
@@ -1741,7 +1741,7 @@ impl Pane for TreesitterPane {
                         };
 
 
-                        sender.send(ControllerMessage::Request(
+                        sender.send(LspControllerMessage::Request(
                              self.lang.clone().into(),
                             request
                         )).expect("Failed to send message");
@@ -1771,7 +1771,7 @@ impl Pane for TreesitterPane {
                                     let file_name = Self::get_file_path(&location.uri);
                                     let (pos, _) = location.range.get_positions();
 
-                                    let message = Message::OpenFile(file_name, Some(pos));
+                                    let message = WindowMessage::OpenFile(file_name, Some(pos));
 
                                     self.sender.send(message).expect("Failed to send message");
 
@@ -1797,7 +1797,7 @@ impl Pane for TreesitterPane {
                                         let file_name = Self::get_file_path(&locations[0].uri);
                                         let (pos, _) = locations[0].range.get_positions();
 
-                                        let message = Message::OpenFile(file_name, Some(pos));
+                                        let message = WindowMessage::OpenFile(file_name, Some(pos));
 
                                         self.sender.send(message).expect("Failed to send message");
                                         
@@ -1859,7 +1859,7 @@ impl Pane for TreesitterPane {
 
 
 
-                                    self.sender.send(Message::CreatePopup(container, true)).expect("Failed to send message");
+                                    self.sender.send(WindowMessage::CreatePopup(container, true)).expect("Failed to send message");
                                     self.waiting = Waiting::Goto;
 
                                     self.contents.add_new_rope();
@@ -1894,7 +1894,7 @@ impl Pane for TreesitterPane {
                         None
                     };
 
-                    let message = Message::OpenFile(path.to_string(), pos);
+                    let message = WindowMessage::OpenFile(path.to_string(), pos);
 
                     self.sender.send(message).expect("Failed to send message");
                     
@@ -1903,16 +1903,16 @@ impl Pane for TreesitterPane {
             "paste" => {
                 if let Some(arg) = command_args.next() {
                     if let Ok(number) = arg.parse::<usize>() {
-                        let message = Message::Paste(RegisterType::Number(number));
+                        let message = WindowMessage::Paste(RegisterType::Number(number));
 
                         self.sender.send(message).expect("Failed to send message");
                     } else {
-                        let message = Message::Paste(RegisterType::Name(arg.to_string()));
+                        let message = WindowMessage::Paste(RegisterType::Name(arg.to_string()));
 
                         self.sender.send(message).expect("Failed to send message");
                     }
                 } else {
-                    let message = Message::Paste(RegisterType::None);
+                    let message = WindowMessage::Paste(RegisterType::None);
 
                     self.sender.send(message).expect("Failed to send message");
                 }
@@ -1948,7 +1948,7 @@ impl Pane for TreesitterPane {
                                 None => String::new(),
                             };
 
-                            let message = Message::Copy(reg, row);
+                            let message = WindowMessage::Copy(reg, row);
 
                             self.sender.send(message).expect("Failed to send message");
                                     
@@ -2029,7 +2029,7 @@ impl Pane for TreesitterPane {
         match &self.lsp_client {
             None => {},
             Some((sender, _)) => {
-                let message = ControllerMessage::Notification(
+                let message = LspControllerMessage::Notification(
                     self.lang.clone().into(),
                     LspNotification::ChangeText(
                         self.generate_uri().into(),
@@ -2091,7 +2091,7 @@ impl Pane for TreesitterPane {
         match &self.lsp_client {
             None => {},
             Some((sender, _)) => {
-                let message = ControllerMessage::Notification(
+                let message = LspControllerMessage::Notification(
                     self.lang.clone().into(),
                     LspNotification::ChangeText(
                         self.generate_uri().into(),
@@ -2146,7 +2146,7 @@ impl Pane for TreesitterPane {
         match &self.lsp_client {
             None => {},
             Some((sender, _)) => {
-                let message = ControllerMessage::Notification(
+                let message = LspControllerMessage::Notification(
                     self.lang.clone().into(),
                     LspNotification::ChangeText(
                         self.generate_uri().into(),
@@ -2219,7 +2219,7 @@ impl Pane for TreesitterPane {
         match &self.lsp_client {
             None => {},
             Some((sender, _)) => {
-                let message = ControllerMessage::Notification(
+                let message = LspControllerMessage::Notification(
                     self.lang.clone().into(),
                     LspNotification::ChangeText(
                         self.generate_uri().into(),
@@ -2282,7 +2282,7 @@ impl Pane for TreesitterPane {
         &mut self.contents
     }
 
-    fn set_sender(&mut self, sender: Sender<Message>) {
+    fn set_sender(&mut self, sender: Sender<WindowMessage>) {
         self.sender = sender;
     }
 }
