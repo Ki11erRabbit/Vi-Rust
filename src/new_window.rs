@@ -1,9 +1,9 @@
-use std::{cell::RefCell, rc::Rc, sync::mpsc::{Receiver, Sender}, collections::HashMap, path::PathBuf, io, cmp};
+use std::{cell::RefCell, rc::Rc, sync::mpsc::{Receiver, Sender}, collections::HashMap, path::PathBuf, io::{self, Write}, cmp, time::Duration};
 
-use crossterm::{event::KeyEvent, queue, terminal::{ClearType, self}};
+use crossterm::{event::{KeyEvent, Event, self}, queue, terminal::{ClearType, self}, cursor};
 use uuid::Uuid;
 
-use crate::{new_editor::{TextLayer, Compositor, StyledChar}, new_editor::{RegisterType, EditorMessage, LayerRow}, settings::Settings, lsp::LspControllerMessage,  Mailbox, new_pane::{PaneContainer, text_pane::TextPane, Pane, TextBuffer}};
+use crate::{new_editor::{TextLayer, Compositor, StyledChar}, new_editor::{RegisterType, EditorMessage, LayerRow, OutputBuffer}, settings::Settings, lsp::LspControllerMessage,  Mailbox, new_pane::{PaneContainer, text_pane::TextPane, Pane, TextBuffer}, apply_colors};
 
 
 
@@ -92,6 +92,11 @@ pub struct Window {
     lsp_sender: Sender<LspControllerMessage>,
     /// The receiver is how we get a response from the lsp,
     lsp_listener: Rc<Receiver<LspControllerMessage>>,
+
+
+    compositor: Compositor,
+    contents: OutputBuffer,
+    size: (usize, usize),
 }
 
 
@@ -114,8 +119,12 @@ impl Window {
 
         let id_to_pane = HashMap::new();
 
+        let size = settings.borrow().get_window_size();
+
+        let size = (size.0 as usize, size.1 as usize -1);
+
         Self {
-            settings,
+            settings: settings.clone(),
             active_panes,
             active_layer,
             panes,
@@ -126,6 +135,10 @@ impl Window {
             editor_listener,
             lsp_sender,
             lsp_listener,
+
+            compositor: Compositor::new(settings.borrow().get_window_size()),
+            contents: OutputBuffer::new(settings.borrow().get_window_size()),
+            size,
         }
 
     }
@@ -630,7 +643,7 @@ impl Window {
         
     }
 
-    #[inline]
+    /*#[inline]
     fn draw_rows(&mut self) {
         let (cols, rows) = self.settings.borrow().get_window_size();
 
@@ -696,9 +709,101 @@ impl Window {
 
         eprintln!("rows: {}", rows);
 
-    }
+    }*/
 
-    fn draw_status_bar(&mut self) {
+    fn draw_rows(&mut self) {
+        //let (cols, rows) = self.settings.borrow().get_window_size();
+
+        //let rows = rows.saturating_sub(1);
+
+        let cols = self.size.0;
+        let rows = self.size.1;
+
+
+        //eprintln!("panes: {}", self.panes.len());
+        //let panes = self.panes.len();
+
+        for l in 0..self.panes.len() {
+            for i in 0..rows {
+                let mut pane_index = 0;
+                let mut window_index = 0;
+                while window_index < cols {
+                    if pane_index >= self.panes[l].len() {
+                        break;
+                    }
+                    let ((start_x, start_y), (end_x, end_y)) = self.panes[l][pane_index].get_corners();
+
+
+                    if self.text_layers[l].contents.len() <= i {
+                        self.text_layers[l].contents.push(LayerRow::new());
+                    }
+
+                    while window_index <= start_x {
+                        self.text_layers[l].contents[i].push(Some(None));
+                        window_index += 1;
+                    }
+                    
+                    if start_y <= i && end_y >= i {
+
+                        /*while window_index < start_x.saturating_sub(1) {
+                            self.text_layers[l].contents[i].push(None);
+                            window_index += 1;
+                        }*/
+
+                        /*while self.text_layers[l].contents[i].len() < start_x.saturating_sub(1) {
+                            self.text_layers[l].contents[i].push(None);
+                        }*/
+                        
+                        self.panes[l][pane_index].draw_row(i - start_y, &mut self.text_layers[l].contents[i]);
+                        window_index += end_x - start_x + 1;
+                        
+                    }
+                    else {
+                        if self.text_layers[l].contents.len() <= i {
+                            let mut text_row = LayerRow::new();
+                            text_row.extend(vec![None; cols]);
+                            self.text_layers[l].contents.push(text_row);
+                        }
+                    }
+                    pane_index += 1;
+                }
+
+                while self.text_layers[l].contents.len() <= i {
+                    self.text_layers[l].contents.push(LayerRow::new());
+                }
+
+                while self.text_layers[l].contents[i].len() < cols {
+                    self.text_layers[l].contents[i].push(Some(None));
+                }
+
+                let color_settings = &self.settings.borrow().colors.pane;
+
+                if l == 0 {
+                    self.text_layers[l].contents[i].push(Some(Some(StyledChar::new('\r', color_settings.clone()))));
+                    self.text_layers[l].contents[i].push(Some(Some(StyledChar::new('\n', color_settings.clone()))));
+
+
+                }
+
+
+            }
+
+
+        }
+
+        self.compositor.merge(&mut self.text_layers);
+
+        self.compositor.draw(&mut self.contents);
+
+        self.compositor.clear();
+        for buffer in self.text_layers.iter_mut() {
+            buffer.clear();
+        }
+        
+    }
+    
+
+    /*fn draw_status_bar(&mut self) {
 
 
         let current_layer = self.panes[self.active_layer][self.active_panes[self.active_layer]].draw_status();
@@ -743,7 +848,41 @@ impl Window {
         for chr in second.chars() {
             self.text_layers[0][row].push(Some(Some(StyledChar::new(chr, color_settings.clone()))));
         }
+}*/
+
+    pub fn draw_status_bar(&mut self) {
+
+        let (cols, rows) = self.settings.borrow().get_window_size();
+        //Self::clear_screen().unwrap();
+        queue!(
+            self.contents,
+            terminal::Clear(ClearType::UntilNewLine),
+        ).unwrap();
+
+        let settings = self.settings.borrow();
+        
+        let color_settings = &settings.colors.bar;
+
+        let (name, first, second) = self.panes[0][self.active_panes[0]].get_status();
+        let total = name.len() + 1 + first.len() + second.len();// plus one for the space
+
+        let mode_color = &settings.colors.mode.get(&name).unwrap_or(&color_settings);
+
+        self.contents.push(apply_colors!(format!("{}", name), mode_color));
+
+        self.contents.push(apply_colors!(" ".to_owned(), color_settings));
+
+
+        self.contents.push(apply_colors!(first, color_settings));
+        
+        let remaining = cols.saturating_sub(total);
+
+        self.contents.push(apply_colors!(" ".repeat(remaining), color_settings));
+
+
+        self.contents.push(apply_colors!(second, color_settings));
     }
+    
 
     fn write(&mut self) {
         eprintln!("{}", self.panes.len());
@@ -754,18 +893,116 @@ impl Window {
     }
 
 
-    pub fn draw(&mut self, compositor: &mut Compositor) {
-
-        self.write();
-        eprintln!("Merging");
-        compositor.merge(&mut self.text_layers);
+    pub fn draw(&mut self) {
 
 
-        for buffer in self.text_layers.iter_mut() {
-            buffer.clear();
+        for layer in self.panes.iter_mut() {
+            for pane in layer.iter_mut() {
+                pane.refresh();
+            }
         }
 
+        queue!(
+            self.contents,
+            //terminal::Clear(ClearType::All),
+            cursor::Hide,
+            cursor::MoveTo(0, 0),
+        ).unwrap();
+
+        //self.write();
+
+        self.draw_rows();
+
+        self.draw_status_bar();
+
+        queue!(
+            self.contents,
+            cursor::MoveTo(0, 0),
+            cursor::Show,
+        ).unwrap();
+
+        self.contents.flush().unwrap();
+        //eprintln!("Merging");
+        //compositor.merge(&mut self.text_layers);
+
+
+        /*for buffer in self.text_layers.iter_mut() {
+            buffer.clear();
+        }*/
+
     }
+
+    pub fn refresh_screen(&mut self) -> io::Result<()> {
+        
+
+        /*if !self.contents.will_change() {
+            return Ok(());
+        }*/
+
+        for layer in self.panes.iter_mut() {
+            for pane in layer.iter_mut() {
+                pane.refresh();
+                //pane.scroll_cursor();
+            }
+        }
+
+        //self.panes[self.active_layer][self.active_panes[self.active_layer]].refresh();
+
+        match self.panes.get_mut(self.active_layer) {
+            None => {},
+            Some(layer) => {
+                match layer.get_mut(self.active_panes[self.active_layer]) {
+                    None => {},
+                    Some(pane) => {
+                        pane.refresh();
+                        //pane.scroll_cursor();
+                    }
+                }
+            }
+        }//[self.active_panes[self.active_layer]].scroll_cursor();
+
+        queue!(
+            self.contents,
+            cursor::Hide,
+            cursor::MoveTo(0, 0),
+        )?;
+
+        //eprintln!("drawing rows");
+        self.draw_rows();
+        //eprintln!("drawing status bar");
+        self.draw_status_bar();
+
+        //let cursor = self.panes[0][self.active_panes[self.active_layer]].get_cursor_coords().unwrap();
+        //let cursor = cursor.borrow();
+
+        let (x, y) = self.panes[0][self.active_panes[self.active_layer]].get_cursor_coords().unwrap();
+        //eprintln!("x: {} y: {}", x, y);
+        let x = x + self.panes[0][self.active_panes[self.active_layer]].get_position().0;
+        let y = y + self.panes[0][self.active_panes[self.active_layer]].get_position().1;
+        //eprintln!("x: {} y: {}", x, y);
+
+        
+        let x = x;// + cursor.number_line_size;
+
+        /*let (x, y) = if cursor.ignore_offset {
+            cursor.get_draw_cursor()
+        }
+        else {
+            (x, y)
+        };*/
+
+        queue!(
+            self.contents,
+            cursor::MoveTo(x as u16, y as u16),
+            cursor::Show,
+        )?;
+
+
+        
+
+        self.contents.flush()
+    }
+    
 
 
     pub fn get_cursor_coords(&self) -> Option<(usize, usize)> {
@@ -802,6 +1039,64 @@ impl Window {
             return Ok(false);
         }
         
+    }
+
+
+    fn process_event(&mut self) -> io::Result<Event> {
+        loop {
+            if event::poll(Duration::from_millis(3000))? {
+                return event::read();
+            }
+        }
+    }
+
+    pub fn run(&mut self) -> io::Result<bool> {
+        //eprintln!("Running");
+        
+        //self.refresh_screen()?;
+        //self.read_messages()?;
+        self.remove_panes();
+        if self.panes[0].len() == 0 {
+            eprintln!("No panes left");
+            self.editor_sender.send(EditorMessage::CloseWindow).unwrap();
+            return Ok(false);
+        }
+
+        self.refresh_screen()?;
+        let ((x1, y1), (x2, y2)) = self.panes[0][self.active_panes[0]].get_corners();
+
+        if x1 == x2 || y1 == y2 {
+            eprintln!("Pane is too small");
+            //eprintln!("x1: {}, x2: {}, y1: {}, y2: {}", x1, x2, y1, y2);
+            self.editor_sender.send(EditorMessage::CloseWindow).unwrap();
+            return Ok(false);
+        }
+
+        /*if self.skip {
+            self.skip = false;
+            return Ok(true);
+        }*/
+
+        
+        self.panes[self.active_layer][self.active_panes[self.active_layer]].reset();
+        
+        //eprintln!("Getting Event");
+        let event = self.process_event()?;
+        match event {
+            Event::Key(key) => {
+                self.process_keypress(key)?;
+                Ok(true)
+            },
+            Event::Resize(width, height) => {
+                self.resize((width as usize, height as usize));
+
+                self.refresh_screen()?;
+                
+                Ok(true)
+            }
+            _ => {
+                Ok(true)},
+        }
     }
 
     pub fn refresh(&mut self) {

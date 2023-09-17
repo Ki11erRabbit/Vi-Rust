@@ -178,7 +178,7 @@ impl Editor {
 
     #[inline]
     fn write(&mut self) {
-        self.windows[self.active_window].draw(&mut self.compositor);
+        //self.windows[self.active_window].draw(&mut self.compositor);
     }
     
 
@@ -186,14 +186,14 @@ impl Editor {
     fn draw(&mut self) {
 
         self.write();
-        self.compositor.draw(&mut self.output_buffer);
+        /*self.compositor.draw(&mut self.output_buffer);
         //self.compositor.merge(&mut self.text_layers);
         
         queue!(
             self.output_buffer,
             //terminal::Clear(ClearType::UntilNewLine),
             terminal::Clear(terminal::ClearType::All),
-        ).unwrap();
+        ).unwrap();*/
         
     }
 
@@ -218,25 +218,25 @@ impl Editor {
         //Self::clear_screen()?;
         self.draw();
 
-        queue!(
+        /*queue!(
             self.output_buffer,
             Hide,
             MoveTo(0, 0),
-        )?;
+        )?;*/
 
 
         let cursor = self.get_cursor_coords();
 
-        if let Some((x, y)) = cursor {
+        /*if let Some((x, y)) = cursor {
             queue!(
                 self.output_buffer,
                 MoveTo(x as u16, y as u16),
                 Show,
             )?;
-        }
+        }*/
 
-        
-        self.output_buffer.flush()
+        Ok(())
+        //self.output_buffer.flush()
     }
 
     fn process_event(&mut self) -> io::Result<Event> {
@@ -260,7 +260,7 @@ impl Editor {
 
 
     pub fn run(&mut self) -> io::Result<bool> {
-        if self.windows[self.active_window].can_close()? {
+        /*if self.windows[self.active_window].can_close()? {
             self.windows.remove(self.active_window);
             self.window_senders.remove(self.active_window);
             self.active_window = self.active_window.saturating_sub(1);
@@ -292,9 +292,9 @@ impl Editor {
                 Ok(true)
             },
             _ => Ok(true),
-        }
+    }*/
 
-
+        self.windows[self.active_window].run()
     }
 
 
