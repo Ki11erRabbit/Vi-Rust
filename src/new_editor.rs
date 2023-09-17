@@ -188,6 +188,13 @@ impl Editor {
         self.write();
         self.compositor.draw(&mut self.output_buffer);
         //self.compositor.merge(&mut self.text_layers);
+        
+        queue!(
+            self.output_buffer,
+            //terminal::Clear(ClearType::UntilNewLine),
+            terminal::Clear(terminal::ClearType::All),
+        ).unwrap();
+        
     }
 
 
@@ -197,10 +204,6 @@ impl Editor {
 
     pub fn clear_screen() -> io::Result<()> {
 
-        queue!(
-            std::io::stdout(),
-            terminal::Clear(ClearType::UntilNewLine),
-        ).unwrap();
         //execute!(std::io::stdout(), terminal::Clear(terminal::ClearType::All))
         //execute!(std::io::stdout(), cursor::MoveTo(0, 0))
         Ok(())
@@ -212,6 +215,8 @@ impl Editor {
 
         
         self.windows[self.active_window].refresh();
+        //Self::clear_screen()?;
+        self.draw();
 
         queue!(
             self.output_buffer,
@@ -219,9 +224,6 @@ impl Editor {
             MoveTo(0, 0),
         )?;
 
-        Self::clear_screen()?;
-        self.draw();
-        self.output_buffer.flush()?;
 
         let cursor = self.get_cursor_coords();
 
@@ -234,7 +236,7 @@ impl Editor {
         }
 
         
-        Ok(())
+        self.output_buffer.flush()
     }
 
     fn process_event(&mut self) -> io::Result<Event> {
@@ -674,7 +676,7 @@ impl Compositor {
                 output.push(self.contents[y][x].style());
             }
         }
-        //eprintln!("Cols: {}, Rows: {}", cols, rows);
+        eprintln!("Cols: {}, Rows: {}", cols, rows);
         //eprintln!("{:#?}", self);
         self.clear();
     }

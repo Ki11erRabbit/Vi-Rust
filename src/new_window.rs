@@ -634,7 +634,7 @@ impl Window {
     fn draw_rows(&mut self) {
         let (cols, rows) = self.settings.borrow().get_window_size();
 
-        let rows = rows.saturating_sub(0);
+        let rows = rows.saturating_sub(2);
 
 
         for l in 0..self.panes.len() {
@@ -694,6 +694,7 @@ impl Window {
 
         }
 
+        eprintln!("rows: {}", rows);
 
     }
 
@@ -716,9 +717,11 @@ impl Window {
 
         let row = rows.saturating_sub(1);
 
-        if row >= self.text_layers[0].contents.len() {
+        while rows > self.text_layers[0].contents.len() {
             self.text_layers[0].contents.push(LayerRow::new());
         }
+
+        eprintln!("len: {}", self.text_layers[0].contents.len());
 
         let settings = self.settings.borrow();
 
@@ -746,7 +749,7 @@ impl Window {
         eprintln!("{}", self.panes.len());
         self.draw_rows();
 
-        //self.draw_status_bar();
+        self.draw_status_bar();
         
     }
 
@@ -754,6 +757,7 @@ impl Window {
     pub fn draw(&mut self, compositor: &mut Compositor) {
 
         self.write();
+        eprintln!("Merging");
         compositor.merge(&mut self.text_layers);
 
 
