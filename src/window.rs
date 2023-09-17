@@ -890,6 +890,37 @@ impl Window {
         }
     }
 
+    pub fn can_continue(&mut self) -> io::Result<bool> {
+        self.read_messages()?;
+        self.remove_panes();
+        if self.panes[0].len() == 0 {
+            eprintln!("No panes left");
+            self.editor_sender.send(EditorMessage::CloseWindow).unwrap();
+            return Ok(false);
+        }
+
+        let ((x1, y1), (x2, y2)) = self.panes[0][self.active_panes[0]].get_corners();
+
+        if x1 == x2 || y1 == y2 {
+            eprintln!("Pane is too small");
+            //eprintln!("x1: {}, x2: {}, y1: {}, y2: {}", x1, x2, y1, y2);
+            self.editor_sender.send(EditorMessage::CloseWindow).unwrap();
+            return Ok(false);
+        }
+
+        Ok(true)
+    }
+
+    pub fn skip_event(&mut self) -> bool {
+        let skip = self.skip;
+        self.skip = false;
+        skip
+    }
+
+    pub fn reset_active_pane(&mut self) {
+        self.panes[self.active_layer][self.active_panes[self.active_layer]].reset();
+    }
+
 
     pub fn run(&mut self) -> io::Result<bool> {
         //eprintln!("Running");
@@ -928,7 +959,7 @@ impl Window {
                 self.process_keypress(key)
             },
             Event::Resize(width, height) => {
-                self.resize(width, height);
+                //self.resize(width, height);
 
                 self.refresh_screen()?;
                 
@@ -939,7 +970,7 @@ impl Window {
         }
     }
 
-    fn resize(&mut self, width: u16, height: u16) {
+    pub fn resize(&mut self, width: usize, height: usize) {
         self.size = (width as usize, height as usize - 1);
         for pane in self.panes[self.active_layer].iter_mut() {
             pane.resize((width as usize, height as usize));

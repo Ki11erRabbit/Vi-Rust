@@ -1,6 +1,6 @@
 use std::{io, sync::mpsc::{Receiver, Sender}, cell::RefCell, rc::Rc, thread, time::Duration};
 
-use crossterm::{terminal, execute, cursor::{SetCursorStyle, MoveTo}};
+use crossterm::{terminal, execute, cursor::{SetCursorStyle, MoveTo}, event::{Event, self}};
 
 use crate::{window::{Window, WindowMessage}, pane::Pane, lsp::{LspControllerMessage, LspController}, registers::{Registers, RegisterUtils}, Mailbox, settings::Settings};
 
@@ -264,16 +264,65 @@ impl Editor {
         }
     }
 
+    fn resize(&mut self, size: (usize, usize)) -> io::Result<()> {
+        for window in &mut self.windows {
+            window.resize(size.0, size.1);
+        }
+        Ok(())
+    }
+
+    fn process_event(&mut self) -> io::Result<Event> {
+        //self.refresh_screen()?;
+        loop {
+            if event::poll(self.poll_duration)? {
+                return event::read();
+            }
+        }
+    }
+
+
     pub fn run(&mut self) -> io::Result<bool> {
         self.check_messages()?;
+
+        if !self.windows[self.active_window].can_continue()? {
+            self.windows.remove(self.active_window);
+            self.active_window = self.active_window.saturating_sub(1);
+        }
 
         if self.windows.is_empty() {
             //eprintln!("No windows left, quitting");
             return Ok(false);
         }
+
+        self.windows[self.active_window].refresh_screen()?;
+
+
+        self.windows[self.active_window].reset_active_pane();
+
+        let event = self.process_event()?;
+        match event {
+            Event::Key(key) => {
+                if self.windows[self.active_window].skip_event() {
+                    return Ok(true);
+                }
+
+                self.windows[self.active_window].process_keypress(key)?;
+                Ok(true)
+            },
+            Event::Resize(width, height) => {
+                self.resize((width as usize, height as usize))?;
+
+                Ok(true)
+            },
+            _ => {
+                //eprintln!("Unhandled event: {:?}", event);
+                Ok(true)
+            },
+
+        }
         
-        self.windows[self.active_window].run()?;
-        Ok(true)
+        //self.windows[self.active_window].run()?;
+        //Ok(true)
     }
 
 
