@@ -175,6 +175,7 @@ impl Editor {
 
     }
 
+
     #[inline]
     fn write(&mut self) {
         self.windows[self.active_window].draw(&mut self.compositor);
@@ -185,6 +186,7 @@ impl Editor {
     fn draw(&mut self) {
 
         self.write();
+        self.compositor.draw(&mut self.output_buffer);
         //self.compositor.merge(&mut self.text_layers);
     }
 
@@ -194,15 +196,20 @@ impl Editor {
     }
 
     pub fn clear_screen() -> io::Result<()> {
-        execute!(std::io::stdout(), terminal::Clear(terminal::ClearType::All))
+
+        queue!(
+            std::io::stdout(),
+            terminal::Clear(ClearType::UntilNewLine),
+        ).unwrap();
+        //execute!(std::io::stdout(), terminal::Clear(terminal::ClearType::All))
         //execute!(std::io::stdout(), cursor::MoveTo(0, 0))
+        Ok(())
     }
 
     /// This function is called every time we want to redraw the screen
     /// We also move or hide the cursor here
     fn refresh_screen(&mut self) -> io::Result<()> {
 
-        //Self::clear_screen()?;
         
         self.windows[self.active_window].refresh();
 
@@ -212,7 +219,9 @@ impl Editor {
             MoveTo(0, 0),
         )?;
 
+        Self::clear_screen()?;
         self.draw();
+        self.output_buffer.flush()?;
 
         let cursor = self.get_cursor_coords();
 
@@ -224,10 +233,8 @@ impl Editor {
             )?;
         }
 
-        self.compositor.draw(&mut self.output_buffer);
         
-        self.output_buffer.flush()
-
+        Ok(())
     }
 
     fn process_event(&mut self) -> io::Result<Event> {
