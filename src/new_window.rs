@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc, sync::mpsc::{Receiver, Sender}, collections::Ha
 use crossterm::event::KeyEvent;
 use uuid::Uuid;
 
-use crate::{new_editor::{TextLayer, Compositor, StyledChar}, editor::{RegisterType, EditorMessage}, settings::Settings, lsp::LspControllerMessage, treesitter::tree_sitter_scheme, Mailbox, window::TextRow, new_pane::{PaneContainer, text_pane::TextPane, Pane, TextBuffer}};
+use crate::{new_editor::{TextLayer, Compositor, StyledChar}, new_editor::{RegisterType, EditorMessage, LayerRow}, settings::Settings, lsp::LspControllerMessage,  Mailbox, new_pane::{PaneContainer, text_pane::TextPane, Pane, TextBuffer}};
 
 
 
@@ -169,7 +169,7 @@ impl Window {
                                      self.lsp_sender.clone(),
                                      self.lsp_listener.clone());
 
-        pane.open_file(&path)?;
+        pane.open_file(path)?;
 
         let pane = Rc::new(RefCell::new(pane));
 
@@ -203,11 +203,13 @@ impl Window {
 
         };
 
+        let id = container.get_id();
+
         self.panes[self.active_panes[self.active_layer]].push(container);
 
         let pos = (self.active_layer, self.panes[self.active_panes[self.active_layer]].len() - 1);
 
-        self.id_to_pane.insert(container.get_id(), pos);
+        self.id_to_pane.insert(id, pos);
 
         pos
     }
@@ -231,23 +233,26 @@ impl Window {
 
     fn switch_pane(&mut self, (layer, index): (usize, usize), location: Option<(usize, usize)>) {
 
-        let new_active_container = &mut self.panes[self.active_panes[layer]][index];
-
-        let old_active_container = &mut self.panes[self.active_panes[self.active_layer]][self.active_panes[self.active_layer]];
 
 
-        let active_pane = new_active_container.get_pane().clone();
-        let new_active_pane = new_active_container.get_pane().clone();
+        let active_pane = self.panes[self.active_panes[self.active_layer]]
+            [self.active_panes[self.active_layer]]
+            .get_pane()
+            .clone();
+        let new_active_pane = self.panes[self.active_panes[layer]][index].get_pane().clone();
 
         active_pane.borrow_mut().reset();
 
-        old_active_container.change_pane(new_active_pane);
-        new_active_container.change_pane(active_pane);
+        self.panes[self.active_panes[self.active_layer]]
+            [self.active_panes[self.active_layer]]
+            .change_pane(new_active_pane);
+        self.panes[self.active_panes[layer]][index].change_pane(active_pane);
 
 
 
         if let Some(location) = location {
-           old_active_container.set_location(location);
+           self.panes[self.active_panes[self.active_layer]]
+            [self.active_panes[self.active_layer]].set_location(location);
         }
     }
 
@@ -628,7 +633,7 @@ impl Window {
 
 
                     if self.text_layers[l].contents.len() <= i {
-                        self.text_layers[l].contents.push(TextRow::new());
+                        self.text_layers[l].contents.push(LayerRow::new());
                     }
 
                     while window_index <= start_x {
@@ -644,7 +649,7 @@ impl Window {
                     }
                     else {
                         if self.text_layers[l].contents.len() <= i {
-                            let mut text_row = TextRow::new();
+                            let mut text_row = LayerRow::new();
                             text_row.extend(vec![None; cols]);
                             self.text_layers[l].contents.push(text_row);
                         }
@@ -653,7 +658,7 @@ impl Window {
                 }
 
                 while self.text_layers[l].contents.len() <= i {
-                    self.text_layers[l].contents.push(TextRow::new());
+                    self.text_layers[l].contents.push(LayerRow::new());
                 }
 
                 while self.text_layers[l].contents[i].len() < cols {
@@ -738,24 +743,25 @@ impl Window {
         self.panes[self.active_layer][self.active_panes[self.active_layer]].process_keypress(key)
     }
 
-    pub fn can_close(&mut self) -> bool {
+    pub fn can_close(&mut self) -> io::Result<bool> {
 
         self.remove_panes();
 
         if !self.check_messages()? {
-            return true;
-        }
+            return Ok(true);
+        } 
+        
 
         if self.panes[0].len() == 0 {
-            return true;
+            return Ok(true);
         }
 
         let ((x1, y1), (x2, y2)) = self.panes[0][self.active_panes[0]].get_corners();
 
         if x1 == x2 && y1 == y2 {
-            return true;
+            return Ok(true);
         } else {
-            return false;
+            return Ok(false);
         }
         
     }

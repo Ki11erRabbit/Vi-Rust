@@ -99,7 +99,9 @@ impl PaneContainer {
         self.pane.borrow().get_status(self)
     }
 
-    
+    pub fn get_settings(&self) -> Rc<RefCell<Settings>> {
+        self.settings.clone()
+    }
 
     pub fn get_corners(&self) -> ((usize, usize), (usize, usize)) {
         let (x, y) = self.position;
@@ -115,8 +117,8 @@ impl PaneContainer {
         self.duplicate
     }
 
-    pub fn get_name(&self) -> &str {
-        self.pane.borrow().get_name()
+    pub fn get_name(&self) -> String {
+        self.pane.borrow().get_name().to_string()
     }
 
     pub fn get_size(&self) -> (usize, usize) {
@@ -142,7 +144,8 @@ impl PaneContainer {
     }
 
     pub fn refresh(&mut self) {
-        self.pane.borrow_mut().refresh(self);
+        let pane = self.pane.clone();
+        pane.borrow_mut().refresh(self);
     }
 
     pub fn get_cursor_coords(&self) -> Option<(usize, usize)> {
@@ -156,7 +159,8 @@ impl PaneContainer {
 
     pub fn process_keypress(&mut self, key: KeyEvent) -> io::Result<()> {
         let pane = self.pane.clone();
-        pane.borrow_mut().process_keypress(key, self)
+        let x = pane.borrow_mut().process_keypress(key, self);
+        x
     }
 
     pub fn draw_status(&self) -> bool {
@@ -392,13 +396,17 @@ pub trait Pane {
     fn resize(&mut self, size: (usize, usize));
 
     fn set_location(&mut self, location: (usize, usize));
+
+    fn get_settings(&self) -> Rc<RefCell<Settings>>;
+
+    fn change_mode(&mut self, mode: &str);
 }
 
 
 pub trait TextBuffer: Pane {
     
     fn save_buffer(&mut self) -> io::Result<()>;
-    fn open_file(&mut self, filename: &PathBuf) -> io::Result<()>;
+    fn open_file(&mut self, filename: PathBuf) -> io::Result<()>;
     fn backup_buffer(&mut self);
 
     fn insert_newline(&mut self) {

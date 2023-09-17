@@ -2,10 +2,9 @@ use std::{io, collections::HashMap, rc::Rc, cell::RefCell, time::Instant};
 
 use crossterm::{event::{KeyEvent, KeyCode, KeyModifiers}, execute, cursor::{SetCursorStyle, MoveTo}, terminal};
 
-use crate::{pane::{Pane, PaneContainer}, cursor::{Direction, Cursor}, settings::{Keys, Key}};
+use crate::{new_pane::{Pane, PaneContainer}, cursor::{Direction, Cursor}, settings::{Keys, Key}};
 
-use crate::mode::Mode;
-
+use crate::mode::Mode; 
 
 pub struct Normal {
     number_buffer: String,
@@ -126,7 +125,7 @@ impl Mode for Normal {
             "insert_text" => {
                 let text = command_args.collect::<Vec<&str>>().join(" ");
 
-                pane.insert_str(&text);
+                //pane.insert_str(&text);
                 
             },
             "copy_line" => {
@@ -249,7 +248,8 @@ impl Mode for Normal {
     }
 
     fn update_status(&mut self, pane: &dyn Pane, _container: &PaneContainer) -> (String, String, String){
-        let (row, col) = pane.get_cursor().borrow().get_cursor();
+        //let (row, col) = pane.get_cursor().borrow().get_cursor();
+        let (row, col) = (0, 0);
 
 
         let mut first = format!("{}:{}", col + 1, row + 1);
@@ -313,22 +313,22 @@ impl Insert {
     }*/
 
     fn insert_newline(&self, pane: &mut dyn Pane) -> io::Result<bool> {
-        pane.insert_newline();
-        pane.changed();
+        /*pane.insert_newline();
+        pane.changed();*/
         Ok(true)
     }
     fn delete_char(&self, pane: &mut dyn Pane) -> io::Result<bool> {
-        pane.delete_char();
-        pane.changed();
+        /*pane.delete_char();
+        pane.changed();*/
         Ok(true)
     }
     fn backspace(&self, pane: &mut dyn Pane) -> io::Result<bool> {
-        pane.backspace_char();
-        pane.changed();
+        /*pane.backspace_char();
+        pane.changed();*/
         Ok(true)
     }
     fn insert_char(&self, pane: &mut dyn Pane, c: char) -> io::Result<bool> {
-        pane.changed();
+        /*pane.changed();
         if pane.get_settings().borrow().editor_settings.use_spaces && c == '\t' {
             pane.insert_str(&" ".repeat(pane.get_settings().borrow().editor_settings.tab_size));
         } else {
@@ -342,7 +342,7 @@ impl Insert {
             cursor.move_cursor(Direction::Right, tab_size, &mut *pane);
         } else {
             cursor.move_cursor(Direction::Right, 1, &mut *pane);
-        }
+        }*/
         Ok(true)
     }
 }
@@ -490,7 +490,8 @@ impl Mode for Insert {
     }
 
     fn update_status(&mut self, pane: &dyn Pane, container: &PaneContainer) -> (String, String, String) {
-        let (row, col) = pane.get_cursor().borrow().get_cursor();
+        //let (row, col) = pane.get_cursor().borrow().get_cursor();
+        let (row, col) = (0, 0);
 
         let first = format!("{}:{}", col + 1, row + 1);
         
@@ -539,7 +540,7 @@ impl Command {
 
     fn backup_cursor(&mut self, pane: &dyn Pane) {
         if self.cursor_location.is_none() {
-            self.cursor_location = Some(*pane.get_cursor().borrow());
+            //self.cursor_location = Some(*pane.get_cursor().borrow());
         }
     }
 
@@ -562,13 +563,13 @@ impl Mode for Command {
         
         let cursor = pane.get_cursor();
         
-        let mut cursor = cursor.borrow_mut();
+        /*let mut cursor = cursor.borrow_mut();
         cursor.number_line_size = 0;
         cursor.ignore_offset = true;
 
         let offset = self.get_name().len() + 2;// + 1 for the space and + 1 for the colon
 
-        cursor.set_draw_cursor(offset + self.edit_pos, terminal::size().unwrap().1 as usize);
+        cursor.set_draw_cursor(offset + self.edit_pos, terminal::size().unwrap().1 as usize);*/
         
         let first = format!(":{}", self.command);
         
@@ -588,11 +589,11 @@ impl Mode for Command {
         execute!(io::stdout(), SetCursorStyle::BlinkingBlock).unwrap();
         let (x, y) = cursor.get_real_cursor();
 
-        if !pane.get_cursor().borrow().jumped {
+        /*if !pane.get_cursor().borrow().jumped {
             *pane.get_cursor().borrow_mut() = cursor;
-        }
+        }*/
 
-        pane.get_cursor().borrow_mut().ignore_offset = false;
+        //pane.get_cursor().borrow_mut().ignore_offset = false;
 
         execute!(io::stdout(), MoveTo(x as u16,y as u16)).unwrap();
         

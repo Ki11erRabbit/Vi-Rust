@@ -9,7 +9,7 @@ use std::{io, collections::HashMap};
 
 use crossterm::event::KeyEvent;
 
-use crate::{new_pane::{Pane, PaneContainer}, settings::Keys, window::StyledChar};
+use crate::{new_pane::{Pane, PaneContainer}, settings::Keys, new_editor::StyledChar};
 
 
 

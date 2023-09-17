@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::{mpsc::{Sender, Receiver, TryRecvError}, Arc}, collections::{HashSet, HashMap}, rc::Rc, cell::RefCell, io, fs::File};
+use std::{path::PathBuf, sync::{mpsc::{Sender, Receiver, TryRecvError}, Arc}, collections::{HashSet, HashMap}, rc::Rc, cell::RefCell, io::{self, Write, BufReader, Read}, fs::File};
 
 use tree_sitter::{Tree, Parser};
 
@@ -236,12 +236,23 @@ impl TextPane {
         }
         
     }
+
+    fn set_changed(&mut self, changed: bool) {
+        self.text_changed = changed;
+    }
+
+    fn get_byte_offset(&self) -> Option<usize> {
+        let (x, y) = self.cursor.borrow().get_cursor();
+
+        self.contents.get_byte_offset(x, y)
+    }
+    
 }
 
 
 
 impl Pane for TextPane {
-    fn draw_row(&self, index: usize, container: &super::PaneContainer, output: &mut crate::new_editor::LayerRow) {
+    fn draw_row(&self, mut index: usize, container: &super::PaneContainer, output: &mut crate::new_editor::LayerRow) {
         let cols = container.get_size().0;
 
 
@@ -371,7 +382,7 @@ impl Pane for TextPane {
             return;
         }
 
-        if let Some(row) = self.get_row(real_row, col_offset, cols) {
+        if let Some(row) = self.contents.get_row(real_row, col_offset, cols) {
             let mut count = 0;
             row.chars().for_each(|c| if count != (cols - num_width) {
                 match c {
@@ -437,7 +448,7 @@ impl Pane for TextPane {
         let mode = self.mode.clone();
         let result = mode.borrow_mut().process_keypress(key, self, container);
 
-        result
+        Ok(())
     }
 
     fn get_status(&self, container: &super::PaneContainer) -> (String, String, String) {
@@ -472,9 +483,9 @@ impl Pane for TextPane {
         let command = command_args.next().unwrap_or("");
         match command {
             "q" => {
-                if self.changed {
+                if self.text_changed {
                 } else {
-                    self.sender.send(WindowMessage::ClosePane(false, None)).unwrap();
+                    self.window_sender.send(WindowMessage::ClosePane(false, None)).unwrap();
                 }
             },
             "w" => {
@@ -484,6 +495,7 @@ impl Pane for TextPane {
 
                 self.save_buffer().expect("Failed to save file");
                 self.contents.add_new_rope();
+                self.text_changed = false;
             },
             "w!" => {
                 if let Some(file_name) = command_args.next() {
@@ -492,13 +504,14 @@ impl Pane for TextPane {
 
                 self.save_buffer().expect("Failed to save file");
                 self.contents.add_new_rope();
+                self.text_changed = false;
             },
             "wq" => {
                 self.save_buffer().expect("Failed to save file");
-                self.sender.send(WindowMessage::ClosePane(false, None)).unwrap();
+                self.window_sender.send(WindowMessage::ClosePane(false, None)).unwrap();
             },
             "q!" => {
-                self.sender.send(WindowMessage::ClosePane(false, None)).unwrap();
+                self.window_sender.send(WindowMessage::ClosePane(false, None)).unwrap();
             },
             "move" => {
                 let direction = command_args.next();
@@ -580,35 +593,35 @@ impl Pane for TextPane {
                 
             },
             "horizontal_split" => {
-                self.sender.send(WindowMessage::HorizontalSplit).expect("Failed to send message");
+                self.window_sender.send(WindowMessage::HorizontalSplit).expect("Failed to send message");
                 self.contents.add_new_rope();
             },
             "vertical_split" => {
-                self.sender.send(WindowMessage::VerticalSplit).expect("Failed to send message");
+                self.window_sender.send(WindowMessage::VerticalSplit).expect("Failed to send message");
                 self.contents.add_new_rope();
             },
             "qa!" => {
-                self.sender.send(WindowMessage::ForceQuitAll).expect("Failed to send message");
+                self.window_sender.send(WindowMessage::ForceQuitAll).expect("Failed to send message");
             },
             "pane_up" => {
-                self.sender.send(WindowMessage::PaneUp).expect("Failed to send message");
+                self.window_sender.send(WindowMessage::PaneUp).expect("Failed to send message");
                 self.contents.add_new_rope();
             },
             "pane_down" => {
-                self.sender.send(WindowMessage::PaneDown).expect("Failed to send message");
+                self.window_sender.send(WindowMessage::PaneDown).expect("Failed to send message");
                 self.contents.add_new_rope();
             },
             "pane_left" => {
-                self.sender.send(WindowMessage::PaneLeft).expect("Failed to send message");
+                self.window_sender.send(WindowMessage::PaneLeft).expect("Failed to send message");
                 self.contents.add_new_rope();
             },
             "pane_right" => {
-                self.sender.send(WindowMessage::PaneRight).expect("Failed to send message");
+                self.window_sender.send(WindowMessage::PaneRight).expect("Failed to send message");
                 self.contents.add_new_rope();
             },
             "e" => {
                 if let Some(file_name) = command_args.next() {
-                    self.sender.send(WindowMessage::OpenFile(file_name.to_string(), None)).expect("Failed to send message");
+                    self.window_sender.send(WindowMessage::OpenFile(file_name.to_string(), None)).expect("Failed to send message");
                 }
                 self.contents.add_new_rope();
             },
@@ -714,10 +727,10 @@ impl Pane for TextPane {
                 self.cursor.borrow_mut().number_line_size = self.contents.get_line_count();
 
             },
-            "change_tab" => {
+            /*"change_tab" => {
                 if let Some(tab) = command_args.next() {
                     if let Ok(tab) = tab.parse::<usize>() {
-                        self.sender.send(WindowMessage::NthTab(tab)).expect("Failed to send message");
+                        self.window_sender.send(WindowMessage::NthTab(tab)).expect("Failed to send message");
                     }
                     else {
                         match tab {
@@ -731,12 +744,12 @@ impl Pane for TextPane {
                         }
                     }
                 }
-            },
-            "open_tab" => {
+            },*/
+            /*"open_tab" => {
                 self.sender.send(WindowMessage::OpenNewTab).expect("Failed to send message");
-            },
+            },*/
             "open_tab_with_pane" => {
-                self.sender.send(WindowMessage::OpenNewTabWithPane).expect("Failed to send message");
+                self.window_sender.send(WindowMessage::OpenNewTabWithPane).expect("Failed to send message");
             },
             /*"paste" => {
                 
@@ -804,6 +817,25 @@ impl Pane for TextPane {
             _ => {}
         }
     }
+
+    fn resize(&mut self, size: (usize, usize)) {
+        //todo: resize cursor
+        todo!()
+    }
+
+    fn set_location(&mut self, location: (usize, usize)) {
+        //todo: set cursor location
+        todo!()
+    }
+
+    fn get_settings(&self) -> Rc<RefCell<Settings>> {
+        self.settings.clone()
+    }
+
+    fn change_mode(&mut self, mode: &str) {
+        let mode = self.modes.get(&mode.to_owned()).unwrap();
+        self.mode = mode.clone();
+    }
 }
 
 
@@ -818,13 +850,16 @@ impl TextBuffer for TextPane {
 
     fn open_file(&mut self, filename: PathBuf) -> std::io::Result<()> {
 
-        let file_type = filename.extension().and_then(|s| s.to_str()).unwrap_or("txt");
+        let file_type = filename.extension().and_then(|s| s.to_str()).unwrap_or("txt").to_string();
 
-        let file = File::from(filename);
-        self.contents = Buffer::from(file);
+        let file = File::open(filename.clone())?;
+        let mut file = BufReader::new(file);
+        let mut contents = String::new();
+        let _amount_read = file.read_to_string(&mut contents)?;
+        self.contents = Buffer::from(contents);
         self.file_name = Some(filename);
 
-        match file_type {
+        match file_type.as_str() {
             "scm" => {
                 let language = unsafe { tree_sitter_scheme() };
                 let mut  parser = Parser::new();
@@ -864,7 +899,7 @@ impl TextBuffer for TextPane {
                     }
                 }
 
-                let lsp_client = Some((self.lsp_sender.clone(), lsp_client));
+                let lsp_client = (self.lsp_sender.clone(), lsp_client);
 
                 let language = tree_sitter_rust::language();
                 let mut parser = Parser::new();
@@ -916,7 +951,7 @@ impl TextBuffer for TextPane {
                     }
                 }
 
-                let lsp_client = Some((self.lsp_sender.clone(), lsp_client));
+                let lsp_client = (self.lsp_sender.clone(), lsp_client);
 
                 let lsp_client = LspInfo::new(lsp_client);
 
@@ -957,7 +992,7 @@ impl TextBuffer for TextPane {
                     }
                 }
 
-                let lsp_client = Some((self.lsp_sender.clone(), lsp_client));
+                let lsp_client = (self.lsp_sender.clone(), lsp_client);
 
                 let lsp_client = LspInfo::new(lsp_client);
 
@@ -998,7 +1033,7 @@ impl TextBuffer for TextPane {
                     }
                 }
 
-                let lsp_client = Some((self.lsp_sender.clone(), lsp_client));
+                let lsp_client = (self.lsp_sender.clone(), lsp_client);
 
                 let lsp_client = LspInfo::new(lsp_client);
 
@@ -1050,7 +1085,7 @@ impl TextBuffer for TextPane {
                     }
                 }
 
-                let lsp_client = Some((self.lsp_sender.clone(), lsp_client));
+                let lsp_client = (self.lsp_sender.clone(), lsp_client);
 
                 let lsp_client = LspInfo::new(lsp_client);
 
@@ -1091,7 +1126,7 @@ impl TextBuffer for TextPane {
                     }
                 }
 
-                let lsp_client = Some((self.lsp_sender.clone(), lsp_client));
+                let lsp_client = (self.lsp_sender.clone(), lsp_client);
 
                 let lsp_client = LspInfo::new(lsp_client);
 
@@ -1132,7 +1167,7 @@ impl TextBuffer for TextPane {
                     }
                 }
 
-                let lsp_client = Some((self.lsp_sender.clone(), lsp_client));
+                let lsp_client = (self.lsp_sender.clone(), lsp_client);
 
                 let lsp_client = LspInfo::new(lsp_client);
 

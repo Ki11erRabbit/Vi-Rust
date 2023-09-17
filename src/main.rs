@@ -7,7 +7,7 @@ use crate::{new_editor::Editor, lsp::{LspController, LspControllerMessage}};
 pub mod mode;
 pub mod cursor;
 pub mod settings;
-pub mod pane;
+//pub mod pane;
 pub mod buffer;
 pub mod treesitter;
 //pub mod editor;

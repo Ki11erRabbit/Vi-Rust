@@ -2,7 +2,7 @@ use std::{collections::HashMap, io};
 
 use crossterm::event::KeyEvent;
 
-use crate::{pane::{PaneContainer, Pane}, window::StyledChar, settings::Keys};
+use crate::{new_pane::{PaneContainer, Pane}, new_editor::StyledChar, settings::Keys};
 
 use super::{Promptable, Mode};
 
@@ -27,7 +27,7 @@ impl Promptable for Info {
         let width = container.get_size().0;
 
 
-        let color_settings = container.settings.borrow().colors.popup.clone();
+        let color_settings = container.get_settings().borrow().colors.popup.clone();
 
         match self.body.get(row) {
             Some(None) => {

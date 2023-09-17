@@ -3,10 +3,10 @@ use std::{io, collections::HashMap, cell::RefCell, rc::Rc};
 use crossterm::event::{KeyEvent, KeyCode, KeyModifiers};
 use crossterm::style::Attribute;
 
-use crate::pane::PaneContainer;
+use crate::new_pane::PaneContainer;
 use crate::settings::{ColorScheme, Key};
-use crate::{mode::Mode, pane::Pane, settings::Keys};
-use crate::window::StyledChar;
+use crate::{mode::Mode, new_pane::Pane, settings::Keys};
+use crate::new_editor::StyledChar;
 
 use super::{Promptable, PromptType};
 
@@ -43,7 +43,7 @@ impl Promptable for Prompt {
         
         let prompt = &self.prompts.borrow()[self.current_prompt];
 
-        let color_settings = container.settings.borrow().colors.popup.clone();
+        let color_settings = container.get_settings().borrow().colors.popup.clone();
 
         match prompt {
             PromptType::Text(_,size,_) => {

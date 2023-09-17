@@ -1,4 +1,4 @@
-use core::fmt
+use core::fmt;
 use std::{collections::{HashMap, HashSet}, rc::Rc};
 
 use crossterm::{event::{KeyCode, KeyModifiers, KeyEvent}, style::{Attribute, Color}};
@@ -2284,6 +2284,8 @@ pub fn read_settings(settings_file: &str, mode_info: HashMap<String,Vec<String>>
     };
     
     Settings {
+        cols: 0,
+        rows: 0,
         editor_settings,
         mode_keybindings,
         colors,

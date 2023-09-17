@@ -15,8 +15,8 @@ use crossterm::{terminal, execute, event, queue};
 
 use crate::lsp::LspControllerMessage;
 use crate::new_window::WindowMessage;
-use crate::{apply_colors, Mailbox, cursor};
-use crate::pane::Pane;
+use crate::{apply_colors, Mailbox};
+use crate::new_pane::Pane;
 use crate::registers::Registers;
 use crate::settings::{ColorScheme, Settings};
 use crate::new_window::Window;
@@ -175,7 +175,7 @@ impl Editor {
 
     #[inline]
     fn write(&mut self) {
-        self.windows[self.active_window].draw(&mut self.output_buffer);
+        self.windows[self.active_window].draw(&mut self.compositor);
     }
     
 
@@ -183,13 +183,12 @@ impl Editor {
     fn draw(&mut self) {
 
         self.write();
-        self.compositor.merge(&mut self.text_layers);
+        //self.compositor.merge(&mut self.text_layers);
     }
 
 
     fn get_cursor_coords(&self) -> Option<(usize, usize)> {
-
-        self.panes[self.active_layer][self.active_panes[self.active_layer]].get_cursor_coords()
+        self.windows[self.active_window].get_cursor_coords()
     }
 
 
@@ -225,7 +224,7 @@ impl Editor {
 
     fn process_event(&mut self) -> io::Result<Event> {
         loop {
-            if event::poll(self.duration)? {
+            if event::poll(self.poll_duration)? {
                 return event::read();
             }
         }
@@ -244,7 +243,7 @@ impl Editor {
 
 
     pub fn run(&mut self) -> io::Result<bool> {
-        if self.windows[self.active_window].can_close() {
+        if self.windows[self.active_window].can_close()? {
             self.windows.remove(self.active_window);
             self.window_senders.remove(self.active_window);
             self.active_window = self.active_window.saturating_sub(1);
@@ -282,6 +281,21 @@ impl Editor {
     }
 
 
+    fn check_messages(&mut self) {
+
+    }
+
+
+}
+
+impl Drop for Editor {
+    fn drop(&mut self) {
+        terminal::disable_raw_mode().expect("Failed to disable raw mode");
+        execute!(std::io::stdout(), terminal::Clear(terminal::ClearType::All)).expect("Failed to clear terminal");
+        execute!(std::io::stdout(), MoveTo(0, 0)).expect("Failed to move cursor to 0, 0");
+        execute!(std::io::stdout(), terminal::LeaveAlternateScreen).expect("Failed to leave alternate screen");
+        execute!(io::stdout(), SetCursorStyle::DefaultUserShape).expect("Could not reset cursor style");
+    }
 }
 
 
@@ -789,7 +803,7 @@ impl io::Write for OutputBuffer {
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        let mut out;
+        let mut out = Ok(());
         for row in self.contents.iter() {
             out = row.write();
 

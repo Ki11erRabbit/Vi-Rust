@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Rc, collections::HashMap};
 
 use crossterm::{style::Attribute, event::{KeyEvent, KeyModifiers, KeyCode}};
 
-use crate::{settings::{Keys, Key}, pane::PaneContainer, window::StyledChar};
+use crate::{settings::{Keys, Key}, new_pane::PaneContainer, new_editor::StyledChar};
 
 use super::{PromptType, Promptable, Mode};
 
@@ -33,7 +33,7 @@ impl Promptable for DropDown {
 
         let mut buttons = self.buttons.borrow_mut();
 
-        let color_settings = container.settings.borrow().colors.popup.clone();
+        let color_settings = container.get_settings().borrow().colors.popup.clone();
 
         let button_str = match buttons.draw_button(row) {
             Some(s) => s,
@@ -78,7 +78,7 @@ impl Mode for DropDown {
         "Drop Down".to_string()
     }
 
-    fn process_keypress(&mut self, key: crossterm::event::KeyEvent, pane: &mut dyn crate::pane::Pane, container: &mut PaneContainer) -> std::io::Result<bool> {
+    fn process_keypress(&mut self, key: crossterm::event::KeyEvent, pane: &mut dyn crate::new_pane::Pane, container: &mut PaneContainer) -> std::io::Result<bool> {
 
         match key {
             KeyEvent {
@@ -105,10 +105,10 @@ impl Mode for DropDown {
         }
     }
 
-    fn change_mode(&mut self, _name: &str, _pane: &mut dyn crate::pane::Pane, _container: &mut PaneContainer) {
+    fn change_mode(&mut self, _name: &str, _pane: &mut dyn crate::new_pane::Pane, _container: &mut PaneContainer) {
     }
 
-    fn update_status(&mut self, _pane: &dyn crate::pane::Pane, _container: &PaneContainer) -> (String, String, String) {
+    fn update_status(&mut self, _pane: &dyn crate::new_pane::Pane, _container: &PaneContainer) -> (String, String, String) {
         (String::new(), String::new(), String::new())
     }
 
@@ -122,7 +122,7 @@ impl Mode for DropDown {
     fn flush_key_buffer(&mut self) {
     }
 
-    fn execute_command(&mut self, command: &str, pane: &mut dyn crate::pane::Pane, container: &mut PaneContainer) {
+    fn execute_command(&mut self, command: &str, pane: &mut dyn crate::new_pane::Pane, container: &mut PaneContainer) {
         match command {
             "cancel" => {
                 pane.run_command("cancel", container);
