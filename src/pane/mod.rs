@@ -98,6 +98,10 @@ impl PaneContainer {
         pane.get_name().to_string()
     }
 
+    pub fn get_status(&self) -> Option<(String, String, String)> {
+        self.pane.borrow().get_status()
+    }
+
 
     pub fn draw_row(&self, index: usize, contents: &mut TextRow) {
         self.pane.borrow().draw_row(index, self, contents);
@@ -441,12 +445,11 @@ pub trait Pane {
 
     fn process_keypress(&mut self, key: KeyEvent, container: &mut PaneContainer) -> io::Result<bool>;
 
-/// This function gets the status bar for the pane
+    /// This function gets the status bar for the pane
     /// It returns the name of the mode, a first item, and a second item
-    fn get_status(&self, container: &PaneContainer) -> (String, String, String);
-
-    /// This function returns whether or not the status bar should be drawn
-    fn draw_status(&self) -> bool;
+    /// The option is to tell the window that the pane doesn't have a status bar and
+    /// it should draw the main pane on layer 0
+    fn get_status(&self, container: &PaneContainer) -> Option<(String, String, String)>;
 
     /// This function is called after we redraw the screen
     /// For most panes it should tell the cursor that it hasn't moved yet

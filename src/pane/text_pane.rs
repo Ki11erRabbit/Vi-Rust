@@ -194,7 +194,7 @@ impl TextPane {
                lsp_listener: Rc<Receiver<LspControllerMessage>>) -> Self {
 
 
-        let mut modes: HashMap<String, Rc<RefCell<dyn Mode>>> = HashMap::new();
+        let mut modes: HashMap<String, Rc<RefCell<dyn TextMode>>> = HashMap::new();
         let normal = Rc::new(RefCell::new(Normal::new()));
         normal.borrow_mut().add_keybindings(settings.borrow().mode_keybindings.get("Normal").unwrap().clone());
         normal.borrow_mut().set_key_timeout(settings.borrow().editor_settings.key_timeout);
@@ -1154,39 +1154,6 @@ impl TextPane {
     }
 
 
-    fn draw_status_bar(&self, container: &PaneContainer, output: &mut TextRow) {
-        let settings = self.settings.clone();
-        let settings = settings.borrow();
-
-        let color_settings = &settings.colors.bar;
-
-        let mode = self.mode.clone();
-
-        let (name, first, second) = mode.borrow_mut().update_status(self, container);
-
-        let total = name.len() + 1 + first.len() + second.len();
-
-        let mode_color = &settings.colors.mode.get(&name).unwrap_or(&color_settings);
-
-        for c in format!("{} ", name).chars() {
-            output.push(Some(Some(StyledChar::new(c, (*mode_color).clone()))));
-        }
-
-        for c in first.chars() {
-            output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
-        }
-
-        let remaining = settings.cols.saturating_sub(total);
-
-        for _ in 0..remaining {
-            output.push(Some(Some(StyledChar::new(' ', color_settings.clone()))));
-        }
-
-        for c in second.chars() {
-            output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
-        }
-    }
-    
 }
 
 
@@ -1194,13 +1161,6 @@ impl TextPane {
 impl Pane for TextPane {
     fn draw_row(&self, mut index: usize, container: &super::PaneContainer, output: &mut TextRow) {
 
-        if index == self.settings.borrow().get_window_size().1 -1 {
-            
-            self.draw_status_bar(container, output);
-            
-            return;
-        }
-        
         if self.tree_sitter_info.is_some() {
             self.draw_row_treesitter(index, container, output);
             return;
@@ -1222,13 +1182,10 @@ impl Pane for TextPane {
         Ok(())
     }
 
-    fn get_status(&self, container: &super::PaneContainer) -> (String, String, String) {
-        self.mode.borrow_mut().update_status(self, container)
+    fn get_status(&self, container: &super::PaneContainer) -> Option<(String, String, String)> {
+        Some(self.mode.borrow_mut().update_status(self, container))
     }
 
-    fn draw_status(&self) -> bool {
-        true
-    }
 
     fn reset(&mut self) {
         self.cursor.borrow_mut().reset_move();
