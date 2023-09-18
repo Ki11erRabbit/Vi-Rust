@@ -2,9 +2,11 @@ use std::{io, collections::HashMap, rc::Rc, cell::RefCell, time::Instant};
 
 use crossterm::{event::{KeyEvent, KeyCode, KeyModifiers}, execute, cursor::{SetCursorStyle, MoveTo}, terminal};
 
-use crate::{pane::{Pane, PaneContainer}, cursor::{Direction, Cursor}, settings::{Keys, Key}};
+use crate::{pane::{Pane, PaneContainer, TextBuffer}, cursor::{Direction, Cursor}, settings::{Keys, Key}};
 
 use crate::mode::Mode;
+
+use super::TextMode;
 
 
 pub struct Normal {
@@ -53,7 +55,18 @@ impl Mode for Normal {
         }
     }
 
-    fn execute_command(&mut self, command: &str, pane: &mut dyn Pane, container: &mut PaneContainer) {
+
+    fn change_mode(&mut self, name: &str, pane: &mut dyn Pane, _container: &mut PaneContainer) {
+
+        pane.change_mode(name);
+
+    }
+
+}
+
+impl TextMode for Normal {
+
+    fn execute_command(&mut self, command: &str, pane: &mut dyn TextBuffer, container: &mut PaneContainer) {
         let mut command_args = command.split_whitespace();
         let command = command_args.next().unwrap_or("");
         
@@ -140,7 +153,7 @@ impl Mode for Normal {
 
     }
 
-    fn process_keypress(&mut self, key: KeyEvent, pane: &mut dyn Pane, container: &mut PaneContainer) -> io::Result<bool> {
+    fn process_keypress(&mut self, key: KeyEvent, pane: &mut dyn TextBuffer, container: &mut PaneContainer) {
         self.refresh();
 
         match key {
@@ -150,7 +163,6 @@ impl Mode for Normal {
                 ..
             } => {
                 self.number_buffer.push('1');
-                Ok(true)
             },
             KeyEvent {
                 code: KeyCode::Char('2'),
@@ -158,7 +170,6 @@ impl Mode for Normal {
                 ..
             } => {
                 self.number_buffer.push('2');
-                Ok(true)
             },
             KeyEvent {
                 code: KeyCode::Char('3'),
@@ -166,7 +177,6 @@ impl Mode for Normal {
                 ..
             } => {
                 self.number_buffer.push('3');
-                Ok(true)
             },
             KeyEvent {
                 code: KeyCode::Char('4'),
@@ -174,7 +184,6 @@ impl Mode for Normal {
                 ..
             } => {
                 self.number_buffer.push('4');
-                Ok(true)
             },
             KeyEvent {
                 code: KeyCode::Char('5'),
@@ -182,7 +191,6 @@ impl Mode for Normal {
                 ..
             } => {
                 self.number_buffer.push('5');
-                Ok(true)
             },
             KeyEvent {
                 code: KeyCode::Char('6'),
@@ -190,7 +198,6 @@ impl Mode for Normal {
                 ..
             } => {
                 self.number_buffer.push('6');
-                Ok(true)
             },
             KeyEvent {
                 code: KeyCode::Char('7'),
@@ -198,7 +205,6 @@ impl Mode for Normal {
                 ..
             } => {
                 self.number_buffer.push('7');
-                Ok(true)
             },
             KeyEvent {
                 code: KeyCode::Char('8'),
@@ -206,7 +212,6 @@ impl Mode for Normal {
                 ..
             } => {
                 self.number_buffer.push('8');
-                Ok(true)
             },
             KeyEvent {
                 code: KeyCode::Char('9'),
@@ -214,14 +219,13 @@ impl Mode for Normal {
                 ..
             } => {
                 self.number_buffer.push('9');
-                Ok(true)
             },
             key_event => {
                 let key = Key::from(key_event);
 
                 if key.key == KeyCode::Char('0') && !self.number_buffer.is_empty() {
                     self.number_buffer.push('0');
-                    return Ok(true);
+                    return;
                 }
 
                 let mut flush = false;
@@ -237,18 +241,11 @@ impl Mode for Normal {
                     self.flush_key_buffer();
                 }
 
-                Ok(true)
             }
         }
     }
 
-    fn change_mode(&mut self, name: &str, pane: &mut dyn Pane, _container: &mut PaneContainer) {
-
-        pane.change_mode(name);
-
-    }
-
-    fn update_status(&mut self, pane: &dyn Pane, _container: &PaneContainer) -> (String, String, String){
+    fn update_status(&mut self, pane: &dyn TextBuffer, _container: &PaneContainer) -> (String, String, String){
         let (row, col) = pane.get_cursor().borrow().get_cursor();
 
 
@@ -277,7 +274,9 @@ impl Mode for Normal {
         (self.get_name(), first, second)
     }
 
+
 }
+
 
 
 pub struct Insert {
@@ -372,7 +371,18 @@ impl Mode for Insert {
         }
     }
 
-    fn execute_command(&mut self, command: &str, pane: &mut dyn Pane, container: &mut PaneContainer) {
+
+    fn change_mode(&mut self, name: &str, pane: &mut dyn Pane, container: &mut PaneContainer) {
+        pane.change_mode(name);
+    
+    }
+
+
+}
+
+impl TextMode for Insert {
+
+    fn execute_command(&mut self, command: &str, pane: &mut dyn TextBuffer, container: &mut PaneContainer) {
         match command {
             "left" => {
                 pane.run_command("move left 1", container);
@@ -410,7 +420,7 @@ impl Mode for Insert {
         }
     }
     
-    fn process_keypress(&mut self, key: KeyEvent, pane: &mut dyn Pane, container: &mut PaneContainer) -> io::Result<bool> {
+    fn process_keypress(&mut self, key: KeyEvent, pane: &mut dyn TextBuffer, container: &mut PaneContainer) {
         self.refresh();
 
         if self.key_buffer.is_empty() {
@@ -454,8 +464,6 @@ impl Mode for Insert {
                     if flush {
                         self.flush_key_buffer();
                     }
-
-                    Ok(true)
                 }
             }
         }
@@ -477,19 +485,13 @@ impl Mode for Insert {
                         self.flush_key_buffer();
                     }
 
-                    Ok(true)
                 }
             }
         }
 
     }
 
-    fn change_mode(&mut self, name: &str, pane: &mut dyn Pane, container: &mut PaneContainer) {
-        pane.change_mode(name);
-    
-    }
-
-    fn update_status(&mut self, pane: &dyn Pane, container: &PaneContainer) -> (String, String, String) {
+    fn update_status(&mut self, pane: &dyn TextBuffer, container: &PaneContainer) -> (String, String, String) {
         let (row, col) = pane.get_cursor().borrow().get_cursor();
 
         let first = format!("{}:{}", col + 1, row + 1);
@@ -510,8 +512,8 @@ impl Mode for Insert {
         (self.get_name(), first, second)
     }
 
-}
 
+}
 
 pub struct Command {
     command: String,
@@ -551,32 +553,6 @@ impl Mode for Command {
         "Command".to_string()
     }
 
-    fn update_status(&mut self, pane: &dyn Pane, _container: &PaneContainer) -> (String, String, String) {
-
-
-        execute!(io::stdout(),SetCursorStyle::BlinkingBar).unwrap();
-
-        let pane = &*pane;
-
-        self.backup_cursor(pane);
-        
-        let cursor = pane.get_cursor();
-        
-        let mut cursor = cursor.borrow_mut();
-        cursor.number_line_size = 0;
-        cursor.ignore_offset = true;
-
-        let offset = self.get_name().len() + 2;// + 1 for the space and + 1 for the colon
-
-        cursor.set_draw_cursor(offset + self.edit_pos, terminal::size().unwrap().1 as usize);
-        
-        let first = format!(":{}", self.command);
-        
-        let second = String::new();
-        
-
-        (self.get_name(), first, second)
-    }
 
     fn change_mode(&mut self, name: &str, pane: &mut dyn Pane, container: &mut PaneContainer) {
         self.command.clear();
@@ -618,7 +594,39 @@ impl Mode for Command {
     }
 
 
-    fn execute_command(&mut self, command: &str, pane: &mut dyn Pane, container: &mut PaneContainer) {
+}
+
+impl TextMode for Command {
+
+    fn update_status(&mut self, pane: &dyn TextBuffer, _container: &PaneContainer) -> (String, String, String) {
+
+
+        execute!(io::stdout(),SetCursorStyle::BlinkingBar).unwrap();
+
+        let pane = &*pane;
+
+        self.backup_cursor(pane);
+        
+        let cursor = pane.get_cursor();
+        
+        let mut cursor = cursor.borrow_mut();
+        cursor.number_line_size = 0;
+        cursor.ignore_offset = true;
+
+        let offset = self.get_name().len() + 2;// + 1 for the space and + 1 for the colon
+
+        cursor.set_draw_cursor(offset + self.edit_pos, terminal::size().unwrap().1 as usize);
+        
+        let first = format!(":{}", self.command);
+        
+        let second = String::new();
+        
+
+        (self.get_name(), first, second)
+    }
+
+
+    fn execute_command(&mut self, command: &str, pane: &mut dyn TextBuffer, container: &mut PaneContainer) {
         match command {
             "left" => {
                 self.edit_pos = self.edit_pos.saturating_sub(1);
@@ -645,7 +653,7 @@ impl Mode for Command {
         }
     }
 
-    fn process_keypress(&mut self, key: KeyEvent, pane: &mut dyn Pane, container: &mut PaneContainer) -> io::Result<bool> {
+    fn process_keypress(&mut self, key: KeyEvent, pane: &mut dyn TextBuffer, container: &mut PaneContainer) {
         self.refresh();
 
 
@@ -717,4 +725,5 @@ impl Mode for Command {
 
         }
     }
+
 }
