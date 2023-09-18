@@ -1241,6 +1241,7 @@ impl CompositorRow {
 
     pub fn push(&mut self, chr: Option<StyledChar>) {
         if self.index >= self.contents.len() {
+            eprintln!("{}", self.index);
             match chr {
                 None => panic!("Tried to push None on first draw"),
                 Some(chr) => self.contents.push(chr),
@@ -1321,9 +1322,10 @@ impl Compositor {
         let min_x = layers.iter().map(|layer| layer.contents.iter().map(|row| row.len()).min().unwrap_or(0)).min().unwrap_or(0);
 
         for y in 0..min_y {
-
+            eprintln!("New row");
 
             for x in 0..min_x {
+                eprintln!("New col");
 
                 let mut curr_layer = top_layer;
 

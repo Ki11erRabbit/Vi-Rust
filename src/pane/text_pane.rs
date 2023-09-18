@@ -1159,7 +1159,7 @@ impl TextPane {
 
 
 impl Pane for TextPane {
-    fn draw_row(&self, mut index: usize, container: &super::PaneContainer, output: &mut TextRow) {
+    fn draw_row(&self, index: usize, container: &super::PaneContainer, output: &mut TextRow) {
 
         if self.tree_sitter_info.is_some() {
             self.draw_row_treesitter(index, container, output);
@@ -1173,6 +1173,7 @@ impl Pane for TextPane {
         let cursor = self.cursor.clone();
 
         cursor.borrow_mut().scroll(container);
+        self.rainbow_delimiters.borrow_mut().clear();
     }
 
     fn process_keypress(&mut self, key: crossterm::event::KeyEvent, container: &mut super::PaneContainer) {
@@ -1188,10 +1189,12 @@ impl Pane for TextPane {
 
     fn reset(&mut self) {
         self.cursor.borrow_mut().reset_move();
+        self.cursor.borrow_mut().reset_scrolled();
     }
 
     fn changed(&mut self) {
         self.cursor.borrow_mut().set_moved();
+        self.cursor.borrow_mut().set_scrolled();
     }
 
     fn get_cursor(&self) -> Option<(usize, usize)> {

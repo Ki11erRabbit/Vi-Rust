@@ -138,6 +138,14 @@ impl Cursor {
         self.moved
     }
 
+    pub fn reset_scrolled(&mut self) {
+        self.scrolled = false;
+    }
+
+    pub fn set_scrolled(&mut self) {
+        self.scrolled = true;
+    }
+
     pub fn get_scrolled(&self) -> bool {
         self.scrolled
     }
