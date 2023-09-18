@@ -100,7 +100,8 @@ impl PaneContainer {
 
     pub fn get_status(&self) -> Option<(String, String, String)> {
         let pane = self.pane.clone();
-        pane.borrow().get_status(self)
+        let status = pane.borrow().get_status(self);
+        status
     }
 
 
@@ -448,7 +449,7 @@ pub trait Pane {
 
     fn refresh(&mut self, container: &mut PaneContainer);
 
-    fn process_keypress(&mut self, key: KeyEvent, container: &mut PaneContainer) -> io::Result<bool>;
+    fn process_keypress(&mut self, key: KeyEvent, container: &mut PaneContainer);
 
     /// This function gets the status bar for the pane
     /// It returns the name of the mode, a first item, and a second item

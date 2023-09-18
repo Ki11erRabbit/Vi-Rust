@@ -1175,11 +1175,10 @@ impl Pane for TextPane {
         cursor.borrow_mut().scroll(container);
     }
 
-    fn process_keypress(&mut self, key: crossterm::event::KeyEvent, container: &mut super::PaneContainer) -> std::io::Result<()> {
+    fn process_keypress(&mut self, key: crossterm::event::KeyEvent, container: &mut super::PaneContainer) {
         let mode = self.mode.clone();
-        let result = mode.borrow_mut().process_keypress(key, self, container);
+        mode.borrow_mut().process_keypress(key, self, container);
 
-        Ok(())
     }
 
     fn get_status(&self, container: &super::PaneContainer) -> Option<(String, String, String)> {

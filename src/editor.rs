@@ -316,7 +316,7 @@ impl Editor {
                     return Ok(true);
                 }
 
-                self.windows[self.active_window].process_keypress(key)?;
+                self.windows[self.active_window].process_keypress(key);
                 Ok(true)
             },
             Event::Resize(width, height) => {

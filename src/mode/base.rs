@@ -591,11 +591,11 @@ impl TextMode for Command {
         execute!(io::stdout(), SetCursorStyle::BlinkingBlock).unwrap();
         let (x, y) = cursor.get_real_cursor();
 
-        if !pane.get_cursor().borrow().jumped {
-            *pane.get_cursor().borrow_mut() = cursor;
+        if !pane.get_physical_cursor().borrow().jumped {
+            *pane.get_physical_cursor().borrow_mut() = cursor;
         }
 
-        pane.get_cursor().borrow_mut().ignore_offset = false;
+        pane.get_physical_cursor().borrow_mut().ignore_offset = false;
 
         execute!(io::stdout(), MoveTo(x as u16,y as u16)).unwrap();
         
