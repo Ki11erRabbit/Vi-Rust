@@ -2,6 +2,7 @@ use crossterm::terminal;
 
 use crate::pane::PaneContainer;
 use crate::pane::Pane;
+use crate::pane::TextBuffer;
 
 pub enum CursorMove {
     Amount(usize),
@@ -195,7 +196,7 @@ impl Cursor {
 
     }
 
-    pub fn set_cursor(&mut self, x: CursorMove, y: CursorMove, pane: &dyn Pane, (x_offset, y_offset): (usize, usize)) {
+    pub fn set_cursor(&mut self, x: CursorMove, y: CursorMove, pane: &dyn TextBuffer, (x_offset, y_offset): (usize, usize)) {
         self.jumped = false;
         let number_of_lines = pane.get_line_count();
 
@@ -257,7 +258,7 @@ impl Cursor {
         self.moved = true;
     }
 
-    pub fn move_cursor(&mut self, direction: Direction, mut n: usize, pane: &dyn Pane) {
+    pub fn move_cursor(&mut self, direction: Direction, mut n: usize, pane: &dyn TextBuffer) {
 
         //eprintln!("{:?}", self);
         self.jumped = false;

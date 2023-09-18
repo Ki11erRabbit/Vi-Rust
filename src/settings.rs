@@ -115,6 +115,11 @@ pub struct Settings {
 }
 
 impl Settings {
+
+    pub fn get_window_size(&self) -> (usize, usize) {
+        (self.cols, self.rows)
+    }
+    
     fn generate_normal_keybindings(normal_keybindings: &mut HashMap<Keys, Command>) {
         normal_keybindings.insert(vec![Key {
             key: KeyCode::Char('l'),

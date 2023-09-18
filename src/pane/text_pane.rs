@@ -5,7 +5,7 @@ use tree_sitter::{Tree, Parser, Point};
 
 use crate::{buffer::Buffer, lsp::{LspControllerMessage, lsp_utils::{Diagnostics, CompletionList, LocationResponse, Diagnostic, TextEditType}, LspNotification, LspRequest}, cursor::{Cursor, Direction, CursorMove}, mode::{Mode, base::{Normal, Insert, Command}}, settings::{Settings, SyntaxHighlight, ColorScheme}, window::WindowMessage, treesitter::tree_sitter_scheme, window::{TextRow, StyledChar}, editor::{EditorMessage, RegisterType}};
 
-use super::{Pane, TextBuffer, PaneMessage, NewPane, PaneContainer};
+use super::{Pane, TextBuffer, PaneMessage, PaneContainer};
 
 
 
@@ -153,7 +153,7 @@ pub struct TextPane {
     cursor: Rc<RefCell<Cursor>>,
     file_name: Option<PathBuf>,
     contents: Buffer,
-    mode: Rc<RefCell<dyn Mode>>,
+    mode: Rc<RefCell<dyn TextMode>>,
     modes: HashMap<String, Rc<RefCell<dyn Mode>>>,
     text_changed: bool,
 
@@ -250,6 +250,19 @@ impl TextPane {
         let (x, y) = self.cursor.borrow().get_cursor();
 
         self.contents.get_byte_offset(x, y)
+    }
+
+
+    fn generate_uri(& self) -> String {
+        let working_dir = std::env::current_dir().unwrap();
+        match &self.file_name {
+            None => format!("untitled://{}", working_dir.display()),
+            Some(file_name) => {
+                let uri = format!("file://{}/{}", working_dir.display(), file_name.display());
+
+                uri
+            },
+        }
     }
 
 
@@ -1139,13 +1152,55 @@ impl TextPane {
             }
         }
     }
+
+
+    fn draw_status_bar(&self, container: &PaneContainer, output: &mut TextRow) {
+        let settings = self.settings.clone();
+        let settings = settings.borrow();
+
+        let color_settings = &settings.colors.bar;
+
+        let mode = self.mode.clone();
+
+        let (name, first, second) = mode.borrow_mut().update_status(self, container);
+
+        let total = name.len() + 1 + first.len() + second.len();
+
+        let mode_color = &settings.colors.mode.get(&name).unwrap_or(&color_settings);
+
+        for c in format!("{} ", name).chars() {
+            output.push(Some(Some(StyledChar::new(c, (*mode_color).clone()))));
+        }
+
+        for c in first.chars() {
+            output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
+        }
+
+        let remaining = settings.cols.saturating_sub(total);
+
+        for _ in 0..remaining {
+            output.push(Some(Some(StyledChar::new(' ', color_settings.clone()))));
+        }
+
+        for c in second.chars() {
+            output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
+        }
+    }
     
 }
 
 
 
-impl NewPane for TextPane {
+impl Pane for TextPane {
     fn draw_row(&self, mut index: usize, container: &super::PaneContainer, output: &mut TextRow) {
+
+        if index == self.settings.borrow().get_window_size().1 -1 {
+            
+            self.draw_status_bar(container, output);
+            
+            return;
+        }
+        
         if self.tree_sitter_info.is_some() {
             self.draw_row_treesitter(index, container, output);
             return;
@@ -1199,28 +1254,31 @@ impl NewPane for TextPane {
         let command = command_args.next().unwrap_or("");
         match command {
             "q" => {
-                if self.changed {
+                if self.text_changed {
                 } else {
-                    self.sender.send(WindowMessage::ClosePane(false, None)).unwrap();
+                    self.window_sender.send(WindowMessage::ClosePane(false, None)).unwrap();
                 }
 
-                let uri = self.generate_uri();
-                match &self.lsp_client {
-                    None => {},
-                    Some((sender,_)) => {
+                if self.lsp_info.is_some() {
 
-                        sender.send(LspControllerMessage::Notification(
-                            self.lang.clone().into(),
-                            LspNotification::Close(uri.into())
-                        )).expect("Failed to send message");
-                    },
+                    let uri = self.generate_uri();
+                    /*match &self.lsp_client {
+                        None => {},
+                        Some((sender,_)) => {
+
+                            sender.send(LspControllerMessage::Notification(
+                                self.lang.clone().into(),
+                                LspNotification::Close(uri.into())
+                            )).expect("Failed to send message");
+                        },
+                    }*/
                 }
                
                 
             },
             "w" => {
 
-                self.file_version += 1;
+                /*self.file_version += 1;
 
                 let uri = self.generate_uri();
                 match &self.lsp_client {
@@ -1234,7 +1292,7 @@ impl NewPane for TextPane {
                         )).expect("Failed to send message");
 
                     },
-                }
+                }*/
 
                 
                 if let Some(file_name) = command_args.next() {
@@ -1244,7 +1302,7 @@ impl NewPane for TextPane {
                 self.save_buffer().expect("Failed to save file");
                 self.contents.add_new_rope();
 
-                match &self.lsp_client {
+                /*match &self.lsp_client {
                     None => {},
                     Some((sender, _)) => {
 
@@ -1255,11 +1313,13 @@ impl NewPane for TextPane {
                             LspNotification::Save(uri.into(), text.into())
                         )).expect("Failed to send message");
                     },
-                }
+                }*/
+
+                self.text_changed = false;
             },
             "w!" => {
 
-                self.file_version += 1;
+                /*self.file_version += 1;
 
                 let uri = self.generate_uri();
                 match &self.lsp_client {
@@ -1273,7 +1333,7 @@ impl NewPane for TextPane {
                         )).expect("Failed to send message");
 
                     },
-                }
+                }*/
 
                 
                 if let Some(file_name) = command_args.next() {
@@ -1283,7 +1343,7 @@ impl NewPane for TextPane {
                 self.save_buffer().expect("Failed to save file");
                 self.contents.add_new_rope();
 
-                match &self.lsp_client {
+                /*match &self.lsp_client {
                     None => {},
                     Some((sender, _)) => {
 
@@ -1294,13 +1354,15 @@ impl NewPane for TextPane {
                             LspNotification::Save(uri.into(), text.into())
                         )).expect("Failed to send message");
                     },
-                }
+                }*/
+
+                self.text_changed = false;
 
             },
             "wq" => {
 
 
-                self.file_version += 1;
+                /*self.file_version += 1;
 
                 let uri = self.generate_uri();
                 match &self.lsp_client {
@@ -1314,13 +1376,13 @@ impl NewPane for TextPane {
                         )).expect("Failed to send message");
 
                     },
-                }
+                }*/
 
                 
                 self.save_buffer().expect("Failed to save file");
-                self.sender.send(WindowMessage::ClosePane(false, None)).unwrap();
+                self.window_sender.send(WindowMessage::ClosePane(false, None)).unwrap();
 
-                match &self.lsp_client {
+                /*match &self.lsp_client {
                     None => {},
                     Some((sender, _)) => {
 
@@ -1343,12 +1405,12 @@ impl NewPane for TextPane {
                             LspNotification::Close(uri.into())
                         )).expect("Failed to send message");
                     },
-                }
+                }*/
                 
             },
             "q!" => {
-                self.sender.send(WindowMessage::ClosePane(false, None)).unwrap();
-                let uri = self.generate_uri();
+                self.window_sender.send(WindowMessage::ClosePane(false, None)).unwrap();
+                /*let uri = self.generate_uri();
 
                 match &self.lsp_client {
                     None => {},
@@ -1359,7 +1421,7 @@ impl NewPane for TextPane {
                             LspNotification::Close(uri.into())
                         )).expect("Failed to send message");
                     },
-                }
+                }*/
 
             },
             "move" => {
@@ -1431,7 +1493,7 @@ impl NewPane for TextPane {
 
                     }
 
-                    self.open_info(container);
+                    //self.open_info(container);
                 }
 
             },
@@ -1447,35 +1509,35 @@ impl NewPane for TextPane {
                 
             },
             "horizontal_split" => {
-                self.sender.send(WindowMessage::HorizontalSplit).expect("Failed to send message");
+                self.window_sender.send(WindowMessage::HorizontalSplit).expect("Failed to send message");
                 self.contents.add_new_rope();
             },
             "vertical_split" => {
-                self.sender.send(WindowMessage::VerticalSplit).expect("Failed to send message");
+                self.window_sender.send(WindowMessage::VerticalSplit).expect("Failed to send message");
                 self.contents.add_new_rope();
             },
             "qa!" => {
-                self.sender.send(WindowMessage::ForceQuitAll).expect("Failed to send message");
+                self.window_sender.send(WindowMessage::ForceQuitAll).expect("Failed to send message");
             },
             "pane_up" => {
-                self.sender.send(WindowMessage::PaneUp).expect("Failed to send message");
+                self.window_sender.send(WindowMessage::PaneUp).expect("Failed to send message");
                 self.contents.add_new_rope();
             },
             "pane_down" => {
-                self.sender.send(WindowMessage::PaneDown).expect("Failed to send message");
+                self.window_sender.send(WindowMessage::PaneDown).expect("Failed to send message");
                 self.contents.add_new_rope();
             },
             "pane_left" => {
-                self.sender.send(WindowMessage::PaneLeft).expect("Failed to send message");
+                self.window_sender.send(WindowMessage::PaneLeft).expect("Failed to send message");
                 self.contents.add_new_rope();
             },
             "pane_right" => {
-                self.sender.send(WindowMessage::PaneRight).expect("Failed to send message");
+                self.window_sender.send(WindowMessage::PaneRight).expect("Failed to send message");
                 self.contents.add_new_rope();
             },
             "e" => {
                 if let Some(file_name) = command_args.next() {
-                    self.sender.send(WindowMessage::OpenFile(file_name.to_string(), None)).expect("Failed to send message");
+                    self.window_sender.send(WindowMessage::OpenFile(file_name.to_string(), None)).expect("Failed to send message");
                 }
                 self.contents.add_new_rope();
             },
@@ -1574,27 +1636,39 @@ impl NewPane for TextPane {
 
                 self.cursor.borrow_mut().set_cursor(CursorMove::Nothing, CursorMove::Amount(self.contents.get_line_count()), self, (0,0));
 
-                self.tree = self.parser.parse(&self.contents.to_string(),None).unwrap();//TODO: replace this with an incremental parse
+                match self.tree_sitter_info.as_mut() {
+                    Some(tree_sitter_info) => {
+                        tree_sitter_info.tree = tree_sitter_info.parser.parse(&self.contents.to_string(),None).unwrap();//TODO: replace this with an incremental parse
+                    },
+                    None => {}
+                }
+
+                //self.tree = self.parser.parse(&self.contents.to_string(),None).unwrap();//TODO: replace this with an incremental parse
 
             },
             "redo" => {
                 self.contents.redo();
                 self.cursor.borrow_mut().number_line_size = self.contents.get_line_count();
 
-                self.tree = self.parser.parse(&self.contents.to_string(),None).unwrap();//TODO: replace this with an incremental parse
+                match self.tree_sitter_info.as_mut() {
+                    Some(tree_sitter_info) => {
+                        tree_sitter_info.tree = tree_sitter_info.parser.parse(&self.contents.to_string(),None).unwrap();//TODO: replace this with an incremental parse
+                    },
+                    None => {}
+                }
             },
             "change_tab" => {
                 if let Some(tab) = command_args.next() {
                     if let Ok(tab) = tab.parse::<usize>() {
-                        self.sender.send(WindowMessage::NthTab(tab)).expect("Failed to send message");
+                        self.window_sender.send(WindowMessage::NthTab(tab)).expect("Failed to send message");
                     }
                     else {
                         match tab {
                             "prev" => {
-                                self.sender.send(WindowMessage::PreviousTab).expect("Failed to send message");
+                                self.window_sender.send(WindowMessage::PreviousTab).expect("Failed to send message");
                             },
                             "next" => {
-                                self.sender.send(WindowMessage::NextTab).expect("Failed to send message");
+                                self.window_sender.send(WindowMessage::NextTab).expect("Failed to send message");
                             },
                             _ => {}
                         }
@@ -1602,13 +1676,13 @@ impl NewPane for TextPane {
                 }
             },
             "open_tab" => {
-                self.sender.send(WindowMessage::OpenNewTab).expect("Failed to send message");
+                self.window_sender.send(WindowMessage::OpenNewTab).expect("Failed to send message");
             },
             "open_tab_with_pane" => {
-                self.sender.send(WindowMessage::OpenNewTabWithPane).expect("Failed to send message");
+                self.window_sender.send(WindowMessage::OpenNewTabWithPane).expect("Failed to send message");
             },
             "info" => {
-                self.open_info(container);
+                //self.open_info(container);
             },
             /*"completion" => {
                 match &self.lsp_client {
@@ -1694,7 +1768,7 @@ impl NewPane for TextPane {
                 }
                 
             },*/
-            "insert" => {
+            /*"insert" => {
                 if let Some(index) = command_args.next() {
                     //eprintln!("Inserting {}", index);
 
@@ -1734,7 +1808,7 @@ impl NewPane for TextPane {
                 }
 
                 self.lsp_completion = None;
-            },
+            },*/
             /*"goto_declaration" | "goto_definition" |
             "goto_type_definition" | "goto_implementation" => {
                 match &self.lsp_client {
@@ -1981,13 +2055,14 @@ impl NewPane for TextPane {
     }
 
     fn resize(&mut self, size: (usize, usize)) {
-        //todo: resize cursor
-        todo!()
+        self.cursor.borrow_mut().resize(size);
     }
 
     fn set_location(&mut self, location: (usize, usize)) {
-        //todo: set cursor location
-        todo!()
+        let cursor = self.cursor.clone();
+        cursor.borrow_mut().set_cursor(CursorMove::Amount(location.0),
+                                       CursorMove::Amount(location.1),
+                                       self, (0,0));
     }
 
     fn get_settings(&self) -> Rc<RefCell<Settings>> {
