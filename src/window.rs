@@ -1076,7 +1076,7 @@ impl Window {
 
     }
 
-
+    /// This function draws the status bar at the bottom of the screen
     pub fn draw_status_bar(&mut self) {
         //Self::clear_screen().unwrap();
         queue!(
@@ -1093,50 +1093,19 @@ impl Window {
 
         let mode_color = &settings.colors.mode.get(&name).unwrap_or(&color_settings);
 
-        /*if self.buffers[0].contents.len() == self.size.1 {
-            // we need to add a Some(None) to the start of the row for at least the first time so that the compositor knows to add a new row
-            for buffer in self.buffers.iter_mut() {
-                let text_row = TextRow::new();
-                buffer.contents.push(text_row);
-            }
-
-            
-        }*/
-
-        //self.buffers[0].contents[self.size.1].push(Some(None));
-
-        /*for c in name.chars() {
-            self.buffers[0].contents[self.size.1].push(Some(Some(StyledChar::new(c, (*mode_color).clone()))));
-        }*/
-
-        //self.buffers[0].contents[self.size.1].push(Some(Some(StyledChar::new(' ', color_settings.clone()))));
-
         self.contents.push_str(apply_colors!(format!("{}", name), mode_color));
 
         self.contents.push_str(apply_colors!(" ", color_settings));
-        //eprintln!("{} {}", first, second);
-        
-        /*for c in first.chars() {
-            self.buffers[0].contents[self.size.1].push(Some(Some(StyledChar::new(c, color_settings.clone()))));
-        }*/
 
         self.contents.push_str(apply_colors!(first, color_settings));
         
         let remaining = self.size.0.saturating_sub(total);
 
-        /*for c in " ".repeat(remaining).chars() {
-            self.buffers[0].contents[self.size.1].push(Some(Some(StyledChar::new(c, color_settings.clone()))));
-        }*/
         
         self.contents.push_str(apply_colors!(" ".repeat(remaining), color_settings));
 
 
         self.contents.push_str(apply_colors!(second, color_settings));
-        /*for c in second.chars() {
-            self.buffers[0].contents[self.size.1].push(Some(Some(StyledChar::new(c, color_settings.clone()))));
-        }*/
-
-        //self.buffers[0].contents[self.size.1].push(Some(None));
     }
 
     pub fn force_refresh_screen(&mut self) -> io::Result<()> {
