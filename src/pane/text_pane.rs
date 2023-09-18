@@ -1614,7 +1614,7 @@ impl Pane for TextPane {
                     None => {}
                 }
             },
-            "change_tab" => {
+            /*"change_tab" => {
                 if let Some(tab) = command_args.next() {
                     if let Ok(tab) = tab.parse::<usize>() {
                         self.window_sender.send(WindowMessage::NthTab(tab)).expect("Failed to send message");
@@ -1637,7 +1637,7 @@ impl Pane for TextPane {
             },
             "open_tab_with_pane" => {
                 self.window_sender.send(WindowMessage::OpenNewTabWithPane).expect("Failed to send message");
-            },
+            },*/
             "info" => {
                 //self.open_info(container);
             },
@@ -2526,6 +2526,10 @@ impl TextBuffer for TextPane {
 
     fn borrow_mut_buffer(&mut self) -> &mut Buffer {
         &mut self.contents
+    }
+
+    fn get_physical_cursor(&self) -> Rc<RefCell<Cursor>> {
+        self.cursor.clone()
     }
 }
 

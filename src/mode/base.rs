@@ -56,15 +56,16 @@ impl Mode for Normal {
     }
 
 
-    fn change_mode(&mut self, name: &str, pane: &mut dyn Pane, _container: &mut PaneContainer) {
-
-        pane.change_mode(name);
-
-    }
 
 }
 
 impl TextMode for Normal {
+
+    fn change_mode(&mut self, name: &str, pane: &mut dyn TextBuffer, _container: &mut PaneContainer) {
+
+        pane.change_mode(name);
+
+    }
 
     fn execute_command(&mut self, command: &str, pane: &mut dyn TextBuffer, container: &mut PaneContainer) {
         let mut command_args = command.split_whitespace();
@@ -246,7 +247,7 @@ impl TextMode for Normal {
     }
 
     fn update_status(&mut self, pane: &dyn TextBuffer, _container: &PaneContainer) -> (String, String, String){
-        let (row, col) = pane.get_cursor().borrow().get_cursor();
+        let (row, col) = pane.get_physical_cursor().borrow().get_cursor();
 
 
         let mut first = format!("{}:{}", col + 1, row + 1);
@@ -311,22 +312,22 @@ impl Insert {
         Ok(true)
     }*/
 
-    fn insert_newline(&self, pane: &mut dyn Pane) -> io::Result<bool> {
+    fn insert_newline(&self, pane: &mut dyn TextBuffer) -> io::Result<bool> {
         pane.insert_newline();
         pane.changed();
         Ok(true)
     }
-    fn delete_char(&self, pane: &mut dyn Pane) -> io::Result<bool> {
+    fn delete_char(&self, pane: &mut dyn TextBuffer) -> io::Result<bool> {
         pane.delete_char();
         pane.changed();
         Ok(true)
     }
-    fn backspace(&self, pane: &mut dyn Pane) -> io::Result<bool> {
+    fn backspace(&self, pane: &mut dyn TextBuffer) -> io::Result<bool> {
         pane.backspace_char();
         pane.changed();
         Ok(true)
     }
-    fn insert_char(&self, pane: &mut dyn Pane, c: char) -> io::Result<bool> {
+    fn insert_char(&self, pane: &mut dyn TextBuffer, c: char) -> io::Result<bool> {
         pane.changed();
         if pane.get_settings().borrow().editor_settings.use_spaces && c == '\t' {
             pane.insert_str(&" ".repeat(pane.get_settings().borrow().editor_settings.tab_size));
@@ -334,7 +335,7 @@ impl Insert {
             pane.insert_char(c);
         };
         
-        let cursor = pane.get_cursor();
+        let cursor = pane.get_physical_cursor();
         let mut cursor = cursor.borrow_mut();
         if c == '\t' {
             let tab_size = pane.get_settings().borrow().editor_settings.tab_size;
@@ -372,15 +373,16 @@ impl Mode for Insert {
     }
 
 
-    fn change_mode(&mut self, name: &str, pane: &mut dyn Pane, container: &mut PaneContainer) {
-        pane.change_mode(name);
-    
-    }
 
 
 }
 
 impl TextMode for Insert {
+
+    fn change_mode(&mut self, name: &str, pane: &mut dyn TextBuffer, container: &mut PaneContainer) {
+        pane.change_mode(name);
+    
+    }
 
     fn execute_command(&mut self, command: &str, pane: &mut dyn TextBuffer, container: &mut PaneContainer) {
         match command {
@@ -429,26 +431,26 @@ impl TextMode for Insert {
                     code: KeyCode::Enter,
                     modifiers: KeyModifiers::NONE,
                     ..
-                } => self.insert_newline(pane),
+                } => {self.insert_newline(pane);},
                 KeyEvent {
                     code: KeyCode::Delete,
                     modifiers: KeyModifiers::NONE,
                     ..
-                } => self.delete_char(pane),
+                } => {self.delete_char(pane);},
                 KeyEvent {
                     code: KeyCode::Backspace,
                     modifiers: KeyModifiers::NONE,
                     ..
-                } => self.backspace(pane),
+                } => {self.backspace(pane);},
                 KeyEvent {
                     code: code @ (KeyCode::Char(..) | KeyCode::Tab),
                     modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
                     ..
-                } => self.insert_char(pane, match code {
+                } => {self.insert_char(pane, match code {
                     KeyCode::Char(c) => c,
                     KeyCode::Tab => '\t',
                     _ => unreachable!(),
-                }),
+                });},
                 key_event => {
                     let key = Key::from(key_event);
 
@@ -492,7 +494,7 @@ impl TextMode for Insert {
     }
 
     fn update_status(&mut self, pane: &dyn TextBuffer, container: &PaneContainer) -> (String, String, String) {
-        let (row, col) = pane.get_cursor().borrow().get_cursor();
+        let (row, col) = pane.get_physical_cursor().borrow().get_cursor();
 
         let first = format!("{}:{}", col + 1, row + 1);
         
@@ -539,9 +541,9 @@ impl Command {
     }
 
 
-    fn backup_cursor(&mut self, pane: &dyn Pane) {
+    fn backup_cursor(&mut self, pane: &dyn TextBuffer) {
         if self.cursor_location.is_none() {
-            self.cursor_location = Some(*pane.get_cursor().borrow());
+            self.cursor_location = Some(*pane.get_physical_cursor().borrow());
         }
     }
 
@@ -554,25 +556,6 @@ impl Mode for Command {
     }
 
 
-    fn change_mode(&mut self, name: &str, pane: &mut dyn Pane, container: &mut PaneContainer) {
-        self.command.clear();
-        self.edit_pos = 0;
-        pane.change_mode(name);
-
-        let mut cursor = self.cursor_location.take().unwrap();
-
-        execute!(io::stdout(), SetCursorStyle::BlinkingBlock).unwrap();
-        let (x, y) = cursor.get_real_cursor();
-
-        if !pane.get_cursor().borrow().jumped {
-            *pane.get_cursor().borrow_mut() = cursor;
-        }
-
-        pane.get_cursor().borrow_mut().ignore_offset = false;
-
-        execute!(io::stdout(), MoveTo(x as u16,y as u16)).unwrap();
-        
-    }
 
     fn add_keybindings(&mut self, keybindings: HashMap<Keys, String>) {
         self.keybindings.borrow_mut().extend(keybindings);
@@ -598,6 +581,27 @@ impl Mode for Command {
 
 impl TextMode for Command {
 
+    fn change_mode(&mut self, name: &str, pane: &mut dyn TextBuffer, container: &mut PaneContainer) {
+        self.command.clear();
+        self.edit_pos = 0;
+        pane.change_mode(name);
+
+        let mut cursor = self.cursor_location.take().unwrap();
+
+        execute!(io::stdout(), SetCursorStyle::BlinkingBlock).unwrap();
+        let (x, y) = cursor.get_real_cursor();
+
+        if !pane.get_cursor().borrow().jumped {
+            *pane.get_cursor().borrow_mut() = cursor;
+        }
+
+        pane.get_cursor().borrow_mut().ignore_offset = false;
+
+        execute!(io::stdout(), MoveTo(x as u16,y as u16)).unwrap();
+        
+    }
+
+
     fn update_status(&mut self, pane: &dyn TextBuffer, _container: &PaneContainer) -> (String, String, String) {
 
 
@@ -607,7 +611,7 @@ impl TextMode for Command {
 
         self.backup_cursor(pane);
         
-        let cursor = pane.get_cursor();
+        let cursor = pane.get_physical_cursor();
         
         let mut cursor = cursor.borrow_mut();
         cursor.number_line_size = 0;
@@ -666,7 +670,6 @@ impl TextMode for Command {
                 pane.run_command(&self.command, container);
 
                 self.change_mode("Normal", pane,container);
-                Ok(true)
             },
             KeyEvent {
                 code: KeyCode::Delete,
@@ -676,7 +679,6 @@ impl TextMode for Command {
                 if self.edit_pos < self.command.len() {
                     self.command.remove(self.edit_pos);
                 }
-                Ok(true)
             },
             KeyEvent {
                 code: KeyCode::Backspace,
@@ -687,7 +689,6 @@ impl TextMode for Command {
                     self.edit_pos -= 1;
                     self.command.remove(self.edit_pos);
                 }
-                Ok(true)
             },
             KeyEvent {
                 code: code @ KeyCode::Char(..),
@@ -702,7 +703,6 @@ impl TextMode for Command {
 
                 self.command.insert(self.edit_pos, c);
                 self.edit_pos += 1;
-                Ok(true)
             },
             key_event => {
                 let key = Key::from(key_event);
@@ -720,7 +720,6 @@ impl TextMode for Command {
                     self.flush_key_buffer();
                 }
 
-                Ok(true)
             }
 
         }

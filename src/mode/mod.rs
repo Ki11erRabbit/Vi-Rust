@@ -19,10 +19,6 @@ pub trait Mode {
 
     fn get_name(&self) -> String;
 
-
-    fn change_mode(&mut self, name: &str, pane: &mut dyn Pane, container: &mut PaneContainer);
-
-
     fn add_keybindings(&mut self, bindings: HashMap<Keys, String>);
 
     fn set_key_timeout(&mut self, timeout: u64);
@@ -40,6 +36,9 @@ pub trait TextMode {
     fn update_status(&mut self, pane: &dyn TextBuffer, container: &PaneContainer) -> (String, String, String);
 
     fn execute_command(&mut self, command: &str, pane: &mut dyn TextBuffer, pane: &mut PaneContainer);
+
+    fn change_mode(&mut self, name: &str, pane: &mut dyn TextBuffer, container: &mut PaneContainer);
+
 }
 
 pub trait Promptable: Mode {

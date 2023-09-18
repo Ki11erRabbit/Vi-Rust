@@ -22,7 +22,7 @@ use crate::lsp::LspControllerMessage;
 use crate::pane::text_pane::TextPane;
 use crate::settings::ColorScheme;
 use crate::{apply_colors, settings::Settings};
-use crate::pane::{Pane, PaneContainer};
+use crate::pane::{Pane, PaneContainer, TextBuffer};
 use crate::treesitter::tree_sitter_scheme;
 
 
@@ -100,7 +100,7 @@ pub struct Window{
     active_layer: usize,
     panes: Vec<Vec<PaneContainer>>,
     id_to_pane: HashMap<Uuid, (usize, usize)>,
-    buffers: Vec<TextBuffer>,
+    buffers: Vec<TextLayer>,
     compositor: Compositor,
     //known_file_types: HashSet<String>,
     settings: Rc<RefCell<Settings>>,
@@ -156,7 +156,7 @@ impl Window {
         Self {
             size: win_size,
             contents: WindowContents::new(),
-            active_panes: vec![0],
+            active_panes,
             active_layer: 0,
             panes,
             id_to_pane,
@@ -173,7 +173,7 @@ impl Window {
     }
 
     pub fn get_sender(&self) -> Sender<WindowMessage> {
-        self.channels.0.clone()
+        self.mailbox.get_far_sender()
     }
 
     fn create_popup(&mut self, pane: PaneContainer, make_active: bool) {
@@ -211,7 +211,7 @@ impl Window {
         }
         if self.buffers.len() - 1 == self.active_layer {
             //eprintln!("Creating new buffer");
-            self.buffers.push(TextBuffer::new());
+            self.buffers.push(TextLayer::new());
         }
         if self.active_panes.len() - 1 == self.active_layer {
             //eprintln!("Creating new active pane");
@@ -266,12 +266,12 @@ impl Window {
         Ok(pos)
     }
 
-    fn insert_pane(&mut self, pane: Rc<RefCell<dyn Pane>>) -> (usize, usize) {
+    pub fn insert_pane(&mut self, pane: Rc<RefCell<dyn Pane>>) -> (usize, usize) {
 
         eprintln!("Inserting pane");
         
         let container = if self.panes.len() == 0 {
-            self.text_layers.push(TextBuffer::new());
+            self.buffers.push(TextLayer::new());
             self.panes.push(Vec::new());
             self.active_panes.push(0);
 
@@ -279,7 +279,7 @@ impl Window {
 
             let mut container = PaneContainer::new(pane, self.settings.clone());
 
-            container.set_max_size(size);
+            //container.set_max_size(size);
             container.set_size(size);
             
             container
@@ -288,14 +288,14 @@ impl Window {
 
             let mut container = PaneContainer::new(pane, self.settings.clone());
 
-            container.set_max_size(size);
+            //container.set_max_size(size);
             container.set_size((0,0));
             
             container
 
         };
 
-        let id = container.get_id();
+        let id = container.get_uuid();
 
         self.panes[self.active_panes[self.active_layer]].push(container);
 
@@ -332,7 +332,7 @@ impl Window {
 
 
 
-    fn switch_pane(&mut self, (layer, index): (usize, usize), location: Option<(usize, usize)>) {
+    pub fn switch_pane(&mut self, (layer, index): (usize, usize), location: Option<(usize, usize)>) {
         eprintln!("Switching to pane: {}, {}", layer, index);
 
 
@@ -718,17 +718,9 @@ impl Window {
 
     }
 
-    fn process_event(&mut self) -> io::Result<Event> {
-        //self.refresh_screen()?;
-        loop {
-            if event::poll(self.duration)? {
-                return event::read();
-            }
-        }
-    }
 
     pub fn can_continue(&mut self) -> io::Result<bool> {
-        self.read_messages()?;
+        self.check_messages()?;
         self.remove_panes();
         if self.panes[0].len() == 0 {
             eprintln!("No panes left");
@@ -759,11 +751,11 @@ impl Window {
     }
 
 
-    pub fn run(&mut self) -> io::Result<bool> {
+    /*pub fn run(&mut self) -> io::Result<bool> {
         //eprintln!("Running");
         
         //self.refresh_screen()?;
-        self.read_messages()?;
+        self.check_messages()?;
         self.remove_panes();
         if self.panes[0].len() == 0 {
             eprintln!("No panes left");
@@ -805,7 +797,7 @@ impl Window {
             _ => {
                 Ok(true)},
         }
-    }
+    }*/
 
     pub fn resize(&mut self, width: usize, height: usize) {
         self.size = (width as usize, height as usize - 1);
@@ -970,7 +962,7 @@ impl Window {
         for layer in self.panes.iter_mut() {
             for pane in layer.iter_mut() {
                 pane.refresh();
-                pane.scroll_cursor();
+                //pane.scroll_cursor();
             }
         }
 
@@ -983,7 +975,7 @@ impl Window {
                     None => {},
                     Some(pane) => {
                         pane.refresh();
-                        pane.scroll_cursor();
+                        //pane.scroll_cursor();
                     }
                 }
             }
@@ -1003,8 +995,17 @@ impl Window {
 
         
 
-        let cursor = self.panes[0][self.active_panes[self.active_layer]].get_cursor();
-        let cursor = cursor.borrow();
+        let cursor = self.panes[0][self.active_panes[self.active_layer]].get_cursor_location();
+
+        if let Some((x, y)) = cursor {
+            queue!(
+                self.contents,
+                cursor::MoveTo(x as u16, y as u16),
+                cursor::Show,
+            )?;
+        } 
+        
+        /*let cursor = cursor.borrow();
 
         let (x, y) = cursor.get_real_cursor();
         //eprintln!("x: {} y: {}", x, y);
@@ -1026,7 +1027,7 @@ impl Window {
             self.contents,
             cursor::MoveTo(x as u16, y as u16),
             cursor::Show,
-        )?;
+        )?;*/
 
 
         
@@ -1034,16 +1035,16 @@ impl Window {
         self.contents.flush()
     }
 
-    pub fn open_file_start(&mut self, filename: &str) -> io::Result<()> {
+    /*pub fn open_file_start(&mut self, filename: &str) -> io::Result<()> {
         let pane = self.file_opener(filename.into())?;
 
         self.panes[0][self.active_panes[0]].change_pane(pane);
 
         Ok(())
         //self.panes[self.active_layer][self.active_panes[self.active_layer]].open_file(&PathBuf::from(filename.to_owned()))
-    }
+    }*/
 
-    pub fn process_keypress(&mut self, key: KeyEvent) -> io::Result<bool> {
+    pub fn process_keypress(&mut self, key: KeyEvent) {
         self.panes[self.active_layer][self.active_panes[self.active_layer]].process_keypress(key)
     }
 
@@ -1177,11 +1178,11 @@ impl Index<usize> for TextRow {
 }
 
 #[derive(Clone, Debug)]
-pub struct TextBuffer {
+pub struct TextLayer {
     pub contents: Vec<TextRow>,
 }
 
-impl TextBuffer {
+impl TextLayer {
     pub fn new() -> Self {
         Self {
             contents: Vec::new(),
@@ -1311,7 +1312,7 @@ impl Compositor {
         }
     }
 
-    pub fn merge(&mut self, layers: &mut Vec<TextBuffer>) {
+    pub fn merge(&mut self, layers: &mut Vec<TextLayer>) {
         
         let top_layer = layers.len() - 1;
 

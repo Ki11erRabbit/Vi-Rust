@@ -505,4 +505,6 @@ pub trait TextBuffer: Pane {
     fn borrow_buffer(&self) -> &Buffer;
     fn borrow_mut_buffer(&mut self) -> &mut Buffer;
 
+    fn get_physical_cursor(&self) -> Rc<RefCell<Cursor>>;
+
 }

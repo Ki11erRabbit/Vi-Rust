@@ -1,4 +1,4 @@
-use std::{io, sync::mpsc::{Receiver, Sender}, cell::RefCell, rc::Rc, thread, time::Duration};
+use std::{io, sync::mpsc::{Receiver, Sender}, cell::RefCell, rc::Rc, thread, time::Duration, path::PathBuf};
 
 use crossterm::{terminal, execute, cursor::{SetCursorStyle, MoveTo}, event::{Event, self}};
 
@@ -147,7 +147,7 @@ impl Editor {
     }
 
     pub fn open_file(&mut self, path: &str) -> io::Result<()> {
-        self.windows[self.active_window].open_file_start(path)
+        self.windows[self.active_window].first_open(PathBuf::from(path))
     }
 
     fn check_messages(&mut self) -> io::Result<()> {
@@ -172,7 +172,8 @@ impl Editor {
                                  self.settings.clone()));
                         self.active_window = self.windows.len() - 1;
                         if let Some(pane) = pane {
-                            self.windows[self.active_window].replace_pane(0, pane);
+                            let pos = self.windows[self.active_window].insert_pane(pane);
+                            self.windows[self.active_window].switch_pane(pos, None);
                             //eprintln!("New window with pane");
                         }
                         self.windows[self.active_window].force_refresh_screen()?;
@@ -198,7 +199,7 @@ impl Editor {
                         Ok(())
                     },
                     EditorMessage::Paste(ty) => {
-                        match ty {
+                        /*match ty {
                             RegisterType::None => {
 
                                 eprintln!("Pasting from clipboard");
@@ -240,10 +241,11 @@ impl Editor {
                                 Ok(())
                             },
                                                
-                        }
+                    }*/
+                        Ok(())
                     },
                     EditorMessage::Copy(ty, text) => {
-                        match ty {
+                        /*match ty {
                             RegisterType::None => {
                                 self.registers.set_clipboard(text);
                                 Ok(())
@@ -256,7 +258,8 @@ impl Editor {
                                 self.registers.set(name, text);
                                 Ok(())
                             },
-                        }
+                    }*/
+                        Ok(())
                     },
                 }
             },
