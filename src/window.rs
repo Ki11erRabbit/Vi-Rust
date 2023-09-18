@@ -23,7 +23,6 @@ use crate::pane::text_pane::TextPane;
 use crate::settings::ColorScheme;
 use crate::{apply_colors, settings::Settings};
 use crate::pane::{Pane, PaneContainer, TextBuffer};
-use crate::treesitter::tree_sitter_scheme;
 
 
 pub enum WindowMessage {
@@ -55,8 +54,8 @@ pub struct WindowMailbox {
 
 impl WindowMailbox {
     pub fn new() -> Self {
-        let (far_sender , far_receiver) = std::sync::mpsc::channel();
-        let (local_sender, local_receiver) = std::sync::mpsc::channel();
+        let (local_sender, far_receiver) = std::sync::mpsc::channel();
+        let (far_sender, local_receiver) = std::sync::mpsc::channel();
 
         Self {
             local_receiver,
@@ -375,6 +374,7 @@ impl Window {
         for (i, layer) in self.panes.iter().enumerate() {
             for (j, pane) in layer.iter().enumerate() {
                 if pane.can_close() {
+                    eprintln!("Removing pane: {}, {}", i, j);
                     panes_to_remove.push((i, j));
                 }
             }
@@ -606,6 +606,7 @@ impl Window {
         self.active_layer = 0;
         self.panes.push(Vec::new());
         self.active_panes.push(0);
+        self.editor_sender.send(EditorMessage::Quit).unwrap();
     }
 
     fn close_pane(&mut self, lose_focus: bool, uuid: Option<Uuid>) {
