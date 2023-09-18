@@ -3,7 +3,7 @@ use std::{path::PathBuf, sync::{mpsc::{Sender, Receiver, TryRecvError}, Arc}, co
 use crossterm::style::{Attribute, Color};
 use tree_sitter::{Tree, Parser, Point};
 
-use crate::{buffer::Buffer, lsp::{LspControllerMessage, lsp_utils::{Diagnostics, CompletionList, LocationResponse, Diagnostic, TextEditType}, LspNotification, LspRequest}, cursor::{Cursor, Direction, CursorMove}, mode::{Mode, base::{Normal, Insert, Command}}, settings::{Settings, SyntaxHighlight, ColorScheme}, window::WindowMessage, treesitter::tree_sitter_scheme, window::{TextRow, StyledChar}, editor::{EditorMessage, RegisterType}};
+use crate::{buffer::Buffer, lsp::{LspControllerMessage, lsp_utils::{Diagnostics, CompletionList, LocationResponse, Diagnostic, TextEditType}, LspNotification, LspRequest}, cursor::{Cursor, Direction, CursorMove}, mode::{Mode, base::{Normal, Insert, Command}, TextMode}, settings::{Settings, SyntaxHighlight, ColorScheme}, window::WindowMessage, treesitter::tree_sitter_scheme, window::{TextRow, StyledChar}, editor::{EditorMessage, RegisterType}};
 
 use super::{Pane, TextBuffer, PaneMessage, PaneContainer};
 
@@ -154,7 +154,7 @@ pub struct TextPane {
     file_name: Option<PathBuf>,
     contents: Buffer,
     mode: Rc<RefCell<dyn TextMode>>,
-    modes: HashMap<String, Rc<RefCell<dyn Mode>>>,
+    modes: HashMap<String, Rc<RefCell<dyn TextMode>>>,
     text_changed: bool,
 
     settings: Rc<RefCell<Settings>>,
@@ -1943,7 +1943,7 @@ impl Pane for TextPane {
                     
                 }
             },
-            "paste" => {
+            /*"paste" => {
                 if let Some(arg) = command_args.next() {
                     if let Ok(number) = arg.parse::<usize>() {
                         let message = WindowMessage::Paste(RegisterType::Number(number));
@@ -2003,7 +2003,7 @@ impl Pane for TextPane {
 
                 }
 
-            },
+            },*/
                 
 
             _ => {}
@@ -2029,6 +2029,12 @@ impl Pane for TextPane {
     fn change_mode(&mut self, mode: &str) {
         let mode = self.modes.get(&mode.to_owned()).unwrap();
         self.mode = mode.clone();
+    }
+
+    
+    fn backup(&mut self) {
+        self.backup_buffer();
+
     }
 }
 

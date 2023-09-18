@@ -37,7 +37,7 @@ pub trait Mode {
 pub trait TextMode {
 
     fn process_keypress(&mut self, key: KeyEvent, pane: &mut dyn TextBuffer, container: &mut PaneContainer);
-    fn update_status(&mut self, pane: &dyn Pane, container: &PaneContainer) -> (String, String, String);
+    fn update_status(&mut self, pane: &dyn TextBuffer, container: &PaneContainer) -> (String, String, String);
 
     fn execute_command(&mut self, command: &str, pane: &mut dyn TextBuffer, pane: &mut PaneContainer);
 }

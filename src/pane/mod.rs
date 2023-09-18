@@ -1,5 +1,5 @@
 
-pub(crate) mod text;
+//pub(crate) mod text;
 //pub mod popup;
 //pub mod treesitter;
 pub mod text_pane;
@@ -99,7 +99,8 @@ impl PaneContainer {
     }
 
     pub fn get_status(&self) -> Option<(String, String, String)> {
-        self.pane.borrow().get_status()
+        let pane = self.pane.clone();
+        pane.borrow().get_status(self)
     }
 
 
@@ -107,10 +108,10 @@ impl PaneContainer {
         self.pane.borrow().draw_row(index, self, contents);
     }
 
-    pub fn process_keypress(&mut self, key: KeyEvent) -> io::Result<()> {
+    pub fn process_keypress(&mut self, key: KeyEvent) {
         let pane = self.pane.clone();
         let mut pane = pane.borrow_mut();
-        pane.process_keypress(key, self)
+        pane.process_keypress(key, self);
     }
 
     pub fn get_cursor_location(&self) -> Option<(usize, usize)> {
@@ -126,13 +127,17 @@ impl PaneContainer {
     }
 
     pub fn backup(&mut self) {
-        self.pane.borrow_mut().backup_buffer();
+        self.pane.borrow_mut().backup();
     }
     
     pub fn refresh(&mut self) {
         let pane = self.pane.clone();
         let mut pane = pane.borrow_mut();
         pane.refresh(self);
+    }
+
+    pub fn set_location(&mut self, position: (usize, usize)) {
+        self.pane.borrow_mut().set_location(position);
     }
 
 
@@ -265,7 +270,7 @@ impl PaneContainer {
             self.grow();
             self.shrink();
         }
-        self.pane.borrow_mut().resize_cursor(self.size);
+        self.pane.borrow_mut().resize(self.size);
 
         //eprintln!("New Size: {:?}", self.size);
         
@@ -471,6 +476,8 @@ pub trait Pane {
     fn get_settings(&self) -> Rc<RefCell<Settings>>;
 
     fn change_mode(&mut self, mode: &str);
+
+    fn backup(&mut self);
 }
 
 
