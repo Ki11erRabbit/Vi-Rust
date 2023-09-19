@@ -154,75 +154,65 @@ impl TextMode for Normal {
 
     }
 
-    fn process_keypress(&mut self, key: KeyEvent, pane: &mut dyn TextBuffer, container: &mut PaneContainer) {
+    fn process_keypress(&mut self, key: Key, pane: &mut dyn TextBuffer, container: &mut PaneContainer) {
         self.refresh();
 
         match key {
-            KeyEvent {
-                code: KeyCode::Char('1'),
-                modifiers: KeyModifiers::NONE,
-                ..
+            Key {
+                key: KeyCode::Char('1'),
+                modifier: KeyModifiers::NONE,
             } => {
                 self.number_buffer.push('1');
             },
-            KeyEvent {
-                code: KeyCode::Char('2'),
-                modifiers: KeyModifiers::NONE,
-                ..
+            Key {
+                key: KeyCode::Char('2'),
+                modifier: KeyModifiers::NONE,
             } => {
                 self.number_buffer.push('2');
             },
-            KeyEvent {
-                code: KeyCode::Char('3'),
-                modifiers: KeyModifiers::NONE,
-                ..
+            Key {
+                key: KeyCode::Char('3'),
+                modifier: KeyModifiers::NONE,
             } => {
                 self.number_buffer.push('3');
             },
-            KeyEvent {
-                code: KeyCode::Char('4'),
-                modifiers: KeyModifiers::NONE,
-                ..
+            Key {
+                key: KeyCode::Char('4'),
+                modifier: KeyModifiers::NONE,
             } => {
                 self.number_buffer.push('4');
             },
-            KeyEvent {
-                code: KeyCode::Char('5'),
-                modifiers: KeyModifiers::NONE,
-                ..
+            Key {
+                key: KeyCode::Char('5'),
+                modifier: KeyModifiers::NONE,
             } => {
                 self.number_buffer.push('5');
             },
-            KeyEvent {
-                code: KeyCode::Char('6'),
-                modifiers: KeyModifiers::NONE,
-                ..
+            Key {
+                key: KeyCode::Char('6'),
+                modifier: KeyModifiers::NONE,
             } => {
                 self.number_buffer.push('6');
             },
-            KeyEvent {
-                code: KeyCode::Char('7'),
-                modifiers: KeyModifiers::NONE,
-                ..
+            Key {
+                key: KeyCode::Char('7'),
+                modifier: KeyModifiers::NONE,
             } => {
                 self.number_buffer.push('7');
             },
-            KeyEvent {
-                code: KeyCode::Char('8'),
-                modifiers: KeyModifiers::NONE,
-                ..
+            Key {
+                key: KeyCode::Char('8'),
+                modifier: KeyModifiers::NONE,
             } => {
                 self.number_buffer.push('8');
             },
-            KeyEvent {
-                code: KeyCode::Char('9'),
-                modifiers: KeyModifiers::NONE,
-                ..
+            Key {
+                key: KeyCode::Char('9'),
+                modifier: KeyModifiers::NONE,
             } => {
                 self.number_buffer.push('9');
             },
-            key_event => {
-                let key = Key::from(key_event);
+            key => {
 
                 if key.key == KeyCode::Char('0') && !self.number_buffer.is_empty() {
                     self.number_buffer.push('0');
@@ -312,22 +302,19 @@ impl Insert {
         Ok(true)
     }*/
 
-    fn insert_newline(&self, pane: &mut dyn TextBuffer) -> io::Result<bool> {
+    fn insert_newline(&self, pane: &mut dyn TextBuffer) {
         pane.insert_newline();
         pane.changed();
-        Ok(true)
     }
-    fn delete_char(&self, pane: &mut dyn TextBuffer) -> io::Result<bool> {
+    fn delete_char(&self, pane: &mut dyn TextBuffer)  {
         pane.delete_char();
         pane.changed();
-        Ok(true)
     }
-    fn backspace(&self, pane: &mut dyn TextBuffer) -> io::Result<bool> {
+    fn backspace(&self, pane: &mut dyn TextBuffer)  {
         pane.backspace_char();
         pane.changed();
-        Ok(true)
     }
-    fn insert_char(&self, pane: &mut dyn TextBuffer, c: char) -> io::Result<bool> {
+    fn insert_char(&self, pane: &mut dyn TextBuffer, c: char)  {
         pane.changed();
         if pane.get_settings().borrow().editor_settings.use_spaces && c == '\t' {
             pane.insert_str(&" ".repeat(pane.get_settings().borrow().editor_settings.tab_size));
@@ -343,7 +330,6 @@ impl Insert {
         } else {
             cursor.move_cursor(Direction::Right, 1, &mut *pane);
         }
-        Ok(true)
     }
 }
 
@@ -422,38 +408,32 @@ impl TextMode for Insert {
         }
     }
     
-    fn process_keypress(&mut self, key: KeyEvent, pane: &mut dyn TextBuffer, container: &mut PaneContainer) {
+    fn process_keypress(&mut self, key: Key, pane: &mut dyn TextBuffer, container: &mut PaneContainer) {
         self.refresh();
 
         if self.key_buffer.is_empty() {
             match key {
-                KeyEvent {
-                    code: KeyCode::Enter,
-                    modifiers: KeyModifiers::NONE,
-                    ..
+                Key {
+                    key: KeyCode::Enter,
+                    modifier: KeyModifiers::NONE,
                 } => {self.insert_newline(pane);},
-                KeyEvent {
-                    code: KeyCode::Delete,
-                    modifiers: KeyModifiers::NONE,
-                    ..
+                Key {
+                    key: KeyCode::Delete,
+                    modifier: KeyModifiers::NONE,
                 } => {self.delete_char(pane);},
-                KeyEvent {
-                    code: KeyCode::Backspace,
-                    modifiers: KeyModifiers::NONE,
-                    ..
+                Key {
+                    key: KeyCode::Backspace,
+                    modifier: KeyModifiers::NONE,
                 } => {self.backspace(pane);},
-                KeyEvent {
-                    code: code @ (KeyCode::Char(..) | KeyCode::Tab),
-                    modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
-                    ..
+                Key {
+                    key: code @ (KeyCode::Char(..) | KeyCode::Tab),
+                    modifier: KeyModifiers::NONE | KeyModifiers::SHIFT,
                 } => {self.insert_char(pane, match code {
                     KeyCode::Char(c) => c,
                     KeyCode::Tab => '\t',
                     _ => unreachable!(),
                 });},
-                key_event => {
-                    let key = Key::from(key_event);
-
+                key => {
                     let mut flush = false;
                     if key.key == KeyCode::Esc {
                         flush = true;
@@ -470,25 +450,20 @@ impl TextMode for Insert {
             }
         }
         else {
-            match key {
-                key_event => {
-                    let key = Key::from(key_event);
 
-                    let mut flush = false;
-                    if key.key == KeyCode::Esc {
-                        flush = true;
-                    }
-                    self.key_buffer.push(key);
-                    if let Some(command) = self.keybindings.clone().borrow().get(&self.key_buffer) {
-                        self.execute_command(command.as_str(), pane, container);
-                        flush = true;
-                    }
-                    if flush {
-                        self.flush_key_buffer();
-                    }
-
-                }
+            let mut flush = false;
+            if key.key == KeyCode::Esc {
+                flush = true;
             }
+            self.key_buffer.push(key);
+            if let Some(command) = self.keybindings.clone().borrow().get(&self.key_buffer) {
+                self.execute_command(command.as_str(), pane, container);
+                flush = true;
+            }
+            if flush {
+                self.flush_key_buffer();
+            }
+
         }
 
     }
@@ -657,43 +632,39 @@ impl TextMode for Command {
         }
     }
 
-    fn process_keypress(&mut self, key: KeyEvent, pane: &mut dyn TextBuffer, container: &mut PaneContainer) {
+    fn process_keypress(&mut self, key: Key, pane: &mut dyn TextBuffer, container: &mut PaneContainer) {
         self.refresh();
 
 
         match key {
-            KeyEvent {
-                code: KeyCode::Enter,
-                modifiers: KeyModifiers::NONE,
-                ..
+            Key {
+                key: KeyCode::Enter,
+                modifier: KeyModifiers::NONE,
             } => {
                 pane.run_command(&self.command, container);
 
                 self.change_mode("Normal", pane,container);
             },
-            KeyEvent {
-                code: KeyCode::Delete,
-                modifiers: KeyModifiers::NONE,
-                ..
+            Key {
+                key: KeyCode::Delete,
+                modifier: KeyModifiers::NONE,
             } => {
                 if self.edit_pos < self.command.len() {
                     self.command.remove(self.edit_pos);
                 }
             },
-            KeyEvent {
-                code: KeyCode::Backspace,
-                modifiers: KeyModifiers::NONE,
-                ..
+            Key {
+                key: KeyCode::Backspace,
+                modifier: KeyModifiers::NONE,
             } => {
                 if self.edit_pos > 0 {
                     self.edit_pos -= 1;
                     self.command.remove(self.edit_pos);
                 }
             },
-            KeyEvent {
-                code: code @ KeyCode::Char(..),
-                modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
-                ..
+            Key {
+                key: code @ KeyCode::Char(..),
+                modifier: KeyModifiers::NONE | KeyModifiers::SHIFT,
             } => {
                 let c = match code {
                     KeyCode::Char(c) => c,
@@ -704,8 +675,7 @@ impl TextMode for Command {
                 self.command.insert(self.edit_pos, c);
                 self.edit_pos += 1;
             },
-            key_event => {
-                let key = Key::from(key_event);
+            key => {
 
                 let mut flush = false;
                 if key.key == KeyCode::Esc {

@@ -10,7 +10,7 @@ use std::{rc::Rc, cell::RefCell, path::PathBuf, io, cmp, fmt::Debug, sync::mpsc:
 use crossterm::event::KeyEvent;
 use uuid::Uuid;
 
-use crate::{settings::Settings, window::{StyledChar, TextRow, WindowMessage}, cursor::Cursor, buffer::Buffer};
+use crate::{settings::{Settings, Key}, window::{StyledChar, TextRow, WindowMessage}, cursor::Cursor, buffer::Buffer};
 
 
 pub enum PaneMessage {
@@ -109,7 +109,7 @@ impl PaneContainer {
         self.pane.borrow().draw_row(index, self, contents);
     }
 
-    pub fn process_keypress(&mut self, key: KeyEvent) {
+    pub fn process_keypress(&mut self, key: Key) {
         let pane = self.pane.clone();
         let mut pane = pane.borrow_mut();
         pane.process_keypress(key, self);
@@ -449,7 +449,7 @@ pub trait Pane {
 
     fn refresh(&mut self, container: &mut PaneContainer);
 
-    fn process_keypress(&mut self, key: KeyEvent, container: &mut PaneContainer);
+    fn process_keypress(&mut self, key: Key, container: &mut PaneContainer);
 
     /// This function gets the status bar for the pane
     /// It returns the name of the mode, a first item, and a second item

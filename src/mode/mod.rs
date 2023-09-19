@@ -9,7 +9,7 @@ use std::{io, collections::HashMap};
 
 use crossterm::event::KeyEvent;
 
-use crate::{pane::{Pane, PaneContainer, TextBuffer}, settings::Keys, window::StyledChar};
+use crate::{pane::{Pane, PaneContainer, TextBuffer}, settings::{Keys, Key}, window::StyledChar};
 
 
 
@@ -32,7 +32,7 @@ pub trait Mode {
 
 pub trait TextMode {
 
-    fn process_keypress(&mut self, key: KeyEvent, pane: &mut dyn TextBuffer, container: &mut PaneContainer);
+    fn process_keypress(&mut self, key: Key, pane: &mut dyn TextBuffer, container: &mut PaneContainer);
     fn update_status(&mut self, pane: &dyn TextBuffer, container: &PaneContainer) -> (String, String, String);
 
     fn execute_command(&mut self, command: &str, pane: &mut dyn TextBuffer, pane: &mut PaneContainer);

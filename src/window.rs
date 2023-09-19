@@ -20,7 +20,7 @@ use crate::Mailbox;
 use crate::editor::{EditorMessage, RegisterType};
 use crate::lsp::LspControllerMessage;
 use crate::pane::text_pane::TextPane;
-use crate::settings::ColorScheme;
+use crate::settings::{ColorScheme, Key};
 use crate::{apply_colors, settings::Settings};
 use crate::pane::{Pane, PaneContainer, TextBuffer};
 
@@ -1046,6 +1046,8 @@ impl Window {
     }*/
 
     pub fn process_keypress(&mut self, key: KeyEvent) {
+        let key = Key::from(key);
+        
         self.panes[self.active_layer][self.active_panes[self.active_layer]].process_keypress(key)
     }
 

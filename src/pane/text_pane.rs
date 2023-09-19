@@ -1177,7 +1177,7 @@ impl Pane for TextPane {
         self.rainbow_delimiters.borrow_mut().clear();
     }
 
-    fn process_keypress(&mut self, key: crossterm::event::KeyEvent, container: &mut super::PaneContainer) {
+    fn process_keypress(&mut self, key: crate::settings::Key, container: &mut super::PaneContainer) {
         let mode = self.mode.clone();
         mode.borrow_mut().process_keypress(key, self, container);
 
