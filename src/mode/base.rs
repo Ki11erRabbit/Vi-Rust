@@ -306,7 +306,7 @@ impl Insert {
         pane.insert_newline();
         pane.changed();
     }
-    fn delete_char(&self, pane: &mut dyn TextBuffer)  {
+    fn delete_char(&self, pane: &mut dyn TextBuffer) {
         pane.delete_char();
         pane.changed();
     }

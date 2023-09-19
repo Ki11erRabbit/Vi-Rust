@@ -798,6 +798,15 @@ impl ColorScheme {
             attributes: Rc::new(attributes),
         }
     }
+
+    pub fn ui() -> Self {
+        ColorScheme {
+            foreground_color: Color::DarkGrey,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -895,12 +904,7 @@ impl Default for EditorColors {
             attributes: Rc::new(Vec::new()),
         });
 
-        let ui = ColorScheme {
-            foreground_color: Color::DarkGrey,
-            background_color: Color::Reset,
-            underline_color: Color::Reset,
-            attributes: Rc::new(Vec::new()),
-        };
+        let ui = ColorScheme::ui();
         
         Self {
             pane: ColorScheme::default(),
