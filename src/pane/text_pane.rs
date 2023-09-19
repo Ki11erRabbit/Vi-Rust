@@ -343,8 +343,9 @@ impl TextPane {
 
                 if real_row + 1 <= number_of_lines {
 
-
+                    
                     if !self.cursor.borrow().get_scrolled() {
+                        //eprintln!("Not Changed 1");
                         for _ in 0..num_width {
                             output.push(None);
                         }
@@ -398,7 +399,7 @@ impl TextPane {
         let syntax_highlighting = syntax_highlighting.get(&self.tree_sitter_info.as_ref().unwrap().language).unwrap_or(&default);
 
         if !self.cursor.borrow().get_scrolled() {
-            //eprintln!("Not Changed");
+            //eprintln!("Not Changed 2");
             for _ in 0..num_width {
                 output.push(None);
             }
@@ -406,7 +407,7 @@ impl TextPane {
 
 
         if !self.cursor.borrow().get_scrolled() {
-            //eprintln!("Not Changed");
+            //eprintln!("Not Changed 3");
             for _ in 0..(cols - num_width) {
                 output.push(None);
             }
@@ -1081,7 +1082,7 @@ impl TextPane {
                     c => {
                         count += 1;
                         match c {
-                            '(' | ')' | '{' | '}' | '[' | ']' | '<' | '>' => {
+                            '(' | ')' | '{' | '}' | '[' | ']'  => {
                                 if self.settings.borrow().editor_settings.rainbow_delimiters {
                                     let colors = &self.settings.borrow().colors.rainbow_delimiters;
                                     match c {
