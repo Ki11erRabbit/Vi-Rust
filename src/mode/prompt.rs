@@ -31,6 +31,116 @@ impl Prompt {
             current_prompt: 0,
         }
     }
+
+
+    fn execute_command(&mut self, command: &str, pane: &mut dyn Pane, container: &mut PaneContainer) {
+        match command {
+            "cancel" => {
+                pane.run_command("cancel", container);
+            },
+            "submit" => {
+                let mut command = String::from("submit ");
+
+                let prompts = self.prompts.clone();
+                let prompts = prompts.borrow();
+                match &prompts[self.current_prompt] {
+                    PromptType::Text(text, _, _) => {
+                        command.push_str(&format!("text {}", text));
+                    },
+                    PromptType::Button(buttons, selected) => {
+                        command.push_str(&format!("button {}", buttons[*selected].1(self)));
+                    },
+                    PromptType::Checkbox(checkboxes, selected) => {
+                        command.push_str("checkbox ");
+                        for (label, checked) in checkboxes {
+                            command.push_str(&format!("{}={},", label, checked));
+                        }
+                    },
+                    PromptType::Radio(radios, selected, _) => {
+                        command.push_str("radio ");
+
+                        match selected {
+                            None => {
+                                command.push_str("");
+                            },
+                            Some(selected) => {
+                                command.push_str(&radios[*selected]);
+                            },
+                        }
+                        
+                        command.push_str(&radios[selected.unwrap()]);
+                    },
+                }
+
+                eprintln!("{}", command);
+
+                pane.run_command(&command, container);
+            },
+            "toggle" => {
+                let prompts = self.prompts.clone();
+                let mut prompts = prompts.borrow_mut();
+                match &mut prompts[self.current_prompt] {
+                    PromptType::Checkbox(checkboxes, selected) => {
+                        checkboxes[*selected].1 = !checkboxes[*selected].1;
+                    },
+                    PromptType::Radio(radios, selected, pos) => {
+                        *selected = Some(*pos);
+                    },
+                    PromptType::Text(text, _, _) => {
+                        text.push_str(" ");
+                    },
+                    PromptType::Button(buttons, selected) => {
+                        let mut command = String::from("submit ");
+                        command.push_str(&format!("button {}", buttons[*selected].1(self)));
+
+                        pane.run_command(&command, container);
+                    },
+                    _ => {},
+                }
+            },
+            "left" => {
+                let prompts = self.prompts.clone();
+                let mut prompts = prompts.borrow_mut();
+                match &mut prompts[self.current_prompt] {
+                    PromptType::Button(buttons, selected) => {
+                        *selected = selected.saturating_sub(1);
+                    },
+                    PromptType::Checkbox(checkboxes, selected) => {
+                        *selected = selected.saturating_sub(1);
+                    },
+                    PromptType::Radio(radios, _, selected) => {
+                        *selected = selected.saturating_sub(1);
+                    },
+                    _ => {},
+                }
+            },
+            "right" => {
+                let prompts = self.prompts.clone();
+                let mut prompts = prompts.borrow_mut();
+                match &mut prompts[self.current_prompt] {
+                    PromptType::Button(buttons, selected) => {
+                        *selected = (*selected + 1).min(buttons.len() - 1);
+                    },
+                    PromptType::Checkbox(checkboxes, selected) => {
+                        *selected = (*selected + 1).min(checkboxes.len() - 1);
+                    },
+                    PromptType::Radio(radios, _, selected) => {
+                        *selected = (*selected + 1).min(radios.len() - 1);
+                    },
+                    _ => {},
+                }
+            },
+            "up" => {
+                self.current_prompt = self.current_prompt.saturating_sub(1);
+            },
+            "down" => {
+                self.current_prompt = (self.current_prompt + 1).min(self.prompts.borrow().len() - 1);
+            },
+            _ => {},
+        }
+
+    }
+    
 }
 
 
@@ -43,7 +153,7 @@ impl Promptable for Prompt {
         
         let prompt = &self.prompts.borrow()[self.current_prompt];
 
-        let color_settings = container.settings.borrow().colors.popup.clone();
+        let color_settings = container.get_settings().borrow().colors.popup.clone();
 
         match prompt {
             PromptType::Text(_,size,_) => {
@@ -219,151 +329,13 @@ impl Promptable for Prompt {
 
         max
     }
-}
 
-
-impl Mode for Prompt {
-    fn get_name(&self) -> String {
-        "prompt".to_string()
-    }
-
-    fn add_keybindings(&mut self, bindings: HashMap<Keys, String>) {
-        self.keybindings.borrow_mut().extend(bindings);
-    }
-
-    fn set_key_timeout(&mut self, timeout: u64) {
-        //self.timeout = timeout;
-    }
-
-    fn flush_key_buffer(&mut self) {
-        //self.key_buffer.clear();
-    }
-
-    fn refresh(&mut self) {
-    }
-
-    fn change_mode(&mut self, mode: &str, pane: &mut dyn Pane, container: &mut PaneContainer) {
-    }
-
-    fn update_status(&mut self, pane: &dyn Pane, container: &PaneContainer) -> (String, String, String) {
-        ("".to_string(), "".to_string(), "".to_string())
-    }
-
-    fn execute_command(&mut self, command: &str, pane: &mut dyn Pane, container: &mut PaneContainer) {
-        match command {
-            "cancel" => {
-                pane.run_command("cancel", container);
-            },
-            "submit" => {
-                let mut command = String::from("submit ");
-
-                let prompts = self.prompts.clone();
-                let prompts = prompts.borrow();
-                match &prompts[self.current_prompt] {
-                    PromptType::Text(text, _, _) => {
-                        command.push_str(&format!("text {}", text));
-                    },
-                    PromptType::Button(buttons, selected) => {
-                        command.push_str(&format!("button {}", buttons[*selected].1(self)));
-                    },
-                    PromptType::Checkbox(checkboxes, selected) => {
-                        command.push_str("checkbox ");
-                        for (label, checked) in checkboxes {
-                            command.push_str(&format!("{}={},", label, checked));
-                        }
-                    },
-                    PromptType::Radio(radios, selected, _) => {
-                        command.push_str("radio ");
-
-                        match selected {
-                            None => {
-                                command.push_str("");
-                            },
-                            Some(selected) => {
-                                command.push_str(&radios[*selected]);
-                            },
-                        }
-                        
-                        command.push_str(&radios[selected.unwrap()]);
-                    },
-                }
-
-                eprintln!("{}", command);
-
-                pane.run_command(&command, container);
-            },
-            "toggle" => {
-                let prompts = self.prompts.clone();
-                let mut prompts = prompts.borrow_mut();
-                match &mut prompts[self.current_prompt] {
-                    PromptType::Checkbox(checkboxes, selected) => {
-                        checkboxes[*selected].1 = !checkboxes[*selected].1;
-                    },
-                    PromptType::Radio(radios, selected, pos) => {
-                        *selected = Some(*pos);
-                    },
-                    PromptType::Text(text, _, _) => {
-                        text.push_str(" ");
-                    },
-                    PromptType::Button(buttons, selected) => {
-                        let mut command = String::from("submit ");
-                        command.push_str(&format!("button {}", buttons[*selected].1(self)));
-
-                        pane.run_command(&command, container);
-                    },
-                    _ => {},
-                }
-            },
-            "left" => {
-                let prompts = self.prompts.clone();
-                let mut prompts = prompts.borrow_mut();
-                match &mut prompts[self.current_prompt] {
-                    PromptType::Button(buttons, selected) => {
-                        *selected = selected.saturating_sub(1);
-                    },
-                    PromptType::Checkbox(checkboxes, selected) => {
-                        *selected = selected.saturating_sub(1);
-                    },
-                    PromptType::Radio(radios, _, selected) => {
-                        *selected = selected.saturating_sub(1);
-                    },
-                    _ => {},
-                }
-            },
-            "right" => {
-                let prompts = self.prompts.clone();
-                let mut prompts = prompts.borrow_mut();
-                match &mut prompts[self.current_prompt] {
-                    PromptType::Button(buttons, selected) => {
-                        *selected = (*selected + 1).min(buttons.len() - 1);
-                    },
-                    PromptType::Checkbox(checkboxes, selected) => {
-                        *selected = (*selected + 1).min(checkboxes.len() - 1);
-                    },
-                    PromptType::Radio(radios, _, selected) => {
-                        *selected = (*selected + 1).min(radios.len() - 1);
-                    },
-                    _ => {},
-                }
-            },
-            "up" => {
-                self.current_prompt = self.current_prompt.saturating_sub(1);
-            },
-            "down" => {
-                self.current_prompt = (self.current_prompt + 1).min(self.prompts.borrow().len() - 1);
-            },
-            _ => {},
-        }
-
-    }
-
-
-    fn process_keypress(&mut self, key: KeyEvent, pane: &mut dyn Pane, container: &mut PaneContainer) -> io::Result<bool> {
+    fn process_keypress(&mut self, key: Key, pane: &mut dyn Pane, container: &mut PaneContainer) {
 
         match key {
-            KeyEvent {
-                code: code @ KeyCode::Char(..),
-                modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+            Key {
+                key: code @ KeyCode::Char(..),
+                modifier: KeyModifiers::NONE | KeyModifiers::SHIFT,
                 ..
             } => {
                 if code == KeyCode::Char(' ') {
@@ -377,7 +349,7 @@ impl Mode for Prompt {
 
                             let chr = match code {
                                 KeyCode::Char(chr) => chr,
-                                _ => return Ok(true),
+                                _ => return,
                             };
                             match limit {
                                 Some(limit) => {
@@ -394,33 +366,51 @@ impl Mode for Prompt {
                         _ => {},
                     }
                 }
-                return Ok(true);
             },
-            KeyEvent {
-                code: KeyCode::Backspace,
-                modifiers: KeyModifiers::NONE,
+            Key {
+                key: KeyCode::Backspace,
+                modifier: KeyModifiers::NONE,
                 ..
             } => {
                 let prompts = self.prompts.clone();
-                match &mut prompts.borrow_mut()[self.current_prompt] {
+                let mut prompts = prompts.borrow_mut();
+                match &mut prompts[self.current_prompt] {
                     PromptType::Text(text, _, _) => {
                         text.pop();
                     },
                     _ => {},
                 }
-                return Ok(true);
             },
-            key_event => {
-                let key = Key::from(key_event);
+            key => {
                 let key = vec![key];
 
                 if let Some(command) = self.keybindings.clone().borrow().get(&key) {
                     self.execute_command(command,pane, container);
                 }
 
-                return Ok(true);
             }
         }
     }
+}
 
+
+impl Mode for Prompt {
+    fn get_name(&self) -> String {
+        "prompt".to_string()
+    }
+
+    fn add_keybindings(&mut self, bindings: HashMap<Keys, String>) {
+        self.keybindings.borrow_mut().extend(bindings);
+    }
+
+    fn set_key_timeout(&mut self, _timeout: u64) {
+        //self.timeout = timeout;
+    }
+
+    fn flush_key_buffer(&mut self) {
+        //self.key_buffer.clear();
+    }
+
+    fn refresh(&mut self) {
+    }
 }

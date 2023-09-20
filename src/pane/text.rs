@@ -10,7 +10,7 @@ use std::{collections::HashMap, rc::Rc, cell::RefCell, path::PathBuf, sync::mpsc
 use crop::{RopeSlice, Rope};
 use crossterm::event::KeyEvent;
 
-use crate::{cursor::{Cursor, Direction}, mode::{Mode, base::{Normal, Insert, Command}}, settings::Settings, window::Message};
+use crate::{cursor::{Cursor, Direction}, mode::{Mode, base::{Normal, Insert, Command}}, settings::Settings, window::WindowMessage};
 
 use super::{PaneContainer, PaneMessage, popup::PopUpPane};
 
@@ -121,13 +121,13 @@ pub struct PlainTextPane {
     changed: bool,
     settings: Rc<RefCell<Settings>>,
     jump_table: JumpTable,
-    sender: Sender<Message>,
+    sender: Sender<WindowMessage>,
     popup_channels: Option<(Sender<PaneMessage>, Receiver<PaneMessage>)>,
     waiting: Waiting,
 }
 
 impl PlainTextPane {
-    pub fn new(settings: Rc<RefCell<Settings>>, sender: Sender<Message>) -> Self {
+    pub fn new(settings: Rc<RefCell<Settings>>, sender: Sender<WindowMessage>) -> Self {
         let mut modes: HashMap<String, Rc<RefCell<dyn Mode>>> = HashMap::new();
         let normal = Rc::new(RefCell::new(Normal::new()));
         normal.borrow_mut().add_keybindings(settings.borrow().mode_keybindings.get("Normal").unwrap().clone());
@@ -475,7 +475,7 @@ impl Pane for PlainTextPane {
             "q" => {
                 if self.changed {
                 } else {
-                    self.sender.send(Message::ClosePane(false, None)).unwrap();
+                    self.sender.send(WindowMessage::ClosePane(false, None)).unwrap();
                 }
             },
             "w" => {
@@ -496,10 +496,10 @@ impl Pane for PlainTextPane {
             },
             "wq" => {
                 self.save_buffer().expect("Failed to save file");
-                self.sender.send(Message::ClosePane(false, None)).unwrap();
+                self.sender.send(WindowMessage::ClosePane(false, None)).unwrap();
             },
             "q!" => {
-                self.sender.send(Message::ClosePane(false, None)).unwrap();
+                self.sender.send(WindowMessage::ClosePane(false, None)).unwrap();
             },
             "move" => {
                 let direction = command_args.next();
@@ -581,35 +581,35 @@ impl Pane for PlainTextPane {
                 
             },
             "horizontal_split" => {
-                self.sender.send(Message::HorizontalSplit).expect("Failed to send message");
+                self.sender.send(WindowMessage::HorizontalSplit).expect("Failed to send message");
                 self.contents.add_new_rope();
             },
             "vertical_split" => {
-                self.sender.send(Message::VerticalSplit).expect("Failed to send message");
+                self.sender.send(WindowMessage::VerticalSplit).expect("Failed to send message");
                 self.contents.add_new_rope();
             },
             "qa!" => {
-                self.sender.send(Message::ForceQuitAll).expect("Failed to send message");
+                self.sender.send(WindowMessage::ForceQuitAll).expect("Failed to send message");
             },
             "pane_up" => {
-                self.sender.send(Message::PaneUp).expect("Failed to send message");
+                self.sender.send(WindowMessage::PaneUp).expect("Failed to send message");
                 self.contents.add_new_rope();
             },
             "pane_down" => {
-                self.sender.send(Message::PaneDown).expect("Failed to send message");
+                self.sender.send(WindowMessage::PaneDown).expect("Failed to send message");
                 self.contents.add_new_rope();
             },
             "pane_left" => {
-                self.sender.send(Message::PaneLeft).expect("Failed to send message");
+                self.sender.send(WindowMessage::PaneLeft).expect("Failed to send message");
                 self.contents.add_new_rope();
             },
             "pane_right" => {
-                self.sender.send(Message::PaneRight).expect("Failed to send message");
+                self.sender.send(WindowMessage::PaneRight).expect("Failed to send message");
                 self.contents.add_new_rope();
             },
             "e" => {
                 if let Some(file_name) = command_args.next() {
-                    self.sender.send(Message::OpenFile(file_name.to_string(), None)).expect("Failed to send message");
+                    self.sender.send(WindowMessage::OpenFile(file_name.to_string(), None)).expect("Failed to send message");
                 }
                 self.contents.add_new_rope();
             },
@@ -652,7 +652,7 @@ impl Pane for PlainTextPane {
 
 
 
-                self.sender.send(Message::CreatePopup(container, true)).expect("Failed to send message");
+                self.sender.send(WindowMessage::CreatePopup(container, true)).expect("Failed to send message");
                 self.waiting = Waiting::JumpTarget;
 
                 self.contents.add_new_rope();
@@ -696,7 +696,7 @@ impl Pane for PlainTextPane {
 
 
 
-                self.sender.send(Message::CreatePopup(container, true)).expect("Failed to send message");
+                self.sender.send(WindowMessage::CreatePopup(container, true)).expect("Failed to send message");
                 self.waiting = Waiting::JumpPosition;
 
                 self.contents.add_new_rope();
@@ -717,15 +717,15 @@ impl Pane for PlainTextPane {
             "change_tab" => {
                 if let Some(tab) = command_args.next() {
                     if let Ok(tab) = tab.parse::<usize>() {
-                        self.sender.send(Message::NthTab(tab)).expect("Failed to send message");
+                        self.sender.send(WindowMessage::NthTab(tab)).expect("Failed to send message");
                     }
                     else {
                         match tab {
                             "prev" => {
-                                self.sender.send(Message::PreviousTab).expect("Failed to send message");
+                                self.sender.send(WindowMessage::PreviousTab).expect("Failed to send message");
                             },
                             "next" => {
-                                self.sender.send(Message::NextTab).expect("Failed to send message");
+                                self.sender.send(WindowMessage::NextTab).expect("Failed to send message");
                             },
                             _ => {}
                         }
@@ -733,25 +733,25 @@ impl Pane for PlainTextPane {
                 }
             },
             "open_tab" => {
-                self.sender.send(Message::OpenNewTab).expect("Failed to send message");
+                self.sender.send(WindowMessage::OpenNewTab).expect("Failed to send message");
             },
             "open_tab_with_pane" => {
-                self.sender.send(Message::OpenNewTabWithPane).expect("Failed to send message");
+                self.sender.send(WindowMessage::OpenNewTabWithPane).expect("Failed to send message");
             },
             "paste" => {
                 
                 if let Some(arg) = command_args.next() {
                     if let Ok(number) = arg.parse::<usize>() {
-                        let message = Message::Paste(RegisterType::Number(number));
+                        let message = WindowMessage::Paste(RegisterType::Number(number));
 
                         self.sender.send(message).expect("Failed to send message");
                     } else {
-                        let message = Message::Paste(RegisterType::Name(arg.to_string()));
+                        let message = WindowMessage::Paste(RegisterType::Name(arg.to_string()));
 
                         self.sender.send(message).expect("Failed to send message");
                     }
                 } else {
-                    let message = Message::Paste(RegisterType::None);
+                    let message = WindowMessage::Paste(RegisterType::None);
 
                     self.sender.send(message).expect("Failed to send message");
                 }
@@ -787,7 +787,7 @@ impl Pane for PlainTextPane {
                                 None => String::new(),
                             };
 
-                            let message = Message::Copy(reg, row);
+                            let message = WindowMessage::Copy(reg, row);
 
                             self.sender.send(message).expect("Failed to send message");
                                     
@@ -947,7 +947,7 @@ impl Pane for PlainTextPane {
     }
 
 
-    fn set_sender(&mut self, sender: Sender<Message>) {
+    fn set_sender(&mut self, sender: Sender<WindowMessage>) {
         self.sender = sender;
     }
 }

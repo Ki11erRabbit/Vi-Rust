@@ -1,48 +1,202 @@
-use std::{sync::{mpsc::{Sender, Receiver}, Arc}, cell::RefCell, rc::Rc, path::PathBuf, collections::{HashMap, HashSet}, io::{self, Write}};
+use std::{path::PathBuf, sync::{mpsc::{Sender, Receiver, TryRecvError}, Arc}, collections::{HashSet, HashMap}, rc::Rc, cell::RefCell, io::{self, Write, BufReader, Read}, fs::File};
 
-use crop::RopeSlice;
-use crossterm::{event::KeyEvent, style::{Attribute, Color}};
-use tree_sitter::{Parser, Tree, Point, Language, InputEdit};
+use crossterm::style::{Attribute, Color};
+use tree_sitter::{Tree, Parser, Point, InputEdit};
 
-use crate::{window::{WindowMessage, StyledChar, TextRow}, cursor::{Cursor, Direction, CursorMove}, mode::{Mode, base::{Normal, Insert, Command},  PromptType, Promptable}, buffer::Buffer, settings::{Settings, SyntaxHighlight, ColorScheme},  lsp::{LspControllerMessage, LspNotification, lsp_utils::{Diagnostic, Diagnostics, CompletionList, TextEditType, LocationResponse}, LspResponse, LspRequest}, editor::RegisterType};
+use crate::{buffer::Buffer, lsp::{LspControllerMessage, lsp_utils::{Diagnostics, CompletionList, LocationResponse, Diagnostic, TextEditType}, LspNotification, LspRequest, LspResponse}, cursor::{Cursor, Direction, CursorMove}, mode::{Mode, base::{Normal, Insert, Command}, TextMode, PromptType, Promptable}, settings::{Settings, SyntaxHighlight, ColorScheme}, window::WindowMessage, treesitter::tree_sitter_scheme, window::{TextRow, StyledChar}, editor::{EditorMessage, RegisterType}};
 
-use super::{text::{JumpTable, Waiting}, PaneMessage, Pane, PaneContainer, popup::PopUpPane};
-
+use super::{Pane, TextBuffer, PaneMessage, PaneContainer, popup::PopUpPane};
 
 
-pub struct TreesitterPane {
-    parser: Parser,
-    tree: Tree,
-    lang: String,
-    lsp_client: Option<(Sender<LspControllerMessage>, Arc<Receiver<LspControllerMessage>>)>,
-    file_version: usize,
-    lsp_diagnostics: Diagnostics,
-    sent_diagnostics: HashSet<Diagnostic>,
-    lsp_completion: Option<CompletionList>,
-    lsp_location: Option<LocationResponse>,
 
+
+#[derive(Debug, Clone)]
+pub struct JumpTable {
+    table: Vec<Cursor>,
+    index: usize,
+    named: HashMap<String, Cursor>,
+}
+
+impl JumpTable {
+    pub fn new() -> Self {
+        Self {
+            table: Vec::new(),
+            index: 0,
+            named: HashMap::new(),
+        }
+    }
+
+    pub fn add(&mut self, mut cursor: Cursor) {
+        if self.index < self.table.len() {
+            self.table.truncate(self.index);
+        }
+        cursor.ignore_offset = false;
+        self.table.push(cursor);
+        self.index += 1;
+    }
+
+    pub fn add_named(&mut self, name: &str, mut cursor: Cursor) {
+        cursor.ignore_offset = false;
+        self.named.insert(name.to_owned(), cursor);
+    }
+
+    pub fn next_jump(&mut self) -> Option<Cursor> {
+        if self.index < self.table.len() - 1 {
+            self.index += 1;
+            if self.table.len() > self.index {
+                Some(self.table[self.index])
+            }
+            else {
+                None
+            }
+        }
+        else {
+            None
+        }
+    }
+
+    pub fn prev_jump(&mut self) -> Option<Cursor> {
+        if self.index > 0 {
+            self.index -= 1;
+            Some(self.table[self.index])
+        }
+        else {
+            None
+        }
+    }
+
+    pub fn jump(&mut self, index: usize, cursor: Cursor) -> Option<Cursor> {
+        if index < self.table.len() {
+            let mut j_cursor = self.table[self.index];
+            j_cursor.prepare_jump(&cursor);
+
+            self.index = index;
+            self.table.truncate(self.index + 1);
+            self.table.push(cursor);
+            Some(j_cursor)
+        }
+        else {
+            None
+        }
+    }
+
+    pub fn named_jump(&mut self, name: &str, mut cursor: Cursor) -> Option<Cursor> {
+        cursor.ignore_offset = false;
+        if let Some(index) = self.named.get(name).cloned() {
+            let mut j_cursor = index;
+            j_cursor.prepare_jump(&cursor);
+
+            self.add(cursor);
+            Some(j_cursor)
+        }
+        else {
+            None
+        }
+    }
+}
+
+
+
+pub enum Waiting {
+    JumpTarget,
+    JumpPosition,
+    Completion,
+    Goto,
+    None,
+}
+
+
+
+pub struct TreeSitterInfo {
+    pub parser: Parser,
+    pub tree: Tree,
+    pub language: String,
+}
+
+impl TreeSitterInfo {
+    pub fn new(parser: Parser, tree: Tree, language: String) -> Self {
+        Self {
+            parser,
+            tree,
+            language,
+        }
+    }
+}
+
+pub struct LspInfo {
+    pub lang: String,
+    pub lsp_client: (Sender<LspControllerMessage>, Arc<Receiver<LspControllerMessage>>),
+    pub file_version: usize,
+    pub lsp_diagnostics: Diagnostics,
+    pub sent_diagnostics: HashSet<Diagnostic>,
+    pub lsp_completion: Option<CompletionList>,
+    pub lsp_location: Option<LocationResponse>,
+}
+
+
+impl LspInfo {
+    pub fn new(lang: &str, lsp_client: (Sender<LspControllerMessage>, Arc<Receiver<LspControllerMessage>>)) -> Self {
+        Self {
+            lang: lang.to_owned(),
+            lsp_client,
+            file_version: 0,
+            lsp_diagnostics: Diagnostics::new(),
+            sent_diagnostics: HashSet::new(),
+            lsp_completion: None,
+            lsp_location: None,
+        }
+    }
+
+}
+
+
+
+pub struct TextPane {
     cursor: Rc<RefCell<Cursor>>,
     file_name: Option<PathBuf>,
     contents: Buffer,
-    mode: Rc<RefCell<dyn Mode>>,
-    modes: HashMap<String, Rc<RefCell<dyn Mode>>>,
-    changed: bool,
+    mode: Rc<RefCell<dyn TextMode>>,
+    modes: HashMap<String, Rc<RefCell<dyn TextMode>>>,
+    text_changed: bool,
+
     settings: Rc<RefCell<Settings>>,
     jump_table: JumpTable,
-    sender: Sender<WindowMessage>,
-    popup_channels: Option<(Sender<PaneMessage>, Receiver<PaneMessage>)>,
     waiting: Waiting,
+
+    popup_channels: Vec<(Sender<PaneMessage>, Receiver<PaneMessage>)>,
+    current_popup: Option<usize>,
+
+    window_sender: Sender<WindowMessage>,
+    window_receiver: Rc<Receiver<WindowMessage>>,
+
+    editor_sender: Sender<EditorMessage>,
+    editor_receiver: Rc<Receiver<EditorMessage>>,
+
+    lsp_sender: Sender<LspControllerMessage>,
+    lsp_listener: Rc<Receiver<LspControllerMessage>>,
+    
+    
+
+    tree_sitter_info: Option<TreeSitterInfo>,
+    lsp_info: Option<LspInfo>,
+
     rainbow_delimiters: RefCell<Vec<(char, ColorScheme)>>,
+
+
 }
 
-impl TreesitterPane {
+
+impl TextPane {
     pub fn new(settings: Rc<RefCell<Settings>>,
-               sender: Sender<WindowMessage>,
-               lang: Language,
-               lang_string: &str,
-               lsp: Option<(Sender<LspControllerMessage>, Arc<Receiver<LspControllerMessage>>)>)
-               -> Self {
-        let mut modes: HashMap<String, Rc<RefCell<dyn Mode>>> = HashMap::new();
+               window_sender: Sender<WindowMessage>,
+               window_receiver: Rc<Receiver<WindowMessage>>,
+               editor_sender: Sender<EditorMessage>,
+               editor_receiver: Rc<Receiver<EditorMessage>>,
+               lsp_sender: Sender<LspControllerMessage>,
+               lsp_listener: Rc<Receiver<LspControllerMessage>>) -> Self {
+
+
+        let mut modes: HashMap<String, Rc<RefCell<dyn TextMode>>> = HashMap::new();
         let normal = Rc::new(RefCell::new(Normal::new()));
         normal.borrow_mut().add_keybindings(settings.borrow().mode_keybindings.get("Normal").unwrap().clone());
         normal.borrow_mut().set_key_timeout(settings.borrow().editor_settings.key_timeout);
@@ -59,62 +213,40 @@ impl TreesitterPane {
         modes.insert("Insert".to_string(), insert.clone());
         modes.insert("Command".to_string(), command.clone());
 
-        let mut parser = Parser::new();
 
-        parser.set_language(lang).unwrap();
-
-        let tree = parser.parse("".as_bytes(), None).unwrap();
-                
-
-        
         Self {
-            parser,
-            tree,
-            lsp_client: lsp,
-            file_version: 0,
-            lsp_diagnostics: Diagnostics::new(),
-            sent_diagnostics: HashSet::new(),
-            lsp_completion: None,
-            lsp_location: None,
-            lang: lang_string.to_string(),
-            cursor: Rc::new(RefCell::new(Cursor::new((0,0)))),
+            cursor: Rc::new(RefCell::new(Cursor::new((0, 0)))),
             file_name: None,
             contents: Buffer::new(settings.clone()),
             mode: normal,
             modes,
-            changed: false,
+            text_changed: false,
             settings,
             jump_table: JumpTable::new(),
-            sender,
-            popup_channels: None,
             waiting: Waiting::None,
+            popup_channels: Vec::new(),
+            current_popup: None,
+
+            window_sender,
+            window_receiver,
+
+            editor_sender,
+            editor_receiver,
+
+            lsp_sender,
+            lsp_listener,
+
+            tree_sitter_info: None,
+            lsp_info: None,
+
             rainbow_delimiters: RefCell::new(Vec::new()),
         }
+        
     }
 
-
-    pub fn set_changed(&mut self, changed: bool) {
-        self.changed = changed;
+    fn set_changed(&mut self, changed: bool) {
+        self.text_changed = changed;
     }
-
-
-    fn get_row(&self, row: usize, offset: usize, col: usize) -> Option<RopeSlice> {
-
-        self.contents.get_row(row, offset, col)
-    }
-
-    pub fn borrow_buffer(&self) -> &Buffer {
-        &self.contents
-    }
-
-    pub fn borrow_buffer_mut(&mut self) -> &mut Buffer {
-        &mut self.contents
-    }
-
-    pub fn get_mode(&self, name: &str) -> Option<Rc<RefCell<dyn Mode>>> {
-        self.modes.get(name).map(|m| m.clone())
-    }
-
 
     fn get_byte_offset(&self) -> Option<usize> {
         let (x, y) = self.cursor.borrow().get_cursor();
@@ -122,51 +254,6 @@ impl TreesitterPane {
         self.contents.get_byte_offset(x, y)
     }
 
-    fn check_messages(&mut self, container: &PaneContainer) {
-        match self.popup_channels.as_ref() {
-            None => {},
-            Some((_, receiver)) => {
-                match receiver.try_recv() {
-                    Ok(message) => {
-                        match message {
-                            PaneMessage::String(string) => {
-
-                                match self.waiting {
-                                    Waiting::JumpTarget => {
-                                        self.waiting = Waiting::JumpPosition;
-                                        let command = format!("jump {}", string);
-                                        self.run_command(&command, container);
-                                    },
-                                    Waiting::JumpPosition => {
-                                        self.waiting = Waiting::None;
-                                        let command = format!("set_jump {}", string);
-                                        self.run_command(&command, container);
-                                    },
-                                    Waiting::Completion => {
-                                        self.waiting = Waiting::None;
-                                        let command = format!("insert {}", string);
-                                        self.run_command(&command, container);
-                                    },
-                                    Waiting::Goto => {
-                                        self.waiting = Waiting::None;
-                                        let command = format!("goto {}", string);
-                                        self.run_command(&command, container);
-                                    },
-                                    Waiting::None => {
-                                    },
-                                }
-                            },
-                            PaneMessage::Close => {
-                                eprintln!("Closing treesitter");
-                                self.run_command("q!", container)
-                            },
-                        }
-                    },
-                    Err(_) => {},
-                }
-            }
-        }
-    }
 
     fn generate_uri(& self) -> String {
         let working_dir = std::env::current_dir().unwrap();
@@ -180,10 +267,19 @@ impl TreesitterPane {
         }
     }
 
+    
     fn read_lsp_messages(&mut self) {
-        match self.lsp_client.as_ref() {
+        match self.lsp_info.take() {
             None => {},
-            Some((sender, receiver)) => {
+            Some(mut lsp_info) => {
+
+                let LspInfo { lang,
+                              lsp_client: (sender, receiver),
+                              lsp_diagnostics,
+                              lsp_completion,
+                              lsp_location,
+                              .. } =&mut lsp_info;
+                
                 let mut other_uri_count = 0;
                 loop {
                     match receiver.try_recv() {
@@ -191,7 +287,7 @@ impl TreesitterPane {
                             match resp {
                                 LspResponse::PublishDiagnostics(diags) => {
                                     if diags.uri == self.generate_uri() {
-                                        self.lsp_diagnostics.merge(diags);
+                                        lsp_diagnostics.merge(diags);
                                     }
                                     else {
                                         if other_uri_count == 4 {
@@ -199,16 +295,16 @@ impl TreesitterPane {
                                         }
                                         other_uri_count += 1;
                                         sender.send(LspControllerMessage::Resend(
-                                            self.lang.clone().into(),
+                                            lang.clone().into(),
                                             LspResponse::PublishDiagnostics(diags)
                                         )).unwrap();
                                     }
                                 },
                                 LspResponse::Completion(completions) => {
-                                    self.lsp_completion = Some(completions);
+                                    *lsp_completion = Some(completions);
                                 },
                                 LspResponse::Location(location) => {
-                                    self.lsp_location = Some(location);
+                                    *lsp_location = Some(location);
                                 },
                             }
 
@@ -220,150 +316,22 @@ impl TreesitterPane {
                         },
                     }
                 }
+
+                self.lsp_info = Some(lsp_info);
             },
         }
     }
 
-    /// This function is to create an informational popup that will display
-    /// the diagnostics for the current cursor position.
-    /// Therefore, it should get called whenever something might have changed
-    /// the diagnostics for the current cursor position.
-    fn open_info(&mut self, container: &PaneContainer) {
 
-        if self.lsp_completion.is_some() {
-            return;
-        }
-
-        match &self.popup_channels {
-            Some((send,_)) => {
-                match self.waiting {
-                    Waiting::None => {
-                        eprintln!("Sending close");
-
-                        match send.send(PaneMessage::Close) {
-                            Ok(_) => {},
-                            Err(_) => {},
-                        }
-
-                        self.popup_channels = None;
-                    },
-                    _ => {},
-                }
-            },
-            None => {},
-        }
-
-
+    fn get_file_path(uri: &str) -> String {
         
-        let cursor = self.cursor.borrow().get_cursor();
+        let chars = uri.chars();
+        // Here we skip the `file://` part of the uri
+        let chars = chars.skip(7);
+        // We will need to skip the port number if there is one
+        //TODO: Handle port numbers
 
-        let diagnostic = self.lsp_diagnostics.get_diagnostic(cursor.1, cursor.0);
-        match diagnostic {
-            Some(diagnostic) => {
-
-                if self.sent_diagnostics.contains(diagnostic) {
-                    self.sent_diagnostics.remove(diagnostic);
-                    return;
-                }
-                
-                let (send, recv) = std::sync::mpsc::channel();
-                let (send2, recv2) = std::sync::mpsc::channel();
-
-                let prompt = match &diagnostic.code {
-                    Some(code) => {
-                        let split = code.split('_');
-
-                        let mut words = Vec::new();
-                        for word in split {
-                            let mut chars = word.chars();
-                            match chars.next() {
-                                None => {},
-                                Some(c) => {
-                                    let mut word = String::new();
-                                    word.push(c.to_ascii_uppercase());
-                                    for c in chars {
-                                        word.push(c);
-                                    }
-                                    words.push(word);
-                                },
-                            }
-                        }
-
-                        let prompt = words.join(" ");
-                        
-
-                        vec![prompt]
-                    },
-                    None => Vec::new(),
-                };
-
-                let mut max = 0;
-
-                let body = diagnostic.message.split("\n").map(|s| if s.len() == 0 {
-                    None
-                } else {
-                    if s.len() > max {
-                        max = s.len();
-                    }
-                    eprintln!("{}", s);
-                    Some(s.to_string())
-                }).collect::<Vec<Option<String>>>();
-
-                
-                let size = (max + 1, body.len() + 2 + prompt.len());
-                
-
-                let pane = PopUpPane::new_info(self.settings.clone(),
-                                               prompt,
-                                               self.sender.clone(),
-                                               send,
-                                               recv2,
-                                               body,
-                                               false);
-                let pane = Rc::new(RefCell::new(pane));
-
-                let (_, (x2, y2)) = container.get_corners();
-                let (x, y) = container.get_size();
-
-                let pos = self.cursor.borrow().get_real_cursor();
-                eprintln!("pos: {:?}", pos);
-
-                let max_size = container.get_size();
-
-                let mut container = PaneContainer::new(max_size, size, pane, self.settings.clone());
-                container.set_position(pos);
-                container.set_size(size);
-
-                self.sender.send(WindowMessage::CreatePopup(container, false)).expect("Failed to send message");
-                self.waiting = Waiting::None;
-
-                self.popup_channels = Some((send2, recv));
-                self.sent_diagnostics.insert(diagnostic.clone());
-            },
-            None => {
-                match &self.popup_channels {
-                    Some((send,_)) => {
-                        match self.waiting {
-                            Waiting::None => {
-                                eprintln!("Sending close");
-
-                                match send.send(PaneMessage::Close) {
-                                    Ok(_) => {},
-                                    Err(_) => {},
-                                }
-                                self.sent_diagnostics.clear();
-                                self.popup_channels = None;
-                            },
-                            _ => {},
-                        }
-                    },
-                    None => {},
-                }
-
-            },
-        }
-            
-        
+        chars.collect()
     }
 
     fn insert_str_at(&mut self, pos: (usize, usize), s: &str) {
@@ -394,19 +362,45 @@ impl TreesitterPane {
 
         let insert_char_count = s.chars().count();
 
+        match &mut self.tree_sitter_info {
+            None => {},
+            Some(TreeSitterInfo { parser, tree, language }) => {
+                let edit = InputEdit {
+                    start_byte,
+                    old_end_byte: start_byte,
+                    new_end_byte,
+                    start_position: Point::new(y, x),
+                    old_end_position: Point::new(y, x + insert_char_count),
+                    new_end_position: Point::new(y, new_char_len),
+                };
 
-        let edit = InputEdit {
-            start_byte,
-            old_end_byte: start_byte,
-            new_end_byte,
-            start_position: Point::new(y, x),
-            old_end_position: Point::new(y, x + insert_char_count),
-            new_end_position: Point::new(y, new_char_len),
-        };
+                tree.edit(&edit);
+                *tree = parser.parse(&self.contents.to_string(), Some(&tree)).unwrap();
+            },
 
-        self.tree.edit(&edit);
-        self.tree = self.parser.parse(&self.contents.to_string(), Some(&self.tree)).unwrap();
-        
+        }
+
+        match self.lsp_info.take() {
+            None => {},
+            Some(mut lsp_info) => {
+
+                let LspInfo { lang, lsp_client: (sender, _), file_version, .. } = &mut lsp_info;
+                *file_version += 1;
+                let message = LspControllerMessage::Notification(
+                    lang.clone().into(),
+                    LspNotification::ChangeText(
+                        self.generate_uri().into(),
+                        *file_version,
+                        self.contents.to_string().into(),
+                    )
+                );
+
+                sender.send(message).expect("Failed to send message");
+                self.lsp_info = Some(lsp_info);
+            }
+        }
+
+
     }
 
     fn get_byte_offset_pos(&self, (x, y): (usize, usize)) -> Option<usize> {
@@ -414,38 +408,53 @@ impl TreesitterPane {
         self.contents.get_byte_offset(x, y)
     }
 
-
-    fn get_file_path(uri: &str) -> String {
+    fn check_messages(&mut self, container: &mut PaneContainer) {
+        if self.popup_channels.len() == 0 {
+            return;
+        }
         
-        let chars = uri.chars();
-        // Here we skip the `file://` part of the uri
-        let chars = chars.skip(7);
-        // We will need to skip the port number if there is one
-        //TODO: Handle port numbers
+        match self.popup_channels[0].1.try_recv() {
+            Ok(message) => {
+                match message {
+                    PaneMessage::String(string) => {
 
-        chars.collect()
-    }
-
-
-}
-
-
-impl Pane for TreesitterPane {
-
-    fn execute_command(&mut self, command: &str, container: &mut PaneContainer) {
-        let mode = self.mode.clone();
-        mode.borrow_mut().execute_command(command, self, container);
-    }
-
-    fn changed(&mut self) {
-        self.cursor.borrow_mut().set_moved();
+                        match self.waiting {
+                            Waiting::JumpTarget => {
+                                self.waiting = Waiting::JumpPosition;
+                                let command = format!("jump {}", string);
+                                self.run_command(&command, container);
+                            },
+                            Waiting::JumpPosition => {
+                                self.waiting = Waiting::None;
+                                let command = format!("set_jump {}", string);
+                                self.run_command(&command, container);
+                            },
+                            Waiting::Completion => {
+                                self.waiting = Waiting::None;
+                                let command = format!("insert {}", string);
+                                self.run_command(&command, container);
+                            },
+                            Waiting::Goto => {
+                                self.waiting = Waiting::None;
+                                let command = format!("goto {}", string);
+                                self.run_command(&command, container);
+                            },
+                            Waiting::None => {
+                            },
+                        }
+                    },
+                    PaneMessage::Close => {
+                        eprintln!("Closing treesitter");
+                        self.run_command("q!", container)
+                    },
+                }
+            },
+            Err(_) => {},
+        }
     }
     
-    fn reset(&mut self) {
-        self.cursor.borrow_mut().reset_move();
-    }
-    
-    fn draw_row(&self, mut index: usize, container: &PaneContainer, output: &mut TextRow) {
+
+    fn draw_row_treesitter(&self, mut index: usize, container: &PaneContainer, output: &mut TextRow) {
 
         let cols = container.get_size().0;
         //eprintln!("Cols: {}", cols);
@@ -522,8 +531,9 @@ impl Pane for TreesitterPane {
 
                 if real_row + 1 <= number_of_lines {
 
-
+                    
                     if !self.cursor.borrow().get_scrolled() {
+                        //eprintln!("Not Changed 1");
                         for _ in 0..num_width {
                             output.push(None);
                         }
@@ -574,10 +584,10 @@ impl Pane for TreesitterPane {
         let color_settings = &self.settings.borrow().colors.pane;
         let syntax_highlighting = self.settings.borrow().colors.treesitter.clone();
         let default = HashMap::new();
-        let syntax_highlighting = syntax_highlighting.get(&self.lang).unwrap_or(&default);
+        let syntax_highlighting = syntax_highlighting.get(&self.tree_sitter_info.as_ref().unwrap().language).unwrap_or(&default);
 
         if !self.cursor.borrow().get_scrolled() {
-            //eprintln!("Not Changed");
+            //eprintln!("Not Changed 2");
             for _ in 0..num_width {
                 output.push(None);
             }
@@ -585,21 +595,21 @@ impl Pane for TreesitterPane {
 
 
         if !self.cursor.borrow().get_scrolled() {
-            //eprintln!("Not Changed");
+            //eprintln!("Not Changed 3");
             for _ in 0..(cols - num_width) {
                 output.push(None);
             }
         }
         else {
 
-            if let Some(row) = self.get_row(real_row, col_offset, cols - num_width) {
+            if let Some(row) = self.contents.get_row(real_row, col_offset, cols - num_width) {
                 //eprintln!("Row: {}", row);
                 let mut count = 0;
 
                 row.chars().for_each(|c| if count != (cols - num_width) {
                     let point1 = Point::new(real_row, count);
                     let point2 = Point::new(real_row, count + 1);
-                    let node = self.tree.root_node().descendant_for_point_range(point1, point2).unwrap();
+                    let node = self.tree_sitter_info.as_ref().unwrap().tree.root_node().descendant_for_point_range(point1, point2).unwrap();
                     let parent_node = node.parent();
 
                     match c {
@@ -1046,7 +1056,7 @@ impl Pane for TreesitterPane {
                                     },
                                     _ => {
 
-                                        let diagnostic = self.lsp_diagnostics.get_diagnostic(real_row, count);
+                                        let diagnostic = self.lsp_info.as_ref().unwrap().lsp_diagnostics.get_diagnostic(real_row, count);
                                         //eprintln!("Diagnostic: {:?}", diagnostic);
                                         match diagnostic {
                                             None => output.push(Some(Some(StyledChar::new(c, color_settings.clone())))),
@@ -1105,121 +1115,336 @@ impl Pane for TreesitterPane {
         }
     }
 
-    fn refresh(&mut self, container: &mut PaneContainer) {
-        self.mode.borrow_mut().refresh();
-        self.check_messages(container);
-        if self.rainbow_delimiters.borrow().len() > 0 {
-            self.rainbow_delimiters.borrow_mut().clear();
+
+    fn draw_row_reg(&self, mut index: usize, container: &super::PaneContainer, output: &mut TextRow) {
+        let cols = container.get_size().0;
+
+
+        let ((x1, y1), _) = container.get_corners();
+
+        if self.settings.borrow().editor_settings.border {
+
+            let color_settings = &self.settings.borrow().colors.ui;
+            
+            if index == 0 && y1 != 0 {
+
+                if !self.cursor.borrow().get_moved() {
+                    //eprintln!("Not Changed");
+                    for _ in 0..cols {
+                        output.push(None);
+                    }
+                    return;
+                }
+
+                
+                let string = "-".repeat(cols);
+
+                for c in string.chars() {
+                    output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
+                }
+                
+                //output.push_str(apply_colors!("-".repeat(cols), color_settings));
+                return;
+            }
+            else {
+                let ((_, y), _) = container.get_corners();
+
+                if y != 0 {
+                    index = index.saturating_sub(1);
+                }
+            }
+
+            if x1 != 0 {
+                let string = "|".to_string();
+
+                for c in string.chars() {
+                    output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
+                }
+                
+                //cols = cols.saturating_sub(1);
+            }
         }
 
-        self.read_lsp_messages();
+        let real_row = self.cursor.borrow().row_offset + index;
+        let col_offset = self.cursor.borrow().col_offset;
+
+        let number_of_lines = self.contents.get_line_count();
+
+        let mut num_width = 0;
+
+        if self.settings.borrow().editor_settings.line_number {
+
+            let color_settings = &self.settings.borrow().colors.ui;
+            
+
+            if !self.settings.borrow().editor_settings.relative_line_number {
 
 
-    }
+                let mut places = 1;
+                while places <= number_of_lines {
+                    places *= 10;
+                    num_width += 1;
+                }
 
+                if real_row + 1 <= number_of_lines {
+                    if !self.cursor.borrow().get_scrolled() {
+                        for _ in 0..num_width {
+                            output.push(None);
+                        }
+                    }
+                    else {
+                        
 
-    fn save_buffer(&mut self) -> io::Result<()> {
-        if let Some(file_name) = &self.file_name {
-            let mut file = std::fs::File::create(file_name)?;
-            file.write_all(self.contents.to_string().as_bytes())?;
+                        let string = format!("{:width$}", real_row + 1, width = num_width);
+
+                        for c in string.chars() {
+                            output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
+                        }
+                    }
+                }
+
+            }
+            else if self.settings.borrow().editor_settings.relative_line_number {
+
+                let mut places = 1;
+                num_width = 3;
+                while places <= number_of_lines {
+                    places *= 10;
+                    num_width += 1;
+                }
+                if real_row == self.cursor.borrow().get_cursor().1 && real_row + 1 <= number_of_lines {
+                    let string = format!("{:<width$}", real_row + 1 , width = num_width);
+
+                    for c in string.chars() {
+                        output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
+                    }
+                }
+                else if real_row + 1 <= number_of_lines {
+                    let string = format!("{:width$}",
+                                            ((real_row) as isize - (self.cursor.borrow().get_cursor().1 as isize)).abs() as usize,
+                                            width = num_width);
+
+                    for c in string.chars() {
+                        output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
+                    }
+                }
+            }
+
         }
-        Ok(())
-    }
 
-    fn open_file(&mut self, filename: &PathBuf) -> io::Result<()> {
-        let file = std::fs::read_to_string(filename)?;
-        self.contents = Buffer::from(file);
-        self.contents.set_settings(self.settings.clone());
-        self.file_name = Some(PathBuf::from(filename));
+        self.cursor.borrow_mut().number_line_size = num_width;
 
-        self.tree = self.parser.parse(self.contents.to_string().as_bytes(), None).unwrap();
-        //eprintln!("{}", self.contents.to_string());
+        let color_settings = &self.settings.borrow().colors.pane;
 
-        //eprintln!("{}", self.tree.root_node().to_sexp());
-
-        let uri = self.generate_uri();
 
         
-        
-        match &self.lsp_client {
-            None => {},
-            Some((sender, _)) => {
-                sender.send(LspControllerMessage::Notification(
-                    self.lang.clone().into(),
-                    LspNotification::Open(uri.clone().into(),
-                                          self.contents.to_string().into()))
-                ).expect("Failed to send message");
-
-                sender.send(LspControllerMessage::Request(
-                    self.lang.clone().into(),
-                    LspRequest::RequestDiagnostic(uri.into())
-                )).expect("Failed to send message");
-            },
+        if !self.cursor.borrow().get_scrolled() {
+            //eprintln!("Not Changed");
+            for _ in 0..(cols - num_width) {
+                output.push(None);
+            }
+            return;
         }
 
+        if let Some(row) = self.contents.get_row(real_row, col_offset, cols) {
+            let mut count = 0;
+            row.chars().for_each(|c| if count != (cols - num_width) {
+                match c {
+                    '\t' => {
 
-        
-        Ok(())
+                        let string = " ".repeat(self.settings.borrow().editor_settings.tab_size);
+                        
+                        count += self.settings.borrow().editor_settings.tab_size;
+
+                        for c in string.chars() {
+                            output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
+                        }
+                    },
+                    '\n' => {
+                        let string = " ".to_string();
+
+                        for c in string.chars() {
+                            output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
+                        }
+                    },
+                    c => {
+                        count += 1;
+                        match c {
+                            '(' | ')' | '{' | '}' | '[' | ']'  => {
+                                if self.settings.borrow().editor_settings.rainbow_delimiters {
+                                    let colors = &self.settings.borrow().colors.rainbow_delimiters;
+                                    match c {
+                                        '(' => {
+                                            let index = self.rainbow_delimiters.borrow().len() % colors.len();
+                                            self.rainbow_delimiters.borrow_mut().push((c, colors[index].clone()));
+                                            output.push(Some(Some(StyledChar::new(c, colors[index].clone()))));
+                                        },
+                                        '{' => {
+                                            let index = self.rainbow_delimiters.borrow().len() % colors.len();
+                                            self.rainbow_delimiters.borrow_mut().push((c, colors[index].clone()));
+                                            output.push(Some(Some(StyledChar::new(c, colors[index].clone()))));
+                                        },
+                                        '[' => {
+                                            let index = self.rainbow_delimiters.borrow().len() % colors.len();
+                                            self.rainbow_delimiters.borrow_mut().push((c, colors[index].clone()));
+                                            output.push(Some(Some(StyledChar::new(c, colors[index].clone()))));
+                                        },
+                                        ')' => {
+                                            let (_, color) = self.rainbow_delimiters.borrow_mut().pop().unwrap_or((c, color_settings.clone()));
+                                            output.push(Some(Some(StyledChar::new(c, color))));
+                                        },
+                                        '}' => {
+                                            let (_, color) = self.rainbow_delimiters.borrow_mut().pop().unwrap_or((c, color_settings.clone()));
+                                            output.push(Some(Some(StyledChar::new(c, color))));
+                                        },
+                                        ']' => {
+                                            let (_, color) = self.rainbow_delimiters.borrow_mut().pop().unwrap_or((c, color_settings.clone()));
+                                            output.push(Some(Some(StyledChar::new(c, color))));
+                                        },
+                                        _ => {
+                                        },
+                                    }
+                                }
+                                else {
+                                    output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
+                                }
+                            },
+                            _ => {
+                                output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
+                            }
+                        }
+                        
+                    },
+                }
+            }
+                                 else {
+            });
+
+            let string = " ".repeat(cols.saturating_sub(count + num_width));
+
+            for c in string.chars() {
+                output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
+            }
+        }
+        else if real_row >= number_of_lines {
+            let string = " ".repeat(cols);
+
+            for c in string.chars() {
+                output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
+            }
+        }
+        else {
+            let string = " ".repeat(cols.saturating_sub(num_width));
+
+            for c in string.chars() {
+                output.push(Some(Some(StyledChar::new(c, color_settings.clone()))));
+            }
+        }
     }
 
-    fn process_keypress(&mut self, key: KeyEvent, container: &mut PaneContainer) -> io::Result<bool> {
-        let mode = self.mode.clone();
-        let result = mode.borrow_mut().process_keypress(key, self, container);
-        
-        self.open_info(container);
-        result
+
+}
+
+
+
+impl Pane for TextPane {
+    fn draw_row(&self, index: usize, container: &super::PaneContainer, output: &mut TextRow) {
+        //eprintln!("{}", index);
+        if self.tree_sitter_info.is_some() {
+            self.draw_row_treesitter(index, container, output);
+        } else {
+            self.draw_row_reg(index, container, output);
+        }
     }
 
-    fn scroll_cursor(&mut self, container: &PaneContainer) {
+    fn refresh(&mut self, container: &mut super::PaneContainer) {
         let cursor = self.cursor.clone();
 
         cursor.borrow_mut().scroll(container);
-        
+        self.rainbow_delimiters.borrow_mut().clear();
+
+        self.check_messages(container);
+        self.read_lsp_messages();
+    }
+
+    fn process_keypress(&mut self, key: crate::settings::Key, container: &mut super::PaneContainer) {
+        let mode = self.mode.clone();
+        mode.borrow_mut().process_keypress(key, self, container);
+
+    }
+
+    fn get_status(&self, container: &super::PaneContainer) -> Option<(String, String, String)> {
+        Some(self.mode.borrow_mut().update_status(self, container))
     }
 
 
-    fn get_status(&self, container: &PaneContainer) -> (String, String, String) {
-        self.mode.borrow_mut().update_status(self, container)
+    fn reset(&mut self) {
+        self.cursor.borrow_mut().reset_move();
+        self.cursor.borrow_mut().reset_scrolled();
     }
 
-    fn run_command(&mut self, command: &str, container: &PaneContainer) {
+    fn changed(&mut self) {
+        self.cursor.borrow_mut().set_moved();
+        self.cursor.borrow_mut().set_scrolled();
+    }
+
+    fn get_cursor(&self) -> Option<(usize, usize)> {
+        Some(self.cursor.borrow().get_real_cursor())
+    }
+
+    fn get_name(&self) -> &str {
+        match self.file_name {
+            Some(ref name) => name.file_name().unwrap().to_str().unwrap(),
+            None => "",
+        }
+    }
+
+    fn run_command(&mut self, command: &str, container: &mut PaneContainer) {
         let mut command_args = command.split_whitespace();
         let command = command_args.next().unwrap_or("");
         match command {
             "q" => {
-                if self.changed {
+                if self.text_changed {
                 } else {
-                    self.sender.send(WindowMessage::ClosePane(false, None)).unwrap();
+                    self.window_sender.send(WindowMessage::ClosePane(false, None)).unwrap();
                 }
 
-                let uri = self.generate_uri();
-                match &self.lsp_client {
+
+                match &self.lsp_info {
                     None => {},
-                    Some((sender,_)) => {
+                    Some(LspInfo { lang,
+                                   lsp_client: (sender, _),
+                                   ..}) => {
+
+                        let uri = self.generate_uri();
 
                         sender.send(LspControllerMessage::Notification(
-                            self.lang.clone().into(),
+                            lang.clone().into(),
                             LspNotification::Close(uri.into())
                         )).expect("Failed to send message");
+
                     },
                 }
+
                
                 
             },
             "w" => {
 
-                self.file_version += 1;
-
-                let uri = self.generate_uri();
-                match &self.lsp_client {
+                match self.lsp_info.take() {
                     None => {},
-                    Some((sender, _)) => {
-                        //TODO replace filename with URI
+                    Some(mut lsp_info) => {
+
+                        let LspInfo { lang, lsp_client: (sender, _), file_version, .. } = &mut lsp_info;
+                        *file_version += 1;
+                        let uri = self.generate_uri();
 
                         sender.send(LspControllerMessage::Notification(
-                            self.lang.clone().into(),
-                            LspNotification::WillSave(uri.clone().into(), "manual".into())
+                            lang.clone().into(),
+                            LspNotification::WillSave(uri.into(), "manual".into())
                         )).expect("Failed to send message");
+
+                        self.lsp_info = Some(lsp_info);
 
                     },
                 }
@@ -1232,33 +1457,43 @@ impl Pane for TreesitterPane {
                 self.save_buffer().expect("Failed to save file");
                 self.contents.add_new_rope();
 
-                match &self.lsp_client {
+                match self.lsp_info.take() {
                     None => {},
-                    Some((sender, _)) => {
+                    Some(mut lsp_info) => {
 
+                        let LspInfo {lang, lsp_client: (sender, _),  .. } = &mut lsp_info;
+
+                        let uri = self.generate_uri();
                         let text = self.contents.to_string();
 
                         sender.send(LspControllerMessage::Notification(
-                            self.lang.clone().into(),
-                            LspNotification::Save(uri.into(), text.into())
+                            lang.clone().into(),
+                            LspNotification::Save(uri.into(),text.into())
                         )).expect("Failed to send message");
+
+                        self.lsp_info = Some(lsp_info);
                     },
                 }
+
+
+                self.text_changed = false;
             },
             "w!" => {
 
-                self.file_version += 1;
-
-                let uri = self.generate_uri();
-                match &self.lsp_client {
+                match self.lsp_info.take() {
                     None => {},
-                    Some((sender, _)) => {
-                        //TODO replace filename with URI
+                    Some(mut lsp_info) => {
+
+                        let LspInfo { lang, lsp_client: (sender, _), file_version, .. } = &mut lsp_info;
+                        *file_version += 1;
+                        let uri = self.generate_uri();
 
                         sender.send(LspControllerMessage::Notification(
-                            self.lang.clone().into(),
-                            LspNotification::WillSave(uri.clone().into(), "manual".into())
+                            lang.clone().into(),
+                            LspNotification::WillSave(uri.into(), "manual".into())
                         )).expect("Failed to send message");
+
+                        self.lsp_info = Some(lsp_info);
 
                     },
                 }
@@ -1271,81 +1506,103 @@ impl Pane for TreesitterPane {
                 self.save_buffer().expect("Failed to save file");
                 self.contents.add_new_rope();
 
-                match &self.lsp_client {
+                match self.lsp_info.take() {
                     None => {},
-                    Some((sender, _)) => {
+                    Some(mut lsp_info) => {
 
+                        let LspInfo {lang, lsp_client: (sender, _),  .. } = &mut lsp_info;
+
+                        let uri = self.generate_uri();
                         let text = self.contents.to_string();
 
                         sender.send(LspControllerMessage::Notification(
-                            self.lang.clone().into(),
-                            LspNotification::Save(uri.into(), text.into())
+                            lang.clone().into(),
+                            LspNotification::Save(uri.into(),text.into())
                         )).expect("Failed to send message");
+
+                        self.lsp_info = Some(lsp_info);
                     },
                 }
+
+                self.text_changed = false;
 
             },
             "wq" => {
 
 
-                self.file_version += 1;
-
-                let uri = self.generate_uri();
-                match &self.lsp_client {
+                match self.lsp_info.take() {
                     None => {},
-                    Some((sender, _)) => {
-                        //TODO replace filename with URI
+                    Some(mut lsp_info) => {
+
+                        let LspInfo { lang, lsp_client: (sender, _), file_version, .. } = &mut lsp_info;
+                        *file_version += 1;
+                        let uri = self.generate_uri();
 
                         sender.send(LspControllerMessage::Notification(
-                            self.lang.clone().into(),
-                            LspNotification::WillSave(uri.clone().into(), "manual".into())
+                            lang.clone().into(),
+                            LspNotification::WillSave(uri.into(), "manual".into())
                         )).expect("Failed to send message");
+
+                        self.lsp_info = Some(lsp_info);
 
                     },
                 }
 
                 
                 self.save_buffer().expect("Failed to save file");
-                self.sender.send(WindowMessage::ClosePane(false, None)).unwrap();
+                self.window_sender.send(WindowMessage::ClosePane(false, None)).unwrap();
 
-                match &self.lsp_client {
+                match self.lsp_info.take() {
                     None => {},
-                    Some((sender, _)) => {
+                    Some(mut lsp_info) => {
 
+                        let LspInfo {lang, lsp_client: (sender, _),  .. } = &mut lsp_info;
+
+                        let uri = self.generate_uri();
                         let text = self.contents.to_string();
 
                         sender.send(LspControllerMessage::Notification(
-                            self.lang.clone().into(),
-                            LspNotification::Save(uri.clone().into(), text.into())
+                            lang.clone().into(),
+                            LspNotification::Save(uri.into(),text.into())
                         )).expect("Failed to send message");
+
+                        self.lsp_info = Some(lsp_info);
                     },
                 }
 
 
-                match &self.lsp_client {
+                match &self.lsp_info {
                     None => {},
-                    Some((sender,_)) => {
+                    Some(LspInfo { lang,
+                                   lsp_client: (sender, _),
+                                   ..}) => {
+
+                        let uri = self.generate_uri();
 
                         sender.send(LspControllerMessage::Notification(
-                            self.lang.clone().into(),
+                            lang.clone().into(),
                             LspNotification::Close(uri.into())
                         )).expect("Failed to send message");
+
                     },
                 }
                 
             },
             "q!" => {
-                self.sender.send(WindowMessage::ClosePane(false, None)).unwrap();
-                let uri = self.generate_uri();
-
-                match &self.lsp_client {
+                self.window_sender.send(WindowMessage::ClosePane(false, None)).unwrap();
+                match &self.lsp_info {
                     None => {},
-                    Some((sender,_)) => {
+                    Some(LspInfo { lang,
+                                   lsp_client: (sender, _),
+                                   ..}) => {
+
+                        let uri = self.generate_uri();
 
                         sender.send(LspControllerMessage::Notification(
-                            self.lang.clone().into(),
+                            lang.clone().into(),
                             LspNotification::Close(uri.into())
                         )).expect("Failed to send message");
+
                     },
                 }
 
@@ -1419,7 +1676,7 @@ impl Pane for TreesitterPane {
 
                     }
 
-                    self.open_info(container);
+                    //self.open_info(container);
                 }
 
             },
@@ -1435,35 +1692,35 @@ impl Pane for TreesitterPane {
                 
             },
             "horizontal_split" => {
-                self.sender.send(WindowMessage::HorizontalSplit).expect("Failed to send message");
+                self.window_sender.send(WindowMessage::HorizontalSplit).expect("Failed to send message");
                 self.contents.add_new_rope();
             },
             "vertical_split" => {
-                self.sender.send(WindowMessage::VerticalSplit).expect("Failed to send message");
+                self.window_sender.send(WindowMessage::VerticalSplit).expect("Failed to send message");
                 self.contents.add_new_rope();
             },
             "qa!" => {
-                self.sender.send(WindowMessage::ForceQuitAll).expect("Failed to send message");
+                self.window_sender.send(WindowMessage::ForceQuitAll).expect("Failed to send message");
             },
             "pane_up" => {
-                self.sender.send(WindowMessage::PaneUp).expect("Failed to send message");
+                self.window_sender.send(WindowMessage::PaneUp).expect("Failed to send message");
                 self.contents.add_new_rope();
             },
             "pane_down" => {
-                self.sender.send(WindowMessage::PaneDown).expect("Failed to send message");
+                self.window_sender.send(WindowMessage::PaneDown).expect("Failed to send message");
                 self.contents.add_new_rope();
             },
             "pane_left" => {
-                self.sender.send(WindowMessage::PaneLeft).expect("Failed to send message");
+                self.window_sender.send(WindowMessage::PaneLeft).expect("Failed to send message");
                 self.contents.add_new_rope();
             },
             "pane_right" => {
-                self.sender.send(WindowMessage::PaneRight).expect("Failed to send message");
+                self.window_sender.send(WindowMessage::PaneRight).expect("Failed to send message");
                 self.contents.add_new_rope();
             },
             "e" => {
                 if let Some(file_name) = command_args.next() {
-                    self.sender.send(WindowMessage::OpenFile(file_name.to_string(), None)).expect("Failed to send message");
+                    self.window_sender.send(WindowMessage::OpenFile(file_name.to_string(), None)).expect("Failed to send message");
                 }
                 self.contents.add_new_rope();
             },
@@ -1471,7 +1728,7 @@ impl Pane for TreesitterPane {
                 let (send, recv) = std::sync::mpsc::channel();
                 let (send2, recv2) = std::sync::mpsc::channel();
 
-                self.popup_channels = Some((send2, recv));
+                self.popup_channels = vec![(send2, recv)];
 
                 let txt_prompt = PromptType::Text(String::new(), None, false);
                 let prompt = vec!["Enter Jump".to_string(), "Target".to_string()];
@@ -1479,7 +1736,7 @@ impl Pane for TreesitterPane {
                 let pane = PopUpPane::new_prompt(
                     self.settings.clone(),
                     prompt,
-                    self.sender.clone(),
+                    self.window_sender.clone(),
                     send,
                     recv2,
                     vec![txt_prompt],
@@ -1498,7 +1755,7 @@ impl Pane for TreesitterPane {
 
                 let max_size = container.get_size();
                 
-                let mut container = PaneContainer::new(max_size, (14, 5), pane, self.settings.clone());
+                let mut container = PaneContainer::new(pane, self.settings.clone());
 
 
                 container.set_position(pos);
@@ -1506,7 +1763,7 @@ impl Pane for TreesitterPane {
 
 
 
-                self.sender.send(WindowMessage::CreatePopup(container, true)).expect("Failed to send message");
+                self.window_sender.send(WindowMessage::CreatePopup(container, true)).expect("Failed to send message");
                 self.waiting = Waiting::JumpTarget;
 
                 self.contents.add_new_rope();
@@ -1515,7 +1772,7 @@ impl Pane for TreesitterPane {
                 let (send, recv) = std::sync::mpsc::channel();
                 let (send2, recv2) = std::sync::mpsc::channel();
 
-                self.popup_channels = Some((send2, recv));
+                self.popup_channels = vec![(send2, recv)];
 
                 let txt_prompt = PromptType::Text(String::new(), None, false);
                 let prompt = vec!["Name the".to_string(), "Target".to_string()];
@@ -1523,7 +1780,7 @@ impl Pane for TreesitterPane {
                 let pane = PopUpPane::new_prompt(
                     self.settings.clone(),
                     prompt,
-                    self.sender.clone(),
+                    self.window_sender.clone(),
                     send,
                     recv2,
                     vec![txt_prompt],
@@ -1542,7 +1799,7 @@ impl Pane for TreesitterPane {
 
                 let max_size = container.get_size();
                 
-                let mut container = PaneContainer::new(max_size, (14, 5), pane, self.settings.clone());
+                let mut container = PaneContainer::new(pane, self.settings.clone());
 
 
                 container.set_position(pos);
@@ -1550,7 +1807,7 @@ impl Pane for TreesitterPane {
 
 
 
-                self.sender.send(WindowMessage::CreatePopup(container, true)).expect("Failed to send message");
+                self.window_sender.send(WindowMessage::CreatePopup(container, true)).expect("Failed to send message");
                 self.waiting = Waiting::JumpPosition;
 
                 self.contents.add_new_rope();
@@ -1562,27 +1819,39 @@ impl Pane for TreesitterPane {
 
                 self.cursor.borrow_mut().set_cursor(CursorMove::Nothing, CursorMove::Amount(self.contents.get_line_count()), self, (0,0));
 
-                self.tree = self.parser.parse(&self.contents.to_string(),None).unwrap();//TODO: replace this with an incremental parse
+                match self.tree_sitter_info.as_mut() {
+                    Some(tree_sitter_info) => {
+                        tree_sitter_info.tree = tree_sitter_info.parser.parse(&self.contents.to_string(),None).unwrap();//TODO: replace this with an incremental parse
+                    },
+                    None => {}
+                }
+
+                //self.tree = self.parser.parse(&self.contents.to_string(),None).unwrap();//TODO: replace this with an incremental parse
 
             },
             "redo" => {
                 self.contents.redo();
                 self.cursor.borrow_mut().number_line_size = self.contents.get_line_count();
 
-                self.tree = self.parser.parse(&self.contents.to_string(),None).unwrap();//TODO: replace this with an incremental parse
+                match self.tree_sitter_info.as_mut() {
+                    Some(tree_sitter_info) => {
+                        tree_sitter_info.tree = tree_sitter_info.parser.parse(&self.contents.to_string(),None).unwrap();//TODO: replace this with an incremental parse
+                    },
+                    None => {}
+                }
             },
             "change_tab" => {
                 if let Some(tab) = command_args.next() {
                     if let Ok(tab) = tab.parse::<usize>() {
-                        self.sender.send(WindowMessage::NthTab(tab)).expect("Failed to send message");
+                        self.editor_sender.send(EditorMessage::NthWindow(tab)).expect("Failed to send message");
                     }
                     else {
                         match tab {
                             "prev" => {
-                                self.sender.send(WindowMessage::PreviousTab).expect("Failed to send message");
+                                self.editor_sender.send(EditorMessage::PrevWindow).expect("Failed to send message");
                             },
                             "next" => {
-                                self.sender.send(WindowMessage::NextTab).expect("Failed to send message");
+                                self.editor_sender.send(EditorMessage::NextWindow).expect("Failed to send message");
                             },
                             _ => {}
                         }
@@ -1590,45 +1859,54 @@ impl Pane for TreesitterPane {
                 }
             },
             "open_tab" => {
-                self.sender.send(WindowMessage::OpenNewTab).expect("Failed to send message");
+                //self.window_sender.send(WindowMessage::OpenNewTab).expect("Failed to send message");
+                self.editor_sender.send(EditorMessage::NewWindow(None)).expect("Failed to send message");
             },
             "open_tab_with_pane" => {
-                self.sender.send(WindowMessage::OpenNewTabWithPane).expect("Failed to send message");
+                self.window_sender.send(WindowMessage::OpenNewTabWithPane).expect("Failed to send message");
             },
             "info" => {
-                self.open_info(container);
+                //self.open_info(container);
             },
             "completion" => {
-                match &self.lsp_client {
+
+                let mut cont = true;
+                
+                match self.lsp_info.take() {
                     None => {},
-                    Some((sender, _)) => {
+                    Some(mut lsp_info) => {
 
-                        match self.popup_channels.take() {
-                            None => {},
-                            Some((send, _)) => {
-                                match send.send(PaneMessage::Close) {
-                                    Ok(_) => {},
-                                    Err(_) => {},
-                                }
-                            }
-                        }
-
+                        let LspInfo {lang, lsp_client: (sender, _),  ..} = &mut lsp_info;
 
                         let uri = self.generate_uri();
 
                         let position = self.cursor.borrow().get_cursor();
 
                         sender.send(LspControllerMessage::Request(
-                             self.lang.clone().into(),
+                             lang.clone().into(),
                             LspRequest::RequestCompletion(uri.into(), position, "invoked".into())
                         )).expect("Failed to send message");
 
-                        //eprintln!("Sent completion request");
-                        while self.lsp_completion.is_none() {
-                            self.read_lsp_messages();
-                        }
+                        cont = false;
 
-                        let completion_list = match self.lsp_completion.take() {
+                        self.lsp_info = Some(lsp_info);
+                    }
+                }
+
+                if !cont {
+                    while self.lsp_info.as_ref().unwrap().lsp_completion.is_none() {
+                        self.read_lsp_messages();
+                    }
+                }
+                
+                match self.lsp_info.take() {
+                    None => {},
+                    Some(mut lsp_info) => {
+
+                        let LspInfo { lsp_completion, ..} = &mut lsp_info;
+                        
+
+                        let completion_list = match lsp_completion.take() {
                             None => return,
                             Some(list) => list,
                         };
@@ -1640,7 +1918,7 @@ impl Pane for TreesitterPane {
                         let (send, recv) = std::sync::mpsc::channel();
                         let (send2, recv2) = std::sync::mpsc::channel();
 
-                        self.popup_channels = Some((send2, recv));
+                        self.popup_channels = vec![(send2, recv)];
 
                         let prompt = Vec::new();
 
@@ -1650,7 +1928,7 @@ impl Pane for TreesitterPane {
                         let pane = PopUpPane::new_dropdown(
                             self.settings.clone(),
                             prompt,
-                            self.sender.clone(),
+                            self.window_sender.clone(),
                             send,
                             recv2,
                             buttons,
@@ -1664,7 +1942,7 @@ impl Pane for TreesitterPane {
 
                         let max_size = container.get_size();
 
-                        let mut container = PaneContainer::new(max_size, size, pane, self.settings.clone());
+                        let mut container = PaneContainer::new(pane, self.settings.clone());
 
 
                         container.set_position(pos);
@@ -1672,12 +1950,14 @@ impl Pane for TreesitterPane {
 
 
 
-                        self.sender.send(WindowMessage::CreatePopup(container, true)).expect("Failed to send message");
+                        self.window_sender.send(WindowMessage::CreatePopup(container, true)).expect("Failed to send message");
                         self.waiting = Waiting::Completion;
 
                         self.contents.add_new_rope();
 
-                        self.lsp_completion = Some(completion_list);
+                        *lsp_completion = Some(completion_list);
+
+                        self.lsp_info = Some(lsp_info);
                     },
                 }
                 
@@ -1687,10 +1967,12 @@ impl Pane for TreesitterPane {
                     //eprintln!("Inserting {}", index);
 
                     if let Some(index) = index.parse::<usize>().ok() {
-                        match &self.lsp_client {
+                        match self.lsp_info.take() {
                             None => {},
-                            Some((_, _)) => {
-                                match self.lsp_completion {
+                            Some(mut lsp_info) => {
+                                let LspInfo { lsp_completion, ..} = &mut lsp_info;
+                                
+                                match lsp_completion {
                                     None => {},
                                     Some(ref mut list) => {
                                         //eprintln!("Inserting {}", index);
@@ -1713,21 +1995,32 @@ impl Pane for TreesitterPane {
                                         }
                                     },
                                 }
-                                
-                                self.lsp_completion = None;
                             },
                         }
 
                     }
                 }
 
-                self.lsp_completion = None;
+                match &mut self.lsp_info {
+                    None => {},
+                    Some(LspInfo {
+                        lsp_completion,
+                        ..
+                    }) => {
+                        lsp_completion.take();
+                    },
+                }
+                
             },
             "goto_declaration" | "goto_definition" |
             "goto_type_definition" | "goto_implementation" => {
-                match &self.lsp_client {
+
+                let mut cont = true;
+                match self.lsp_info.take() {
                     None => {},
-                    Some((sender, _)) => {
+                    Some(mut lsp_info) => {
+
+                        let LspInfo {lang, lsp_client: (sender, _),  ..} = &mut lsp_info;
                         let uri = self.generate_uri();
 
                         let position = self.cursor.borrow().get_cursor();
@@ -1742,17 +2035,33 @@ impl Pane for TreesitterPane {
 
 
                         sender.send(LspControllerMessage::Request(
-                             self.lang.clone().into(),
+                             lang.clone().into(),
                             request
                         )).expect("Failed to send message");
+                        cont = false;
 
-                        while self.lsp_location.is_none() {
-                            self.read_lsp_messages();
-                        }
+                        self.lsp_info = Some(lsp_info);
+                    }
+                }
 
-                        let lsp_location = self.lsp_location.take().expect("LSP location was none");
+                if !cont {
+                    while self.lsp_info.as_ref().unwrap().lsp_location.is_none() {
+                        self.read_lsp_messages();
+                    }
+                }
 
-                        match lsp_location {
+                match self.lsp_info.take() {
+                    None => {},
+                    Some(mut lsp_info) => {
+
+                        let LspInfo { lang, lsp_client: (sender, _), lsp_location, ..} = &mut lsp_info;
+
+                        let location = lsp_location.take().expect("LSP location was none");
+
+                        let uri = self.generate_uri();
+
+
+                        match location {
                             LocationResponse::Location(location) => {
                                 //eprintln!("Got location {:?}", location);
                                 
@@ -1773,7 +2082,7 @@ impl Pane for TreesitterPane {
 
                                     let message = WindowMessage::OpenFile(file_name, Some(pos));
 
-                                    self.sender.send(message).expect("Failed to send message");
+                                    self.window_sender.send(message).expect("Failed to send message");
 
                                     self.contents.add_new_rope();
                                 }
@@ -1799,7 +2108,7 @@ impl Pane for TreesitterPane {
 
                                         let message = WindowMessage::OpenFile(file_name, Some(pos));
 
-                                        self.sender.send(message).expect("Failed to send message");
+                                        self.window_sender.send(message).expect("Failed to send message");
                                         
                                         self.contents.add_new_rope();
                                     }
@@ -1808,7 +2117,7 @@ impl Pane for TreesitterPane {
                                     let (send, recv) = std::sync::mpsc::channel();
                                     let (send2, recv2) = std::sync::mpsc::channel();
 
-                                    self.popup_channels = Some((send2, recv));
+                                    self.popup_channels = vec![(send2, recv)];
 
                                     let mut buttons = Vec::new();
                                     
@@ -1832,7 +2141,7 @@ impl Pane for TreesitterPane {
                                     let pane = PopUpPane::new_dropdown(
                                         self.settings.clone(),
                                         prompt,
-                                        self.sender.clone(),
+                                        self.window_sender.clone(),
                                         send,
                                         recv2,
                                         buttons,
@@ -1851,7 +2160,7 @@ impl Pane for TreesitterPane {
 
                                     let max_size = container.get_size();
                                     
-                                    let mut container = PaneContainer::new(max_size, (20, locations.len() + 3), pane, self.settings.clone());
+                                    let mut container = PaneContainer::new(pane, self.settings.clone());
 
 
                                     container.set_position(pos);
@@ -1859,7 +2168,7 @@ impl Pane for TreesitterPane {
 
 
 
-                                    self.sender.send(WindowMessage::CreatePopup(container, true)).expect("Failed to send message");
+                                    self.window_sender.send(WindowMessage::CreatePopup(container, true)).expect("Failed to send message");
                                     self.waiting = Waiting::Goto;
 
                                     self.contents.add_new_rope();
@@ -1876,7 +2185,7 @@ impl Pane for TreesitterPane {
                             
                         }
                         
-
+                        self.lsp_info = Some(lsp_info);
                     }
                 }
 
@@ -1896,25 +2205,25 @@ impl Pane for TreesitterPane {
 
                     let message = WindowMessage::OpenFile(path.to_string(), pos);
 
-                    self.sender.send(message).expect("Failed to send message");
+                    self.window_sender.send(message).expect("Failed to send message");
                     
                 }
             },
-            "paste" => {
+            /*"paste" => {
                 if let Some(arg) = command_args.next() {
                     if let Ok(number) = arg.parse::<usize>() {
                         let message = WindowMessage::Paste(RegisterType::Number(number));
 
-                        self.sender.send(message).expect("Failed to send message");
+                        self.window_sender.send(message).expect("Failed to send message");
                     } else {
                         let message = WindowMessage::Paste(RegisterType::Name(arg.to_string()));
 
-                        self.sender.send(message).expect("Failed to send message");
+                        self.window_sender.send(message).expect("Failed to send message");
                     }
                 } else {
                     let message = WindowMessage::Paste(RegisterType::None);
 
-                    self.sender.send(message).expect("Failed to send message");
+                    self.window_sender.send(message).expect("Failed to send message");
                 }
                 
 
@@ -1950,7 +2259,7 @@ impl Pane for TreesitterPane {
 
                             let message = WindowMessage::Copy(reg, row);
 
-                            self.sender.send(message).expect("Failed to send message");
+                            self.window_sender.send(message).expect("Failed to send message");
                                     
                         },
                         _ => {},
@@ -1960,7 +2269,7 @@ impl Pane for TreesitterPane {
 
                 }
 
-            },
+            },*/
                 
 
             _ => {}
@@ -1968,12 +2277,418 @@ impl Pane for TreesitterPane {
 
     }
 
-
-    fn change_mode(&mut self, name: &str) {
-        if let Some(mode) = self.get_mode(name) {
-            self.mode = mode;
-        }
+    fn resize(&mut self, size: (usize, usize)) {
+        self.cursor.borrow_mut().resize(size);
     }
+
+    fn set_location(&mut self, location: (usize, usize)) {
+        let cursor = self.cursor.clone();
+        cursor.borrow_mut().set_cursor(CursorMove::Amount(location.0),
+                                       CursorMove::Amount(location.1),
+                                       self, (0,0));
+    }
+
+    fn get_settings(&self) -> Rc<RefCell<Settings>> {
+        self.settings.clone()
+    }
+
+    fn change_mode(&mut self, mode: &str) {
+        let mode = self.modes.get(&mode.to_owned()).unwrap();
+        self.mode = mode.clone();
+    }
+
+    
+    fn backup(&mut self) {
+        self.backup_buffer();
+
+    }
+}
+
+
+impl TextBuffer for TextPane {
+    fn save_buffer(&mut self) -> io::Result<()> {
+        if let Some(file_name) = &self.file_name {
+            let mut file = std::fs::File::create(file_name)?;
+            file.write_all(self.contents.to_string().as_bytes())?;
+        }
+        Ok(())
+    }
+
+    fn open_file(&mut self, filename: PathBuf) -> std::io::Result<()> {
+
+        let file_type = filename.extension().and_then(|s| s.to_str()).unwrap_or("txt").to_string();
+
+        let file = File::open(filename.clone())?;
+        let mut file = BufReader::new(file);
+        let mut contents = String::new();
+        let _amount_read = file.read_to_string(&mut contents)?;
+        self.contents = Buffer::from(contents);
+        self.file_name = Some(filename);
+
+        match file_type.as_str() {
+            "scm" => {
+                let language = unsafe { tree_sitter_scheme() };
+                let mut  parser = Parser::new();
+                parser.set_language(language).unwrap();
+
+                let tree = parser.parse(self.contents.to_string(), None).unwrap();
+
+                let tree_sitter = TreeSitterInfo::new(parser, tree, "scheme".to_string());
+
+                self.tree_sitter_info = Some(tree_sitter);
+
+            },
+            "rs" => {
+                self.lsp_sender.send(LspControllerMessage::CreateClient("rust"
+                                                                        .to_string()
+                                                                        .into()))
+                    .expect("Failed to send message");
+
+                let lsp_client;
+
+                loop {
+                    match self.lsp_listener.try_recv() {
+                        Ok(LspControllerMessage::ClientCreated(language_rcv)) => {
+                            lsp_client = language_rcv;
+                            break;
+                        }
+                        Ok(_) => {
+                            continue;
+                        }
+                        Err(TryRecvError::Empty) => {
+                            continue;
+                        }
+                        Err(TryRecvError::Disconnected) => {
+                            unreachable!();
+                        }
+                        
+                    }
+                }
+
+                let lsp_client = (self.lsp_sender.clone(), lsp_client);
+
+                let language = tree_sitter_rust::language();
+                let mut parser = Parser::new();
+                parser.set_language(language).unwrap();
+
+                let tree = parser.parse(self.contents.to_string(), None).unwrap();
+
+                let tree_sitter = TreeSitterInfo::new(parser, tree, "rust".to_string());
+
+                self.tree_sitter_info = Some(tree_sitter);
+
+                let lsp_client = LspInfo::new("rust", lsp_client);
+
+                self.lsp_info = Some(lsp_client);
+            }
+            //todo: move h to C++ since there is no easy way of knowing which lang it is
+            "c" | "h" => {
+                let language = tree_sitter_c::language();
+                let mut parser = Parser::new();
+                parser.set_language(language).unwrap();
+
+                let tree = parser.parse(self.contents.to_string(), None).unwrap();
+
+                let tree_sitter = TreeSitterInfo::new(parser, tree, "c".to_string());
+
+                self.tree_sitter_info = Some(tree_sitter);
+
+                self.lsp_sender.send(LspControllerMessage::CreateClient("c".to_string().into()))
+                    .expect("Failed to send message");
+
+                let lsp_client;
+
+                loop {
+                    match self.lsp_listener.try_recv() {
+                        Ok(LspControllerMessage::ClientCreated(language_rcv)) => {
+                            lsp_client = language_rcv;
+                            break;
+                        }
+                        Ok(_) => {
+                            continue;
+                        }
+                        Err(TryRecvError::Empty) => {
+                            continue;
+                        }
+                        Err(TryRecvError::Disconnected) => {
+                            unreachable!();
+                        }
+                        
+                    }
+                }
+
+                let lsp_client = (self.lsp_sender.clone(), lsp_client);
+
+                let lsp_client = LspInfo::new("c", lsp_client);
+
+                self.lsp_info = Some(lsp_client);
+            }
+            "cpp" | "hpp" => {
+                let language = tree_sitter_cpp::language();
+                let mut parser = Parser::new();
+                parser.set_language(language).unwrap();
+
+                let tree = parser.parse(self.contents.to_string(), None).unwrap();
+
+                let tree_sitter = TreeSitterInfo::new(parser, tree, "cpp".to_string());
+
+                self.tree_sitter_info = Some(tree_sitter);
+
+                self.lsp_sender.send(LspControllerMessage::CreateClient("cpp".to_string().into()))
+                    .expect("Failed to send message");
+
+                let lsp_client;
+
+                loop {
+                    match self.lsp_listener.try_recv() {
+                        Ok(LspControllerMessage::ClientCreated(language_rcv)) => {
+                            lsp_client = language_rcv;
+                            break;
+                        }
+                        Ok(_) => {
+                            continue;
+                        }
+                        Err(TryRecvError::Empty) => {
+                            continue;
+                        }
+                        Err(TryRecvError::Disconnected) => {
+                            unreachable!();
+                        }
+                        
+                    }
+                }
+
+                let lsp_client = (self.lsp_sender.clone(), lsp_client);
+
+                let lsp_client = LspInfo::new("cpp", lsp_client);
+
+                self.lsp_info = Some(lsp_client);
+            }
+            "py" => {
+                let language = tree_sitter_python::language();
+                let mut parser = Parser::new();
+                parser.set_language(language).unwrap();
+
+                let tree = parser.parse(self.contents.to_string(), None).unwrap();
+
+                let tree_sitter = TreeSitterInfo::new(parser, tree, "python".to_string());
+
+                self.tree_sitter_info = Some(tree_sitter);
+
+                self.lsp_sender.send(LspControllerMessage::CreateClient("python".to_string().into()))
+                    .expect("Failed to send message");
+
+                let lsp_client;
+
+                loop {
+                    match self.lsp_listener.try_recv() {
+                        Ok(LspControllerMessage::ClientCreated(language_rcv)) => {
+                            lsp_client = language_rcv;
+                            break;
+                        }
+                        Ok(_) => {
+                            continue;
+                        }
+                        Err(TryRecvError::Empty) => {
+                            continue;
+                        }
+                        Err(TryRecvError::Disconnected) => {
+                            unreachable!();
+                        }
+                        
+                    }
+                }
+
+                let lsp_client = (self.lsp_sender.clone(), lsp_client);
+
+                let lsp_client = LspInfo::new("python", lsp_client);
+
+                self.lsp_info = Some(lsp_client);
+            }
+            "lsp" => {
+                let language = tree_sitter_commonlisp::language();
+                let mut parser = Parser::new();
+                parser.set_language(language).unwrap();
+
+                let tree = parser.parse(self.contents.to_string(), None).unwrap();
+
+                let tree_sitter = TreeSitterInfo::new(parser, tree, "commonlisp".to_string());
+
+                self.tree_sitter_info = Some(tree_sitter);
+            }
+            "swift" => {
+                let language = tree_sitter_swift::language();
+                let mut parser = Parser::new();
+                parser.set_language(language).unwrap();
+
+                let tree = parser.parse(self.contents.to_string(), None).unwrap();
+
+                let tree_sitter = TreeSitterInfo::new(parser, tree, "swift".to_string());
+
+                self.tree_sitter_info = Some(tree_sitter);
+
+                self.lsp_sender.send(LspControllerMessage::CreateClient("swift".to_string().into()))
+                    .expect("Failed to send message");
+
+                let lsp_client;
+
+                loop {
+                    match self.lsp_listener.try_recv() {
+                        Ok(LspControllerMessage::ClientCreated(language_rcv)) => {
+                            lsp_client = language_rcv;
+                            break;
+                        }
+                        Ok(_) => {
+                            continue;
+                        }
+                        Err(TryRecvError::Empty) => {
+                            continue;
+                        }
+                        Err(TryRecvError::Disconnected) => {
+                            unreachable!();
+                        }
+                        
+                    }
+                }
+
+                let lsp_client = (self.lsp_sender.clone(), lsp_client);
+
+                let lsp_client = LspInfo::new("swift", lsp_client);
+
+                self.lsp_info = Some(lsp_client);
+            }
+            "go" => {
+                let language = tree_sitter_go::language();
+                let mut parser = Parser::new();
+                parser.set_language(language).unwrap();
+
+                let tree = parser.parse(self.contents.to_string(), None).unwrap();
+
+                let tree_sitter = TreeSitterInfo::new(parser, tree, "go".to_string());
+
+                self.tree_sitter_info = Some(tree_sitter);
+
+                self.lsp_sender.send(LspControllerMessage::CreateClient("go".to_string().into()))
+                    .expect("Failed to send message");
+
+                let lsp_client;
+
+                loop {
+                    match self.lsp_listener.try_recv() {
+                        Ok(LspControllerMessage::ClientCreated(language_rcv)) => {
+                            lsp_client = language_rcv;
+                            break;
+                        }
+                        Ok(_) => {
+                            continue;
+                        }
+                        Err(TryRecvError::Empty) => {
+                            continue;
+                        }
+                        Err(TryRecvError::Disconnected) => {
+                            unreachable!();
+                        }
+                        
+                    }
+                }
+
+                let lsp_client = (self.lsp_sender.clone(), lsp_client);
+
+                let lsp_client = LspInfo::new("go", lsp_client);
+
+                self.lsp_info = Some(lsp_client);
+            }
+            "sh" => {
+                let language = tree_sitter_bash::language();
+                let mut parser = Parser::new();
+                parser.set_language(language).unwrap();
+
+                let tree = parser.parse(self.contents.to_string(), None).unwrap();
+
+                let tree_sitter = TreeSitterInfo::new(parser, tree, "bash".to_string());
+
+                self.tree_sitter_info = Some(tree_sitter);
+
+                self.lsp_sender.send(LspControllerMessage::CreateClient("bash".to_string().into()))
+                    .expect("Failed to send message");
+
+                let lsp_client;
+
+                loop {
+                    match self.lsp_listener.try_recv() {
+                        Ok(LspControllerMessage::ClientCreated(language_rcv)) => {
+                            lsp_client = language_rcv;
+                            break;
+                        }
+                        Ok(_) => {
+                            continue;
+                        }
+                        Err(TryRecvError::Empty) => {
+                            continue;
+                        }
+                        Err(TryRecvError::Disconnected) => {
+                            unreachable!();
+                        }
+                        
+                    }
+                }
+
+                let lsp_client = (self.lsp_sender.clone(), lsp_client);
+
+                let lsp_client = LspInfo::new("bash", lsp_client);
+
+                self.lsp_info = Some(lsp_client);
+            }
+            "js" => {
+                let language = tree_sitter_javascript::language();
+                let mut parser = Parser::new();
+                parser.set_language(language).unwrap();
+
+                let tree = parser.parse(self.contents.to_string(), None).unwrap();
+
+                let tree_sitter = TreeSitterInfo::new(parser, tree, "javascript".to_string());
+
+                self.tree_sitter_info = Some(tree_sitter);
+            }
+            "cs" => {
+                let language = tree_sitter_c_sharp::language();
+                let mut parser = Parser::new();
+                parser.set_language(language).unwrap();
+
+                let tree = parser.parse(self.contents.to_string(), None).unwrap();
+
+                let tree_sitter = TreeSitterInfo::new(parser, tree, "c_sharp".to_string());
+
+                self.tree_sitter_info = Some(tree_sitter);
+            }
+            "java" => {
+                let language = tree_sitter_java::language();
+                let mut parser = Parser::new();
+                parser.set_language(language).unwrap();
+
+                let tree = parser.parse(self.contents.to_string(), None).unwrap();
+
+                let tree_sitter = TreeSitterInfo::new(parser, tree, "java".to_string());
+
+                self.tree_sitter_info = Some(tree_sitter);
+            }
+            "txt" | _ => {
+                
+
+            }
+
+
+        }
+
+        self.backup_buffer();
+
+        Ok(())
+    }
+
+    fn backup_buffer(&mut self) {
+        self.contents.add_new_rope();
+    }
+
 
     fn insert_newline(&mut self) {
         self.insert_char('\n');
@@ -1985,64 +2700,18 @@ impl Pane for TreesitterPane {
 
     fn insert_char(&mut self, c: char) {
         self.set_changed(true);
-
-        let start_byte;
-        //let old_end_byte = self.contents.get_byte_count();
-        let new_end_byte;
-        
         let byte_pos = self.get_byte_offset();
         let c = c.to_string();
         if self.contents.get_char_count() == 0 {
-            self.contents.insert_current(0, c);
-            new_end_byte = self.contents.get_byte_count();
-            start_byte = 0;
+            self.contents.insert(0, c);
+            return;
         }
-        else {
-            let byte_pos = match byte_pos {
-                None => self.contents.get_byte_count(),
-                Some(byte_pos) => byte_pos,
-            };
-
-            self.contents.insert_current(byte_pos, c);
-
-            new_end_byte = self.contents.get_byte_count();
-            start_byte = byte_pos;
-        }
-        let (x, y) = self.cursor.borrow().get_cursor();
-
-        let new_char_len = self.contents.get_char_count();
-        
-        let edit = InputEdit {
-            start_byte,
-            old_end_byte: start_byte,
-            new_end_byte,
-            start_position: Point::new(y, x),
-            old_end_position: Point::new(y, x + 1),
-            new_end_position: Point::new(y, new_char_len),
+        let byte_pos = match byte_pos {
+            None => self.contents.get_byte_count(),
+            Some(byte_pos) => byte_pos,
         };
-
-        self.tree.edit(&edit);
-        self.tree = self.parser.parse(&self.contents.to_string(), Some(&self.tree)).unwrap();
-
-        self.file_version += 1;
-
-        match &self.lsp_client {
-            None => {},
-            Some((sender, _)) => {
-                let message = LspControllerMessage::Notification(
-                    self.lang.clone().into(),
-                    LspNotification::ChangeText(
-                        self.generate_uri().into(),
-                        self.file_version,
-                        self.contents.to_string().into(),
-                    )
-                );
-
-                sender.send(message).expect("Failed to send message");
-                        
-            },
-        }
-
+        
+        self.contents.insert_current(byte_pos, c);
     }
 
     fn insert_str(&mut self, s: &str) {
@@ -2073,44 +2742,47 @@ impl Pane for TreesitterPane {
 
         let insert_char_count = s.chars().count();
 
-
-        let edit = InputEdit {
-            start_byte,
-            old_end_byte: start_byte,
-            new_end_byte,
-            start_position: Point::new(y, x),
-            old_end_position: Point::new(y, x + insert_char_count),
-            new_end_position: Point::new(y, new_char_len),
-        };
-
-        self.tree.edit(&edit);
-        self.tree = self.parser.parse(&self.contents.to_string(), Some(&self.tree)).unwrap();
-
-        self.file_version += 1;
-        
-        match &self.lsp_client {
+        match &mut self.tree_sitter_info {
             None => {},
-            Some((sender, _)) => {
+            Some(TreeSitterInfo { parser, tree, language }) => {
+                let edit = InputEdit {
+                    start_byte,
+                    old_end_byte: start_byte,
+                    new_end_byte,
+                    start_position: Point::new(y, x),
+                    old_end_position: Point::new(y, x + insert_char_count),
+                    new_end_position: Point::new(y, new_char_len),
+                };
+
+                tree.edit(&edit);
+                *tree = parser.parse(self.contents.to_string(), Some(&tree)).unwrap();
+            }
+        }
+
+        match self.lsp_info.take() {
+            None => {},
+            Some(mut lsp_info) => {
+
+                let LspInfo { lang, lsp_client: (sender, _), file_version, .. } = &mut lsp_info;
+                *file_version += 1;
                 let message = LspControllerMessage::Notification(
-                    self.lang.clone().into(),
+                    lang.clone().into(),
                     LspNotification::ChangeText(
                         self.generate_uri().into(),
-                        self.file_version,
+                        *file_version,
                         self.contents.to_string().into(),
                     )
                 );
 
                 sender.send(message).expect("Failed to send message");
-                        
-            },
+                self.lsp_info = Some(lsp_info);
+            }
         }
-        
     }
 
     ///TODO: add check to make sure we have a valid byte range
     fn delete_char(&mut self) {
         self.set_changed(true);
-
         
         let byte_pos = self.get_byte_offset();
 
@@ -2128,38 +2800,43 @@ impl Pane for TreesitterPane {
 
         let (x, y) = self.cursor.borrow().get_cursor();
 
-        let edit = InputEdit {
-            start_byte,
-            old_end_byte,
-            new_end_byte,
-            start_position: Point::new(y, x),
-            old_end_position: Point::new(y, x - 1),
-            new_end_position: Point::new(y, x),
-        };
-
-        self.tree.edit(&edit);
-
-        self.tree = self.parser.parse(&self.contents.to_string(), Some(&self.tree)).unwrap();
-
-        self.file_version += 1;
-        
-        match &self.lsp_client {
+        match &mut self.tree_sitter_info {
             None => {},
-            Some((sender, _)) => {
+            Some(TreeSitterInfo { parser, tree, language }) => {
+                let edit = InputEdit {
+                    start_byte,
+                    old_end_byte,
+                    new_end_byte,
+                    start_position: Point::new(y, x),
+                    old_end_position: Point::new(y, x - 1),
+                    new_end_position: Point::new(y, x),
+                };
+
+                tree.edit(&edit);
+                *tree = parser.parse(self.contents.to_string(), Some(&tree)).unwrap();
+            }
+        }
+
+        match self.lsp_info.take() {
+            None => {},
+            Some(mut lsp_info) => {
+
+                let LspInfo { lang, lsp_client: (sender, _), file_version, .. } = &mut lsp_info;
+                *file_version += 1;
                 let message = LspControllerMessage::Notification(
-                    self.lang.clone().into(),
+                    lang.clone().into(),
                     LspNotification::ChangeText(
                         self.generate_uri().into(),
-                        self.file_version,
+                        *file_version,
                         self.contents.to_string().into(),
                     )
                 );
 
                 sender.send(message).expect("Failed to send message");
-                        
-            },
+                self.lsp_info = Some(lsp_info);
+            }
         }
-
+        
     }
 
     ///TODO: add check to make sure we have a valid byte range
@@ -2201,46 +2878,45 @@ impl Pane for TreesitterPane {
 
         let new_end_byte = self.contents.get_byte_count();
 
-        let edit = InputEdit {
-            start_byte,
-            old_end_byte,
-            new_end_byte,
-            start_position: Point::new(y, x),
-            old_end_position: Point::new(y, x.saturating_sub(1)),
-            new_end_position: Point::new(y, x),
-        };
-
-        self.tree.edit(&edit);
-
-        self.tree = self.parser.parse(&self.contents.to_string(), Some(&self.tree)).unwrap();
-
-        self.file_version += 1;
-        
-        match &self.lsp_client {
+        match &mut self.tree_sitter_info {
             None => {},
-            Some((sender, _)) => {
+            Some(TreeSitterInfo { parser, tree, language }) => {
+                let edit = InputEdit {
+                    start_byte,
+                    old_end_byte,
+                    new_end_byte,
+                    start_position: Point::new(y, x),
+                    old_end_position: Point::new(y, x.saturating_sub(1)),
+                    new_end_position: Point::new(y, x),
+                };
+
+                tree.edit(&edit);
+                *tree = parser.parse(self.contents.to_string(), Some(&tree)).unwrap();
+            }
+        }
+
+        match self.lsp_info.take() {
+            None => {},
+            Some(mut lsp_info) => {
+
+                let LspInfo { lang, lsp_client: (sender, _), file_version, .. } = &mut lsp_info;
+                *file_version += 1;
                 let message = LspControllerMessage::Notification(
-                    self.lang.clone().into(),
+                    lang.clone().into(),
                     LspNotification::ChangeText(
                         self.generate_uri().into(),
-                        self.file_version,
+                        *file_version,
                         self.contents.to_string().into(),
                     )
                 );
 
                 sender.send(message).expect("Failed to send message");
-                        
-            },
+                self.lsp_info = Some(lsp_info);
+            }
         }
-
-    }
-
-    fn get_cursor(&self) -> Rc<RefCell<Cursor>> {
-        self.cursor.clone()
     }
 
     fn get_line_count(&self) -> usize {
-
         self.contents.get_line_count()
     }
 
@@ -2252,37 +2928,18 @@ impl Pane for TreesitterPane {
         self.contents.line_len(row)
     }
 
-
-    fn get_filename(&self) -> &Option<PathBuf> {
-        &self.file_name
-    }
-
-    fn resize_cursor(&mut self, size: (usize, usize)) {
-        let mut cursor = self.cursor.borrow_mut();
-        cursor.resize(size);
-    }
-
-    fn set_cursor_size(&mut self, size: (usize, usize)) {
-        let mut cursor = self.cursor.borrow_mut();
-        cursor.set_size(size);
-    }
-
-    fn backup_buffer(&mut self) {
-        self.contents.add_new_rope();
-    }
-
-    fn get_settings(&self) -> Rc<RefCell<Settings>> {
-        self.settings.clone()
-    }
-
     fn borrow_buffer(&self) -> &Buffer {
         &self.contents
     }
+
     fn borrow_mut_buffer(&mut self) -> &mut Buffer {
         &mut self.contents
     }
 
-    fn set_sender(&mut self, sender: Sender<WindowMessage>) {
-        self.sender = sender;
+    fn get_physical_cursor(&self) -> Rc<RefCell<Cursor>> {
+        self.cursor.clone()
     }
 }
+
+
+
