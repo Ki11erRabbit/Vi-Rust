@@ -1,7 +1,7 @@
 use std::{io, rc::Rc};
 
 
-use crate::{editor::Editor, lsp::{LspController, LspControllerMessage}};
+use crate::{editor::Editor, lsp::{LspController, ControllerMessage}};
 
 pub mod window;
 pub mod mode;
@@ -13,17 +13,8 @@ pub mod treesitter;
 pub mod editor;
 pub mod lsp;
 pub mod registers;
-//pub mod widgets;
 
 //const EDITOR_NAME: &str = "vi";
-
-pub trait Mailbox<M> {
-    fn send(&self, message: M) -> Result<(), std::sync::mpsc::SendError<M>>;
-    fn recv(&self) -> Result<M, std::sync::mpsc::RecvError>;
-    fn try_recv(&self) -> Result<M, std::sync::mpsc::TryRecvError>;
-}
-
-
 
 fn main() -> io::Result<()> {
     //let _cleanup = CleanUp;
@@ -64,11 +55,11 @@ fn main() -> io::Result<()> {
         editor.open_file(&filename)?;
     }
 
-    editor.draw()?;
+
 
     while editor.run()? {}
 
-    lsp_sender.send(LspControllerMessage::Exit).unwrap();
+    lsp_sender.send(ControllerMessage::Exit).unwrap();
     
     thread_handle.join().unwrap();
 

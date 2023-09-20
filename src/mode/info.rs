@@ -27,7 +27,7 @@ impl Promptable for Info {
         let width = container.get_size().0;
 
 
-        let color_settings = container.get_settings().borrow().colors.popup.clone();
+        let color_settings = container.settings.borrow().colors.popup.clone();
 
         match self.body.get(row) {
             Some(None) => {
@@ -67,9 +67,6 @@ impl Promptable for Info {
         }
         max
     }
-
-    fn process_keypress(&mut self, key: crate::settings::Key, _pane: &mut dyn Pane, _container: &mut PaneContainer) {
-    }
 }
 
 impl Mode for Info {
@@ -77,6 +74,17 @@ impl Mode for Info {
         "Info".to_string()
     }
 
+    fn process_keypress(&mut self, _key: KeyEvent, _pane: &mut dyn Pane, _container: &mut PaneContainer) -> io::Result<bool> {
+        Ok(true)
+    }
+
+    fn change_mode(&mut self, _name: &str, _pane: &mut dyn Pane, _container: &mut PaneContainer) {
+        // Do nothing
+    }
+
+    fn update_status(&mut self, _pane: &dyn Pane, _container: &PaneContainer) -> (String, String, String) {
+        (String::new(), String::new(), String::new())
+    }
 
     fn add_keybindings(&mut self, _bindings: HashMap<Keys, String>) {
         // Do nothing
@@ -87,6 +95,10 @@ impl Mode for Info {
     }
 
     fn flush_key_buffer(&mut self) {
+        // Do nothing
+    }
+
+    fn execute_command(&mut self, command: &str, _pane: &mut dyn Pane, _container: &mut PaneContainer) {
         // Do nothing
     }
 
