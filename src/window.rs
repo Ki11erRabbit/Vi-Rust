@@ -695,7 +695,7 @@ impl Window {
                         Ok(true)
                     },
                     WindowMessage::CreatePopup(container, make_active) => {
-                        //self.create_popup(container, make_active);
+                        self.create_popup(container, make_active);
                         Ok(true)
                     },
                     WindowMessage::OpenNewTabWithPane => {
@@ -875,7 +875,7 @@ impl Window {
                     self.buffers[l].contents.push(TextRow::new());
                 }
 
-                while self.buffers[l].contents[i].len() < cols {
+                while self.buffers[l].contents[i].len() < cols{
                     self.buffers[l].contents[i].push(Some(None));
                 }
 
@@ -1109,6 +1109,7 @@ impl TextRow {
     }
 
     pub fn push(&mut self, chr: Option<Option<StyledChar>>) {
+        eprintln!("pushing {:?}", chr);
         if self.index >= self.contents.len() {
             match chr {
                 None => panic!("Tried to push None on first draw"),

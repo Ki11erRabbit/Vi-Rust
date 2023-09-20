@@ -1349,10 +1349,9 @@ impl TextPane {
 
 impl Pane for TextPane {
     fn draw_row(&self, index: usize, container: &super::PaneContainer, output: &mut TextRow) {
-
+        //eprintln!("{}", index);
         if self.tree_sitter_info.is_some() {
             self.draw_row_treesitter(index, container, output);
-            return;
         } else {
             self.draw_row_reg(index, container, output);
         }
