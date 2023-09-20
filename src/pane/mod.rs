@@ -1,6 +1,6 @@
 
 //pub(crate) mod text;
-//pub mod popup;
+pub mod popup;
 //pub mod treesitter;
 pub mod text_pane;
 
@@ -102,6 +102,10 @@ impl PaneContainer {
         let pane = self.pane.clone();
         let status = pane.borrow().get_status(self);
         status
+    }
+
+    pub fn get_settings(&self) -> Rc<RefCell<Settings>> {
+        self.settings.clone()
     }
 
 

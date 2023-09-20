@@ -13,7 +13,7 @@ pub mod treesitter;
 pub mod editor;
 pub mod lsp;
 pub mod registers;
-pub mod widgets;
+//pub mod widgets;
 
 //const EDITOR_NAME: &str = "vi";
 

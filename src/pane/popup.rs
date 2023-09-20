@@ -3,7 +3,7 @@ use std::{rc::Rc, cell::RefCell, sync::mpsc::{Sender, Receiver}, path::PathBuf, 
 
 use uuid::Uuid;
 
-use crate::{mode::{Mode, PromptType, Promptable}, cursor::Cursor, window::{StyledChar, WindowMessage, TextRow}, settings::Settings, buffer::Buffer};
+use crate::{mode::{Mode, PromptType, Promptable}, cursor::Cursor, window::{StyledChar, WindowMessage, TextRow}, settings::{Settings, Key}, buffer::Buffer};
 use super::{PaneMessage, PaneContainer, Pane};
 
 
@@ -103,7 +103,7 @@ impl PopUpPane {
     }
 
 
-    fn check_messages(&mut self, container: &PaneContainer) {
+    fn check_messages(&mut self, container: &mut PaneContainer) {
         match self.pane_receiver.try_recv() {
             Ok(message) => {
                 match message {
@@ -127,9 +127,6 @@ impl Pane for PopUpPane {
     fn reset(&mut self) {
     }
     
-    fn scroll_cursor(&mut self, _container: &PaneContainer) {
-
-    }
 
     fn refresh(&mut self, container: &mut PaneContainer) {
         self.check_messages(container);
@@ -137,7 +134,7 @@ impl Pane for PopUpPane {
 
     fn change_mode(&mut self, name: &str) {}
 
-    fn process_keypress(&mut self, key: crossterm::event::KeyEvent, container: &mut PaneContainer) -> io::Result<bool> {
+    fn process_keypress(&mut self, key: Key, container: &mut PaneContainer) {
         let mode = self.mode.clone();
         let result = mode.borrow_mut().process_keypress(key, self, container);
         result
@@ -292,11 +289,7 @@ impl Pane for PopUpPane {
         }
     }
 
-    fn execute_command(&mut self, _command: &str, _container: &mut PaneContainer) {
-
-    }
-
-    fn run_command(&mut self, command: &str, _container: &PaneContainer) {
+    fn run_command(&mut self, command: &str, _container: &mut PaneContainer) {
         let mut command_args = command.split(" ");
 
         let command = command_args.next().unwrap();
@@ -352,71 +345,36 @@ impl Pane for PopUpPane {
     }
         
 
-    fn save_buffer(&mut self) -> io::Result<()> {
-        Ok(())
-    }
 
-    fn open_file(&mut self, _filename: &PathBuf) -> io::Result<()> {
-        Ok(())
-    }
-
-    fn get_status(&self, _container: &PaneContainer) -> (String, String, String) {
-        ("".to_string(), "".to_string(), "".to_string())
-    }
-
-    fn insert_newline(&mut self) {}
-
-    fn delete_char(&mut self) {}
-
-    fn backspace_char(&mut self) {}
-
-    fn insert_char(&mut self, _c: char) {}
-
-    fn insert_str(&mut self, _s: &str) {}
-
-    fn get_cursor(&self) -> Rc<RefCell<Cursor>> {
-        panic!("Cannot get cursor from popup pane")
-    }
-
-    fn get_line_count(&self) -> usize {
-        0
-    }
-
-    fn buffer_to_string(&self) -> String {
-        "".to_string()
-    }
-
-    fn get_row_len(&self, _row: usize) -> Option<usize> {
+    fn get_status(&self, _container: &PaneContainer) -> Option<(String, String, String)> {
         None
     }
 
-    fn get_filename(&self) -> &Option<std::path::PathBuf> {
-        &None
+
+    fn get_cursor(&self) -> Option<(usize, usize)> {
+        None
     }
 
-    fn resize_cursor(&mut self, _size: (usize, usize)) {}
-
-    fn set_cursor_size(&mut self, _size: (usize, usize)) {}
-        
-
-    fn backup_buffer(&mut self) {
+    fn get_name(&self) -> &str {
+        "Prompt"
     }
+
     
     fn get_settings(&self) -> Rc<RefCell<Settings>> {
         self.settings.clone()
     }
 
 
-    fn borrow_buffer(&self) -> &Buffer {
-        unimplemented!()
-    }
-    fn borrow_mut_buffer(&mut self) -> &mut Buffer {
-        unimplemented!()
+
+    fn resize(&mut self, _size: (usize, usize)) {
     }
 
+    fn set_location(&mut self, _location: (usize, usize)) {
 
-    fn set_sender(&mut self, _sender: Sender<WindowMessage>) {
-        unimplemented!()
+    }
+
+    fn backup(&mut self) {
+
     }
 
 }

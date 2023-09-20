@@ -23,104 +23,6 @@ impl DropDown {
             keybindings: Rc::new(RefCell::new(HashMap::new())),
         }
     }
-}
-
-
-impl Promptable for DropDown {
-    fn draw_prompt(&mut self, row: usize, container: &PaneContainer) -> Vec<Option<StyledChar>> {
-        let mut output = Vec::new();
-        let width = container.get_size().0;
-
-        let mut buttons = self.buttons.borrow_mut();
-
-        let color_settings = container.settings.borrow().colors.popup.clone();
-
-        let button_str = match buttons.draw_button(row) {
-            Some(s) => s,
-            None =>  {
-                " ".repeat(width)
-                .chars()
-                .for_each(|c|
-                          output.push(Some(StyledChar::new(c, color_settings.clone()))));
-                return output;
-            },
-        };
-
-        match &mut*buttons {
-            PromptType::Button(_, selected) => {
-                
-                let color_settings = if *selected == row {
-                    color_settings.add_attribute(Attribute::Reverse)
-                }
-                else {
-                    color_settings.clone()
-                };
-
-                for c in button_str.chars() {
-                    output.push(Some(StyledChar::new(c, color_settings.clone())));
-                }
-            },
-            _ => panic!("Buttons were not buttons"),
-        }
-
-        output
-    }
-
-    fn max_width(&self) -> usize {
-        todo!()
-    }
-
-}
-
-
-impl Mode for DropDown {
-    fn get_name(&self) -> String {
-        "Drop Down".to_string()
-    }
-
-    fn process_keypress(&mut self, key: crossterm::event::KeyEvent, pane: &mut dyn crate::pane::Pane, container: &mut PaneContainer) -> std::io::Result<bool> {
-
-        match key {
-            KeyEvent {
-                code: KeyCode::Char(' '),
-                modifiers: KeyModifiers::NONE,
-                ..
-            } => {
-                self.execute_command("submit", pane, container);
-                
-                return Ok(true);
-            },
-            key_event => {
-                let key = Key::from(key_event);
-                let key = vec![key];
-
-                let keybindings = self.keybindings.clone();
-
-                if let Some(command) = keybindings.borrow().get(&key) {
-                    self.execute_command(command, pane, container);
-                }
-                return Ok(true);
-            }
-
-        }
-    }
-
-    fn change_mode(&mut self, _name: &str, _pane: &mut dyn crate::pane::Pane, _container: &mut PaneContainer) {
-    }
-
-    fn update_status(&mut self, _pane: &dyn crate::pane::Pane, _container: &PaneContainer) -> (String, String, String) {
-        (String::new(), String::new(), String::new())
-    }
-
-    fn add_keybindings(&mut self, bindings: HashMap<Keys, String>) {
-        self.keybindings.borrow_mut().extend(bindings);
-    }
-
-    fn set_key_timeout(&mut self, _timeout: u64) {
-    }
-
-    fn flush_key_buffer(&mut self) {
-    }
 
     fn execute_command(&mut self, command: &str, pane: &mut dyn crate::pane::Pane, container: &mut PaneContainer) {
         match command {
@@ -170,6 +72,98 @@ impl Mode for DropDown {
 
         }
     }
+    
+}
+
+
+impl Promptable for DropDown {
+    fn draw_prompt(&mut self, row: usize, container: &PaneContainer) -> Vec<Option<StyledChar>> {
+        let mut output = Vec::new();
+        let width = container.get_size().0;
+
+        let mut buttons = self.buttons.borrow_mut();
+
+        let color_settings = container.get_settings().borrow().colors.popup.clone();
+
+        let button_str = match buttons.draw_button(row) {
+            Some(s) => s,
+            None =>  {
+                " ".repeat(width)
+                .chars()
+                .for_each(|c|
+                          output.push(Some(StyledChar::new(c, color_settings.clone()))));
+                return output;
+            },
+        };
+
+        match &mut*buttons {
+            PromptType::Button(_, selected) => {
+                
+                let color_settings = if *selected == row {
+                    color_settings.add_attribute(Attribute::Reverse)
+                }
+                else {
+                    color_settings.clone()
+                };
+
+                for c in button_str.chars() {
+                    output.push(Some(StyledChar::new(c, color_settings.clone())));
+                }
+            },
+            _ => panic!("Buttons were not buttons"),
+        }
+
+        output
+    }
+
+    fn max_width(&self) -> usize {
+        todo!()
+    }
+
+    fn process_keypress(&mut self, key: Key, pane: &mut dyn crate::pane::Pane, container: &mut PaneContainer) {
+        match key {
+            Key {
+                key: KeyCode::Char(' '),
+                modifier: KeyModifiers::NONE,
+                ..
+            } => {
+                self.execute_command("submit", pane, container);
+                
+            },
+            key_event => {
+                let key = Key::from(key_event);
+                let key = vec![key];
+
+                let keybindings = self.keybindings.clone();
+                let keybindings = keybindings.borrow();
+
+                if let Some(command) = keybindings.get(&key) {
+                    self.execute_command(command, pane, container);
+                }
+            }
+
+        }
+    }
+
+}
+
+
+impl Mode for DropDown {
+    fn get_name(&self) -> String {
+        "Drop Down".to_string()
+    }
+
+
+    fn add_keybindings(&mut self, bindings: HashMap<Keys, String>) {
+        self.keybindings.borrow_mut().extend(bindings);
+    }
+
+    fn set_key_timeout(&mut self, _timeout: u64) {
+    }
+
+    fn flush_key_buffer(&mut self) {
+    }
+
 
     fn refresh(&mut self) {
     }

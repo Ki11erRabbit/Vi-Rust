@@ -8,16 +8,29 @@ pub mod button;
 
 
 
+pub enum WidgetMessage {
+
+}
+
+
 
 
 
 pub trait Widget {
+    type State: Default;
+    type Event;
+
+    
     /// This function is called to draw the widget.
     /// It takes in an index to draw a level and an output buffer.
     /// It returns true if the widget is done drawing.
     fn draw(&self, index: usize, output: &mut Vec<Option<StyledChar>>) -> bool;
 
     fn set_color_scheme(&mut self, scheme: ColorScheme);
+
+    fn update(&mut self, state: &Self::State, event: &Self::Event) -> Option<WidgetMessage>;
+    
+    
 }
 
 pub trait InteractableWidget: Widget {

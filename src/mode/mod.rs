@@ -1,8 +1,8 @@
 
 pub mod base;
-//pub mod prompt;
-//pub mod info;
-//pub mod drop_down;
+pub mod prompt;
+pub mod info;
+pub mod drop_down;
 
 
 use std::{io, collections::HashMap};
@@ -25,7 +25,6 @@ pub trait Mode {
 
     fn flush_key_buffer(&mut self);
 
-
     fn refresh(&mut self);
 }
 
@@ -45,6 +44,9 @@ pub trait Promptable: Mode {
     fn draw_prompt(&mut self, row: usize, container: &PaneContainer) -> Vec<Option<StyledChar>>;
 
     fn max_width(&self) -> usize;
+
+    fn process_keypress(&mut self, key: Key, pane: &mut dyn Pane, container: &mut PaneContainer);
+
 }
 
 
