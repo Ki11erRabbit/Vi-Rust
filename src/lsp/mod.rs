@@ -64,9 +64,9 @@ pub enum LspNotification {
 }
 
 
-unsafe impl Send for LspControllerMessage {}
+unsafe impl Send for ControllerMessage {}
 
-pub enum LspControllerMessage {
+pub enum ControllerMessage {
     /// String is the language id
     Request(Box<str>, LspRequest),
     /// Response to a request
@@ -77,7 +77,7 @@ pub enum LspControllerMessage {
     CreateClient(Box<str>),
     /// Notification to tell the caller how to recieve responses
     /// The receiver is for the language server side
-    ClientCreated(Arc<Receiver<LspControllerMessage>>),
+    ClientCreated(Arc<Receiver<ControllerMessage>>),
     /// Notification to tell the caller that there is no client for the language
     NoClient,
     Resend(Box<str>, LspResponse),
@@ -101,10 +101,10 @@ unsafe impl Send for LspController {}
 
 pub struct LspController {
     clients: HashMap<String, Client>,
-    //channels: (Sender<LspControllerMessage>, Receiver<LspControllerMessage>),
-    listen: Option<Receiver<LspControllerMessage>>,
-    response: Option<Sender<LspControllerMessage>>,
-    server_channels: HashMap<String, (Sender<LspControllerMessage>, Arc<Receiver<LspControllerMessage>>)>,
+    //channels: (Sender<ControllerMessage>, Receiver<ControllerMessage>),
+    listen: Option<Receiver<ControllerMessage>>,
+    response: Option<Sender<ControllerMessage>>,
+    server_channels: HashMap<String, (Sender<ControllerMessage>, Arc<Receiver<ControllerMessage>>)>,
     exit: bool,
 }
 
@@ -124,11 +124,11 @@ impl LspController {
         }
     }
 
-    pub fn set_listen(&mut self, listen: Receiver<LspControllerMessage>) {
+    pub fn set_listen(&mut self, listen: Receiver<ControllerMessage>) {
         self.listen = Some(listen);
     }
 
-    pub fn set_response(&mut self, response: Sender<LspControllerMessage>) {
+    pub fn set_response(&mut self, response: Sender<ControllerMessage>) {
         self.response = Some(response);
     }
 
@@ -177,7 +177,7 @@ impl LspController {
                     ////eprintln!("Got diagnostics");
                     let sender = self.server_channels.get(language).unwrap().0.clone();
 
-                    let message = LspControllerMessage::Response(
+                    let message = ControllerMessage::Response(
                         LspResponse::PublishDiagnostics(diagnostics)
                     );
 
@@ -187,7 +187,7 @@ impl LspController {
                     //eprintln!("Got completion");
                     let sender = self.server_channels.get(language).unwrap().0.clone();
 
-                    let message = LspControllerMessage::Response(
+                    let message = ControllerMessage::Response(
                         LspResponse::Completion(completion)
                     );
 
@@ -198,7 +198,7 @@ impl LspController {
 
                     let sender = self.server_channels.get(language).unwrap().0.clone();
 
-                    let message = LspControllerMessage::Response(
+                    let message = ControllerMessage::Response(
                         LspResponse::Location(location)
                     );
 
@@ -218,16 +218,16 @@ impl LspController {
     fn check_messages(&mut self) -> io::Result<()> {
        
         match self.listen.as_ref().unwrap().try_recv() {
-            Ok(LspControllerMessage::CreateClient(lang)) => {
+            Ok(ControllerMessage::CreateClient(lang)) => {
                 self.create_client(lang)
             },
-            Ok(LspControllerMessage::Request(lang, req)) => {
+            Ok(ControllerMessage::Request(lang, req)) => {
                 self.check_request(lang, req)
             },
-            Ok(LspControllerMessage::Notification(lang, notif)) => {
+            Ok(ControllerMessage::Notification(lang, notif)) => {
                 self.check_notification(lang, notif)
             },
-            Ok(LspControllerMessage::Exit) => {
+            Ok(ControllerMessage::Exit) => {
                 self.exit = true;
                 return Ok(());
             },
@@ -332,7 +332,7 @@ impl LspController {
         let client = match lang.as_ref() {
             "rust" => {
                 if let Some((_, recv)) = self.server_channels.get("rust") {
-                    self.response.as_ref().unwrap().send(LspControllerMessage::ClientCreated(recv.clone())).unwrap();
+                    self.response.as_ref().unwrap().send(ControllerMessage::ClientCreated(recv.clone())).unwrap();
                     return Ok(());
                 }
                 let rust_analyzer = Command::new("rust-analyzer")
@@ -349,7 +349,7 @@ impl LspController {
             "c" | "cpp" => {
 
                 if let Some((_, recv)) = self.server_channels.get(lang.as_ref()) {
-                    self.response.as_ref().unwrap().send(LspControllerMessage::ClientCreated(recv.clone())).unwrap();
+                    self.response.as_ref().unwrap().send(ControllerMessage::ClientCreated(recv.clone())).unwrap();
                     return Ok(());
                 }
 
@@ -366,7 +366,7 @@ impl LspController {
             },
             "python" => {
                 if let Some((_, recv)) = self.server_channels.get(lang.as_ref()) {
-                    self.response.as_ref().unwrap().send(LspControllerMessage::ClientCreated(recv.clone())).unwrap();
+                    self.response.as_ref().unwrap().send(ControllerMessage::ClientCreated(recv.clone())).unwrap();
                     return Ok(());
                 }
                 let python_lsp = Command::new("python-lsp-server")
@@ -382,7 +382,7 @@ impl LspController {
             },
             "swift" => {
                 if let Some((_, recv)) = self.server_channels.get(lang.as_ref()) {
-                    self.response.as_ref().unwrap().send(LspControllerMessage::ClientCreated(recv.clone())).unwrap();
+                    self.response.as_ref().unwrap().send(ControllerMessage::ClientCreated(recv.clone())).unwrap();
                     return Ok(());
                 }
                 let apple_swift = Command::new("sourcekit-lsp")
@@ -398,7 +398,7 @@ impl LspController {
             },
             "go" => {
                 if let Some((_, recv)) = self.server_channels.get(lang.as_ref()) {
-                    self.response.as_ref().unwrap().send(LspControllerMessage::ClientCreated(recv.clone())).unwrap();
+                    self.response.as_ref().unwrap().send(ControllerMessage::ClientCreated(recv.clone())).unwrap();
                     return Ok(());
                 }
                 let gopls = Command::new("gopls")
@@ -414,7 +414,7 @@ impl LspController {
             },
             "bash" => {
                 if let Some((_, recv)) = self.server_channels.get(lang.as_ref()) {
-                    self.response.as_ref().unwrap().send(LspControllerMessage::ClientCreated(recv.clone())).unwrap();
+                    self.response.as_ref().unwrap().send(ControllerMessage::ClientCreated(recv.clone())).unwrap();
                     return Ok(());
                 }
                 let bash_lsp = Command::new("bash-language-server")
@@ -429,7 +429,7 @@ impl LspController {
                 lsp_client
             },
             _ => {
-                self.response.as_ref().unwrap().send(LspControllerMessage::NoClient).unwrap();
+                self.response.as_ref().unwrap().send(ControllerMessage::NoClient).unwrap();
                 return Ok(());
             }
         };
@@ -444,7 +444,7 @@ impl LspController {
 
         self.clients.insert(lang.as_ref().to_string(), client);
 
-        self.response.as_ref().unwrap().send(LspControllerMessage::ClientCreated(rx)).unwrap();
+        self.response.as_ref().unwrap().send(ControllerMessage::ClientCreated(rx)).unwrap();
 
         Ok(())
     }

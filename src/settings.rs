@@ -106,8 +106,6 @@ pub type Keys = Vec<Key>;
 
 #[derive(Debug, Clone)]
 pub struct Settings {
-    pub cols: usize,
-    pub rows: usize,
     pub editor_settings: EditorSettings,
     pub mode_keybindings: HashMap<Mode, HashMap<Keys, Command>>,
     pub colors: EditorColors,
@@ -115,11 +113,6 @@ pub struct Settings {
 }
 
 impl Settings {
-
-    pub fn get_window_size(&self) -> (usize, usize) {
-        (self.cols, self.rows)
-    }
-    
     fn generate_normal_keybindings(normal_keybindings: &mut HashMap<Keys, Command>) {
         normal_keybindings.insert(vec![Key {
             key: KeyCode::Char('l'),
@@ -728,8 +721,6 @@ impl Default for Settings {
         let colors = EditorColors::default();
         
         Self {
-            cols: 0,
-            rows: 0,
             editor_settings,
             mode_keybindings,
             colors,
@@ -743,7 +734,6 @@ pub struct EditorSettings {
     pub relative_line_number: bool,
     pub tab_size: usize,
     pub use_spaces: bool,
-    pub poll_duration: u64,
     pub key_timeout: u64,
     pub border: bool,
     pub minimum_width: usize,
@@ -759,7 +749,6 @@ impl Default for EditorSettings {
             tab_size: 4,
             use_spaces: true,
             key_timeout: 3000,
-            poll_duration: 100,
             border: true,
             minimum_width: 24,
             minimum_height: 1,
@@ -796,15 +785,6 @@ impl ColorScheme {
             background_color: self.background_color,
             underline_color: self.underline_color,
             attributes: Rc::new(attributes),
-        }
-    }
-
-    pub fn ui() -> Self {
-        ColorScheme {
-            foreground_color: Color::DarkGrey,
-            background_color: Color::Reset,
-            underline_color: Color::Reset,
-            attributes: Rc::new(Vec::new()),
         }
     }
 }
@@ -904,7 +884,12 @@ impl Default for EditorColors {
             attributes: Rc::new(Vec::new()),
         });
 
-        let ui = ColorScheme::ui();
+        let ui = ColorScheme {
+            foreground_color: Color::DarkGrey,
+            background_color: Color::Reset,
+            underline_color: Color::Reset,
+            attributes: Rc::new(Vec::new()),
+        };
         
         Self {
             pane: ColorScheme::default(),
@@ -2286,8 +2271,6 @@ pub fn read_settings(settings_file: &str, mode_info: HashMap<String,Vec<String>>
     };
     
     Settings {
-        cols: 0,
-        rows: 0,
         editor_settings,
         mode_keybindings,
         colors,
